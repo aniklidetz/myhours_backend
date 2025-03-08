@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import Employee, Salary, WorkLog
-
+from users.models import Employee
+from worktime.models import WorkLog
+from payroll.models import Salary
 
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:

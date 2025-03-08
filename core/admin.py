@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django import forms
-from core.models import Employee, WorkLog, Salary
+from users.models import Employee
+from worktime.models import WorkLog
+from payroll.models import Salary
 
 
 # 📌 Добавляем Employee обратно в админку

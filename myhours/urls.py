@@ -9,5 +9,13 @@ def home_view(request):
 urlpatterns = [
     path('', home_view),  # Заглушка для корневого URL
     path('admin/', admin.site.urls),
+    # Новые URL-пути для реструктурированных приложений
+    path('api/users/', include('users.urls')),
+    path('api/worktime/', include('worktime.urls')),
+    path('api/payroll/', include('payroll.urls')),
+    path('api/biometrics/', include('biometrics.urls')),
+    # Если у вас есть urls.py в integrations - сейчас закомментировано
+    # path('api/integrations/', include('integrations.urls')),
+    # Сохраняем для обратной совместимости
     path('api/', include('core.urls')),  # Подключаем маршруты из core.urls
 ]
