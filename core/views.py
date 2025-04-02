@@ -13,32 +13,38 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     """Endpoints for employees"""
     queryset = Employee.objects.all().order_by('id')
     serializer_class = EmployeeSerializer
-    # Add search functionality
     filter_backends = [SearchFilter]
-    search_fields = ['first_name', 'last_name', 'email']  # Search by name, surname and email
-
+    search_fields = ['first_name', 'last_name', 'email']
 
 class SalaryViewSet(viewsets.ModelViewSet):
     """Endpoints for employee salaries"""
     queryset = Salary.objects.all().order_by('id')
     serializer_class = SalarySerializer
-    # Add filtering
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['employee', 'currency']  # Filter by employee and currency
+    filterset_fields = ['employee', 'currency']
 
     @action(detail=True, methods=['post'])
     def calculate(self, request, pk=None):
         """Endpoint for recalculating salary"""
         salary = self.get_object()
-        salary.calculate_salary()
+        
+        # Check which calculation method is available in the updated model
+        if hasattr(salary, 'calculate_salary') and callable(salary.calculate_salary):
+            salary.calculate_salary()
+        elif hasattr(salary, 'calculate_monthly_salary') and callable(salary.calculate_monthly_salary):
+            # Use the new method from the updated model
+            from django.utils import timezone
+            now = timezone.now()
+            result = salary.calculate_monthly_salary(now.month, now.year)
+            salary.save()
+            return Response({"message": "Salary recalculated", "result": result})
+        
         salary.save()
-        return Response({"message": "Salary recalculated", "salary": salary.calculated_salary})
-
+        return Response({"message": "Salary recalculated"})
 
 class WorkLogViewSet(viewsets.ModelViewSet):
     """Endpoints for work time logs"""
     queryset = WorkLog.objects.all().order_by('-check_in')
     serializer_class = WorkLogSerializer
-    # Configure filtering
-    filter_backends = [DjangoFilterBackend]  
-    filterset_class = WorkLogFilter  # Use our custom filter
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = WorkLogFilter

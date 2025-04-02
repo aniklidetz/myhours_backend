@@ -10,20 +10,20 @@ from .services.face_recognition_service import FaceRecognitionService
 logger = logging.getLogger(__name__)
 
 class FaceRegistrationView(APIView):
-    """API для регистрации лица сотрудника"""
+    """API for employee face registration"""
     
     def post(self, request, *args, **kwargs):
         employee_id = request.data.get('employee_id')
         base64_image = request.data.get('image')
         
-        # Проверяем наличие необходимых данных
+        # Check if required data is provided
         if not employee_id or not base64_image:
             return Response(
                 {"error": "employee_id and image are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Проверяем существование сотрудника
+        # Verify employee existence
         try:
             employee = Employee.objects.get(id=employee_id)
         except Employee.DoesNotExist:
@@ -32,7 +32,7 @@ class FaceRegistrationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Сохраняем кодирование лица
+        # Save face encoding
         document_id = FaceRecognitionService.save_employee_face(employee_id, base64_image)
         
         if not document_id:
@@ -52,7 +52,7 @@ class FaceRegistrationView(APIView):
 
 
 class FaceRecognitionCheckInView(APIView):
-    """API для регистрации начала работы с распознаванием лица"""
+    """API for employee check-in using face recognition"""
     
     def post(self, request, *args, **kwargs):
         base64_image = request.data.get('image')
@@ -64,7 +64,7 @@ class FaceRecognitionCheckInView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Распознаем сотрудника по лицу
+        # Recognize employee by face
         employee_id = FaceRecognitionService.recognize_employee(base64_image)
         
         if not employee_id:
@@ -74,10 +74,10 @@ class FaceRecognitionCheckInView(APIView):
             )
         
         try:
-            # Получаем сотрудника
+            # Retrieve employee
             employee = Employee.objects.get(id=employee_id)
             
-            # Проверяем, нет ли уже открытой смены
+            # Check for an already open shift
             open_worklog = WorkLog.objects.filter(
                 employee=employee,
                 check_out__isnull=True
@@ -89,7 +89,7 @@ class FaceRecognitionCheckInView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Создаем новую запись о начале работы
+            # Create a new work log entry
             worklog = WorkLog.objects.create(
                 employee=employee,
                 check_in=timezone.now(),
@@ -120,7 +120,7 @@ class FaceRecognitionCheckInView(APIView):
 
 
 class FaceRecognitionCheckOutView(APIView):
-    """API для регистрации окончания работы с распознаванием лица"""
+    """API for employee check-out using face recognition"""
     
     def post(self, request, *args, **kwargs):
         base64_image = request.data.get('image')
@@ -132,7 +132,7 @@ class FaceRecognitionCheckOutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Распознаем сотрудника по лицу
+        # Recognize employee by face
         employee_id = FaceRecognitionService.recognize_employee(base64_image)
         
         if not employee_id:
@@ -142,10 +142,10 @@ class FaceRecognitionCheckOutView(APIView):
             )
         
         try:
-            # Получаем сотрудника
+            # Retrieve employee
             employee = Employee.objects.get(id=employee_id)
             
-            # Ищем открытую смену для этого сотрудника
+            # Find an open shift for this employee
             open_worklog = WorkLog.objects.filter(
                 employee=employee,
                 check_out__isnull=True
@@ -157,12 +157,12 @@ class FaceRecognitionCheckOutView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Заполняем время окончания работы
+            # Record check-out time
             open_worklog.check_out = timezone.now()
             open_worklog.location_check_out = location
             open_worklog.save()
             
-            # Рассчитываем отработанные часы
+            # Calculate worked hours
             hours_worked = open_worklog.get_total_hours()
             
             return Response(

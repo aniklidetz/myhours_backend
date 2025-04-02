@@ -6,14 +6,17 @@ from payroll.models import Salary
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
-        fields = '__all__'  # Или укажи конкретные поля ['id', 'first_name', 'last_name', 'email']
+        fields = '__all__'
 
 class SalarySerializer(serializers.ModelSerializer):
+    # Ensure that the fields match the updated model
     class Meta:
         model = Salary
-        fields = '__all__'
+        # Use only the fields available in the updated model
+        fields = ['id', 'employee', 'base_salary', 'hourly_rate', 
+                  'calculation_type', 'currency', 'created_at', 'updated_at']
 
 class WorkLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkLog
-        fields = '__all__'  # Или перечисли только нужные поля
+        fields = '__all__'

@@ -5,7 +5,7 @@ from .serializers import WorkLogSerializer
 from .filters import WorkLogFilter
 
 class WorkLogViewSet(viewsets.ModelViewSet):
-    """Endpoints для учета рабочего времени"""
+    """Endpoints for tracking work time"""
     queryset = WorkLog.objects.all().order_by('-check_in')
     serializer_class = WorkLogSerializer
     filter_backends = [DjangoFilterBackend]

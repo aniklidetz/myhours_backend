@@ -1,4 +1,4 @@
 from django.db import models
 
-# Здесь не создаем Django-модели, так как данные будут храниться в MongoDB
-# Вместо этого используем сервисы для работы с MongoDB
+# No Django models are created here since data will be stored in MongoDB
+# Instead, services are used to interact with MongoDB

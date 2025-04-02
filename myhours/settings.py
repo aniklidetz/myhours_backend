@@ -15,7 +15,6 @@ from pymongo import MongoClient
 import logging
 import sys
 
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -23,7 +22,7 @@ LOGGING = {
         "file": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
-            "filename": "django_debug.log",  # Лог-файл будет в корне проекта
+            "filename": "django_debug.log",  # Log file will be stored in the project root
         },
     },
     "loggers": {
@@ -32,7 +31,7 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": True,
         },
-        "django.contrib.sessions": {  # 👈 Логируем только работу с сессиями
+        "django.contrib.sessions": {  # 👈 Logging only session-related activities
             "handlers": ["file"],
             "level": "DEBUG",
             "propagate": False,
@@ -40,10 +39,8 @@ LOGGING = {
     },
 }
 
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -55,7 +52,6 @@ SECRET_KEY = 'django-insecure-5yyuxapl9bi$tv)uj7#zok)d9-g*!^7_$bftd*2=!7q+&8j6#!
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -108,10 +104,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'myhours.wsgi.application'
 
-
 # Database settings
 DATABASES = {
-    'default': {  # PostgreSQL (основная база)
+    'default': {  # PostgreSQL (Primary database)
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'mytime_db',
         'USER': 'mytime_user',
@@ -124,7 +119,6 @@ DATABASES = {
 # MongoDB
 MONGO_CLIENT = MongoClient("mongodb://localhost:27017/")
 MONGO_DB = MONGO_CLIENT["biometrics_db"]
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -144,7 +138,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
@@ -155,7 +148,6 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
@@ -178,32 +170,29 @@ CACHES = {
     }
 }
 
-
-
-# Используем Redis для хранения сессий пользователей
+# Use Redis for storing user sessions
 SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 SESSION_CACHE_ALIAS = "default"
 
-# Принудительно сохраняем каждую сессию
-SESSION_SAVE_EVERY_REQUEST = True  # Django сохраняет сессию при каждом запросе
+# Force session save on every request
+SESSION_SAVE_EVERY_REQUEST = True
 
-# Сессии не исчезают при закрытии браузера
+# Sessions do not expire when the browser closes
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
-# Название cookie, которое будет хранить session_id
+# Cookie name for storing session ID
 SESSION_COOKIE_NAME = "myhours_session"
 
-# Срок жизни сессии (в секундах) - 1 день
+# Session lifetime (in seconds) - 1 day
 SESSION_COOKIE_AGE = 86400  
 
-# Добавляем, чтобы Django принудительно записывал сессии в Redis
+# Enforce session storage in Redis
 SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,  # Будет возвращать по 10 записей на страницу
+    'PAGE_SIZE': 10,  # Returns 10 records per page
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend']
-
 }
 
 if 'test' in sys.argv:
