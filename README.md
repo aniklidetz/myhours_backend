@@ -35,18 +35,19 @@ python manage.py runserver
 
 ### 🏗️ Architecture
 
-users: Employee management
-worktime: Time tracking with geolocation
-payroll: Israeli labor law compliant calculations
-biometrics: Face recognition authentication
-integrations: Holiday calendar services
+users: Employee management  
+worktime: Time tracking with geolocation  
+payroll: Israeli labor law compliant calculations  
+biometrics: Face recognition authentication  
+integrations: Holiday calendar services  
 
 ### 🛡️ Security Features
 
-Environment-based configuration
-Secure password storage
-CORS enabled for React Native
-Input validation and sanitization
+Environment-based configuration  
+Secure password storage  
+CORS enabled for React Native  
+Input validation and sanitization  
 
 ### 📱 Frontend
+
 React Native app located in ../myhours-app/
