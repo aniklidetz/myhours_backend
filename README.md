@@ -11,17 +11,27 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 ### 2. Install Dependencies
-```install -r requirements.txt```
+```
+install -r requirements.txt
+```
 ### 3. Configure Environment
-```.env.example .env # Edit .env with your configuration```
+```
+.env.example .env # Edit .env with your configuration
+```
 ### 4. Generate SECRET_KEY
-```python manage.py shell -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())" # Copy the output to SECRET_KEY in .env```
+```
+python manage.py shell -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())" 
+# Copy the output to SECRET_KEY in .env
+```
 ### 5. Database Setup
 ```
 python manage.py migrate
-python manage.py createsuperuser```
+python manage.py createsuperuser
+```
 ### 6. Run Development Server
-```bash python manage.py runserver```
+```
+python manage.py runserver
+```
 
 ### 🏗️ Architecture
 
