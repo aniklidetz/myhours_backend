@@ -5,7 +5,7 @@
 
 ### 1. Clone and Setup Environment
 ```
-git clone <your-repo-url>
+git clone <https://github.com/aniklidetz/myhours_backend>
 cd myhours-backend
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
