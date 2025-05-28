@@ -1,0 +1,47 @@
+
+# Environment variables - CRITICAL!
+
+.env
+
+.env.local
+
+*.env
+
+# Python cache
+
+pycache/
+
+*.py[cod]
+
+*$py.class
+
+# Django
+
+*.log
+
+db.sqlite3
+
+django_debug.log
+
+# Media files
+
+media/
+
+# Static files
+
+staticfiles/
+
+# Virtualenv
+
+venv/
+
+# IDE
+
+.DS_Store
+
+.vscode/
+
+# Logs
+
+logs/
+
