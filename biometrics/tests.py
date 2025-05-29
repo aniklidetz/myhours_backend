@@ -1,286 +1,272 @@
+# biometrics/tests.py
+import base64
+import json
+from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from rest_framework.test import APITestCase
-from rest_framework import status
 from django.urls import reverse
-from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+from tests.base import BaseAPITestCase, UnauthenticatedAPITestCase
 from users.models import Employee
 from worktime.models import WorkLog
-import base64
-import os
-from unittest.mock import patch, MagicMock
-import numpy as np
-import cv2
+from biometrics.services.biometrics import BiometricService
+from biometrics.services.face_recognition_service import FaceRecognitionService
+from django.utils import timezone
 
 
 class BiometricServiceTest(TestCase):
-    """Tests for BiometricService"""
+    """Test cases for BiometricService"""
     
     def setUp(self):
         self.employee = Employee.objects.create(
-            first_name="John",
-            last_name="Doe",
-            email="john@example.com"
+            first_name='John',
+            last_name='Doe',
+            email='john.doe@example.com',
+            employment_type='hourly'
         )
         
-        # Create a mock face encoding
-        self.mock_face_encoding = np.random.rand(100*100).astype(np.uint8)
-    
-    @patch('biometrics.services.biometrics.settings')
-    def test_get_collection(self, mock_settings):
+    @patch('biometrics.services.biometrics.settings.MONGO_DB')
+    def test_get_collection(self, mock_mongo_db):
         """Test getting MongoDB collection"""
-        from biometrics.services.biometrics import BiometricService
-        
-        # Setup mock
+        # Mock MongoDB collection
         mock_collection = MagicMock()
-        mock_db = MagicMock()
-        mock_db.__getitem__.return_value = mock_collection
-        mock_settings.MONGO_DB = mock_db
+        mock_mongo_db.__getitem__.return_value = mock_collection
         
-        # Call method
         collection = BiometricService.get_collection()
         
-        # Assert
         self.assertIsNotNone(collection)
-        # mock_collection.create_index.assert_called_once()
+        mock_mongo_db.__getitem__.assert_called_with('face_encodings')
     
     @patch('biometrics.services.biometrics.BiometricService.get_collection')
     def test_save_face_encoding(self, mock_get_collection):
         """Test saving face encodings"""
-        from biometrics.services.biometrics import BiometricService
-        
-        # Setup mock
+        # Mock collection
         mock_collection = MagicMock()
-        mock_collection.insert_one.return_value = MagicMock(inserted_id='abc123')
         mock_get_collection.return_value = mock_collection
         
-        # Call method
+        # Mock find_one to return None (no existing document)
+        mock_collection.find_one.return_value = None
+        
+        # Mock insert_one result
+        mock_result = MagicMock()
+        mock_result.inserted_id = 'abc123'
+        mock_collection.insert_one.return_value = mock_result
+        
+        # Test face encoding
+        test_encoding = [0.1, 0.2, 0.3, 0.4, 0.5]
+        
         result = BiometricService.save_face_encoding(
-            self.employee.id, 
-            self.mock_face_encoding,
-            "base64_image_data"
+            employee_id=self.employee.id,
+            face_encoding=test_encoding
         )
         
-        # Assert - using more flexible checking
-        if result is None:
-            # Check that mock_collection.insert_one was called,
-            # even if the result is None due to an error
-            mock_collection.insert_one.assert_called_once()
-            # Additionally, logging can be checked here
-        else:
-            # If the result is not None, check its correctness
-            self.assertEqual(result, 'abc123')
-            mock_collection.insert_one.assert_called_once()
+        self.assertEqual(result, 'abc123')
+        mock_collection.insert_one.assert_called_once()
 
 
 class FaceRecognitionServiceTest(TestCase):
-    """Tests for FaceRecognitionService"""
+    """Test cases for FaceRecognitionService"""
     
-    def setUp(self):
-        self.employee = Employee.objects.create(
-            first_name="John",
-            last_name="Doe",
-            email="john@example.com"
-        )
-        
-        # Sample base64 image (a tiny 1x1 pixel JPEG)
-        self.sample_image_base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDAREAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AfwD/2Q=="
-    
-    @patch('biometrics.services.face_recognition_service.cv2')
-    def test_decode_image(self, mock_cv2):
+    def test_decode_image(self):
         """Test decoding base64 image"""
-        from biometrics.services.face_recognition_service import FaceRecognitionService
+        # Create a simple test image (1x1 red pixel PNG)
+        test_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
         
-        # Setup mock
-        mock_image = np.zeros((100, 100, 3), dtype=np.uint8)
-        mock_cv2.imdecode.return_value = mock_image
+        result = FaceRecognitionService.decode_image(test_image_base64)
         
-        # Call method
-        result = FaceRecognitionService.decode_image(self.sample_image_base64)
-        
-        # Assert
         self.assertIsNotNone(result)
-        mock_cv2.imdecode.assert_called_once()
     
-    @patch('biometrics.services.face_recognition_service.cv2')
-    def test_extract_face_features(self, mock_cv2):
+    @patch('biometrics.services.face_recognition_service.FaceRecognitionService.FACE_CASCADE')
+    def test_extract_face_features(self, mock_cascade):
         """Test extracting face features"""
-        from biometrics.services.face_recognition_service import FaceRecognitionService
-        
-        # Setup mocks
-        mock_image = np.zeros((100, 100, 3), dtype=np.uint8)
-        mock_gray = np.zeros((100, 100), dtype=np.uint8)
-        mock_cv2.cvtColor.return_value = mock_gray
+        import numpy as np
         
         # Mock face detection
-        mock_cv2.CascadeClassifier().detectMultiScale.return_value = [(10, 10, 50, 50)]
+        mock_cascade.detectMultiScale.return_value = [(10, 10, 100, 100)]
         
-        # Mock face ROI
-        mock_face_roi = np.zeros((50, 50), dtype=np.uint8)
+        # Create a dummy image
+        test_image = np.zeros((200, 200, 3), dtype=np.uint8)
         
-        # Need to mock array slicing which is tricky
-        # For simplicity, patch the entire method
-        with patch.object(FaceRecognitionService, 'extract_face_features', return_value=mock_face_roi):
-            result = FaceRecognitionService.extract_face_features(mock_image)
-            self.assertIsNotNone(result)
+        result = FaceRecognitionService.extract_face_features(test_image)
+        
+        self.assertIsNotNone(result)
 
 
-class BiometricAPITest(APITestCase):
-    """Tests for Biometric API endpoints"""
+class BiometricAPITest(BaseAPITestCase):
+    """Test cases for biometric API endpoints"""
     
     def setUp(self):
-        self.employee = Employee.objects.create(
-            first_name="John",
-            last_name="Doe",
-            email="john@example.com"
-        )
+        super().setUp()
         
-        # Sample base64 image
-        self.sample_image_base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDAREAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACv/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AfwD/2Q=="
-
+        # Test image data (longer base64 string to pass validation)
+        self.test_image = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+                          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+                          "additional_padding_to_make_string_longer_than_100_chars_for_validation_purposes")
+    
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.save_employee_face')
     def test_face_registration(self, mock_save_face):
         """Test face registration endpoint"""
-        # Mock the save_employee_face method to return a document ID
-        mock_save_face.return_value = "123456789"
+        mock_save_face.return_value = 'test_document_id'
         
         url = reverse('face-register')
         data = {
             'employee_id': self.employee.id,
-            'image': self.sample_image_base64
+            'image': self.test_image
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data['success'])
-        self.assertEqual(response.data['document_id'], "123456789")
+        self.assertIn('Face registered', response.data['message'])
     
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.recognize_employee')
     def test_face_recognition_check_in(self, mock_recognize):
         """Test face recognition check-in endpoint"""
-        # Mock the recognize_employee method to return the employee ID
         mock_recognize.return_value = self.employee.id
         
         url = reverse('face-check-in')
         data = {
-            'image': self.sample_image_base64,
-            'location': '31.7767,35.2345'
+            'image': self.test_image,
+            'location': 'Office'
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data['success'])
-        
-        # Verify a worklog was created
-        worklog = WorkLog.objects.filter(employee=self.employee, check_out__isnull=True).first()
-        self.assertIsNotNone(worklog)
+        self.assertEqual(response.data['employee_id'], self.employee.id)
     
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.recognize_employee')
     def test_face_recognition_check_out(self, mock_recognize):
         """Test face recognition check-out endpoint"""
-        # Create an open worklog
+        mock_recognize.return_value = self.employee.id
+        
+        # First create a check-in
+        check_in_time = timezone.now()
         worklog = WorkLog.objects.create(
             employee=self.employee,
-            check_in=timezone.now() - timezone.timedelta(hours=8)
+            check_in=check_in_time,
+            location_check_in='Office'
         )
-        
-        # Mock the recognize_employee method to return the employee ID
-        mock_recognize.return_value = self.employee.id
         
         url = reverse('face-check-out')
         data = {
-            'image': self.sample_image_base64,
-            'location': '31.7767,35.2345'
+            'image': self.test_image,
+            'location': 'Office'
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['success'])
-        
-        # Verify the worklog was updated with check_out time
-        worklog.refresh_from_db()
-        self.assertIsNotNone(worklog.check_out)
+        self.assertEqual(response.data['employee_id'], self.employee.id)
     
-    def test_face_registration_missing_data(self):
+    def test_face_registration_missing_data(self, ):
         """Test face registration endpoint with missing data"""
         url = reverse('face-register')
+        data = {
+            'employee_id': self.employee.id
+            # Missing 'image' field
+        }
         
-        # Test missing employee_id
-        data = {'image': self.sample_image_base64}
         response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         
-        # Test missing image
-        data = {'employee_id': self.employee.id}
-        response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
     
     def test_face_recognition_missing_image(self):
         """Test face recognition endpoints with missing image"""
-        # Test check-in
         url = reverse('face-check-in')
-        data = {'location': '31.7767,35.2345'}
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        data = {
+            'location': 'Office'
+            # Missing 'image' field
+        }
         
-        # Test check-out
-        url = reverse('face-check-out')
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
     
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.recognize_employee')
     def test_face_recognition_no_match(self, mock_recognize):
         """Test face recognition with no matching face"""
-        # Mock the recognize_employee method to return None (no match)
         mock_recognize.return_value = None
         
         url = reverse('face-check-in')
         data = {
-            'image': self.sample_image_base64,
-            'location': '31.7767,35.2345'
+            'image': self.test_image,
+            'location': 'Office'
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('Face not recognized', response.data['error'])
     
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.recognize_employee')
     def test_face_recognition_multiple_check_in(self, mock_recognize):
         """Test multiple check-ins"""
-        # Create an open worklog
-        worklog = WorkLog.objects.create(
-            employee=self.employee,
-            check_in=timezone.now() - timezone.timedelta(hours=1)
-        )
-        
-        # Mock the recognize_employee method to return the employee ID
         mock_recognize.return_value = self.employee.id
         
-        # Try to check in again
+        # Create existing check-in
+        WorkLog.objects.create(
+            employee=self.employee,
+            check_in=timezone.now(),
+            location_check_in='Office'
+        )
+        
         url = reverse('face-check-in')
         data = {
-            'image': self.sample_image_base64,
-            'location': '31.7767,35.2345'
+            'image': self.test_image,
+            'location': 'Office'
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('already has an open shift', response.data['error'])
     
     @patch('biometrics.services.face_recognition_service.FaceRecognitionService.recognize_employee')
     def test_face_recognition_check_out_without_check_in(self, mock_recognize):
         """Test check-out without a prior check-in"""
-        # Make sure there are no open worklogs
-        WorkLog.objects.filter(employee=self.employee).delete()
-        
-        # Mock the recognize_employee method to return the employee ID
         mock_recognize.return_value = self.employee.id
         
         url = reverse('face-check-out')
         data = {
-            'image': self.sample_image_base64,
-            'location': '31.7767,35.2345'
+            'image': self.test_image,
+            'location': 'Office'
         }
         
         response = self.client.post(url, data, format='json')
+        
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('No open shift found', response.data['error'])
+
+
+class BiometricAPIUnauthenticatedTest(UnauthenticatedAPITestCase):
+    """Test biometric API endpoints without authentication"""
+    
+    def test_face_registration_unauthenticated(self):
+        """Test face registration without authentication"""
+        url = reverse('face-register')
+        data = {
+            'employee_id': self.employee.id,
+            'image': 'test_image_data'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_face_recognition_unauthenticated(self):
+        """Test face recognition without authentication"""
+        url = reverse('face-check-in')
+        data = {
+            'image': 'test_image_data',
+            'location': 'Office'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

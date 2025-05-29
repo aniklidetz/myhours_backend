@@ -1,13 +1,14 @@
 import logging
 import pymongo
 from pymongo import MongoClient
+from pymongo.errors import PyMongoError, ConnectionFailure
 from bson.objectid import ObjectId
 from django.conf import settings
 import numpy as np
 import json
 import datetime
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('biometrics')
 
 class BiometricService:
     """
@@ -24,18 +25,31 @@ class BiometricService:
             pymongo.collection.Collection or None: MongoDB collection or None if connection failed
         """
         try:
-            # Using the client from Django settings
-            from django.conf import settings
+            # Check if MongoDB is available
+            if not hasattr(settings, 'MONGO_DB') or settings.MONGO_DB is None:
+                logger.error("MongoDB not configured or not available")
+                return None
             
             db = settings.MONGO_DB
             collection = db['face_encodings']
             
+            # Test connection
+            try:
+                collection.database.client.admin.command('ping')
+            except ConnectionFailure:
+                logger.error("MongoDB connection failed")
+                return None
+            
             # Create indexes if they don't exist
-            collection.create_index([("employee_id", pymongo.ASCENDING)])
+            try:
+                collection.create_index([("employee_id", pymongo.ASCENDING)], background=True)
+                collection.create_index([("created_at", pymongo.DESCENDING)], background=True)
+            except Exception as e:
+                logger.warning(f"Failed to create indexes: {e}")
             
             return collection
         except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            logger.error(f"Failed to get MongoDB collection: {e}")
             return None
     
     @classmethod
@@ -49,7 +63,7 @@ class BiometricService:
             image_data (str, optional): Base64 image data
         
         Returns:
-            str: MongoDB document ID
+            str or None: MongoDB document ID if successful, None if failed
         """
         collection = cls.get_collection()
         if not collection:
@@ -57,30 +71,62 @@ class BiometricService:
             return None
         
         try:
+            # Validate inputs
+            if not isinstance(employee_id, int) or employee_id <= 0:
+                logger.error(f"Invalid employee_id: {employee_id}")
+                return None
+                
+            if face_encoding is None:
+                logger.error("face_encoding cannot be None")
+                return None
+            
             # Convert numpy array to list for MongoDB storage
             if isinstance(face_encoding, np.ndarray):
                 face_encoding = face_encoding.tolist()
+            elif not isinstance(face_encoding, list):
+                logger.error(f"Invalid face_encoding type: {type(face_encoding)}")
+                return None
             
             # Create document
             document = {
-                "employee_id": employee_id,
+                "employee_id": int(employee_id),
                 "face_encoding": face_encoding,
                 "created_at": datetime.datetime.now(datetime.timezone.utc),
+                "version": "1.0"  # For future compatibility
             }
             
             # Optionally store the reference image if provided
             if image_data:
+                # Limit image data size
+                if len(image_data) > 10000:  # Limit to ~10KB
+                    image_data = image_data[:10000]
                 document["reference_image"] = image_data
             
-            # Insert document
-            result = collection.insert_one(document)
-            document_id = str(result.inserted_id)
+            # Check if employee already exists
+            existing_doc = collection.find_one({"employee_id": employee_id})
             
-            logger.info(f"Face encoding saved with ID: {document_id}")
+            if existing_doc:
+                # Update existing document
+                document["updated_at"] = datetime.datetime.now(datetime.timezone.utc)
+                result = collection.replace_one(
+                    {"employee_id": employee_id}, 
+                    document
+                )
+                document_id = str(existing_doc["_id"])
+                logger.info(f"Updated face encoding for employee {employee_id}")
+            else:
+                # Insert new document
+                result = collection.insert_one(document)
+                document_id = str(result.inserted_id)
+                logger.info(f"Created face encoding for employee {employee_id} with ID: {document_id}")
+            
             return document_id
         
+        except PyMongoError as e:
+            logger.error(f"MongoDB error while saving face for employee {employee_id}: {e}")
+            return None
         except Exception as e:
-            logger.error(f"Error saving face encoding: {e}")
+            logger.error(f"Unexpected error saving face for employee {employee_id}: {e}")
             return None
     
     @classmethod
@@ -102,23 +148,44 @@ class BiometricService:
         try:
             # Query filter
             query = {}
-            if employee_id:
-                query["employee_id"] = employee_id
+            if employee_id is not None:
+                query["employee_id"] = int(employee_id)
             
-            # Get documents
-            documents = list(collection.find(query, {"employee_id": 1, "face_encoding": 1}))
+            # Get documents - only fetch necessary fields
+            projection = {
+                "employee_id": 1, 
+                "face_encoding": 1, 
+                "created_at": 1,
+                "version": 1
+            }
             
-            # Convert ObjectId to string for serialization
+            documents = list(collection.find(query, projection))
+            
+            # Process documents
+            result = []
             for doc in documents:
-                doc["_id"] = str(doc["_id"])
-                # Convert face_encoding list back to numpy array
-                if doc.get("face_encoding"):
-                    doc["face_encoding"] = np.array(doc["face_encoding"])
+                try:
+                    # Convert ObjectId to string for serialization
+                    doc["_id"] = str(doc["_id"])
+                    
+                    # Convert face_encoding list back to numpy array
+                    if doc.get("face_encoding"):
+                        doc["face_encoding"] = np.array(doc["face_encoding"], dtype=np.float32)
+                    
+                    result.append(doc)
+                except Exception as e:
+                    logger.warning(f"Error processing document {doc.get('_id')}: {e}")
+                    continue
             
-            return documents
+            logger.info(f"Retrieved {len(result)} face encodings" + 
+                       (f" for employee {employee_id}" if employee_id else ""))
+            return result
         
+        except PyMongoError as e:
+            logger.error(f"MongoDB error retrieving face encodings: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Error retrieving face encodings: {e}")
+            logger.error(f"Unexpected error retrieving face encodings: {e}")
             return []
     
     @classmethod
@@ -138,15 +205,22 @@ class BiometricService:
             return 0
         
         try:
+            if not isinstance(employee_id, int) or employee_id <= 0:
+                logger.error(f"Invalid employee_id: {employee_id}")
+                return 0
+            
             # Delete documents
-            result = collection.delete_many({"employee_id": employee_id})
+            result = collection.delete_many({"employee_id": int(employee_id)})
             deleted_count = result.deleted_count
             
             logger.info(f"Deleted {deleted_count} face encodings for employee {employee_id}")
             return deleted_count
         
+        except PyMongoError as e:
+            logger.error(f"MongoDB error deleting face encodings for employee {employee_id}: {e}")
+            return 0
         except Exception as e:
-            logger.error(f"Error deleting face encodings: {e}")
+            logger.error(f"Unexpected error deleting face encodings for employee {employee_id}: {e}")
             return 0
     
     @classmethod
@@ -168,9 +242,22 @@ class BiometricService:
             return False
         
         try:
+            # Validate document_id
+            if not document_id or not ObjectId.is_valid(document_id):
+                logger.error(f"Invalid document_id: {document_id}")
+                return False
+            
+            # Validate face_encoding
+            if face_encoding is None:
+                logger.error("face_encoding cannot be None")
+                return False
+            
             # Convert numpy array to list for MongoDB storage
             if isinstance(face_encoding, np.ndarray):
                 face_encoding = face_encoding.tolist()
+            elif not isinstance(face_encoding, list):
+                logger.error(f"Invalid face_encoding type: {type(face_encoding)}")
+                return False
             
             # Create update document
             update_doc = {
@@ -182,6 +269,9 @@ class BiometricService:
             
             # Add image data if provided
             if image_data:
+                # Limit image data size
+                if len(image_data) > 10000:  # Limit to ~10KB
+                    image_data = image_data[:10000]
                 update_doc["$set"]["reference_image"] = image_data
             
             # Update document
@@ -190,8 +280,50 @@ class BiometricService:
                 update_doc
             )
             
-            return result.modified_count > 0
+            success = result.modified_count > 0
+            if success:
+                logger.info(f"Updated face encoding document {document_id}")
+            else:
+                logger.warning(f"No document updated for ID {document_id}")
+                
+            return success
         
-        except Exception as e:
-            logger.error(f"Error updating face encoding: {e}")
+        except PyMongoError as e:
+            logger.error(f"MongoDB error updating face encoding {document_id}: {e}")
             return False
+        except Exception as e:
+            logger.error(f"Unexpected error updating face encoding {document_id}: {e}")
+            return False
+    
+    @classmethod
+    def get_stats(cls):
+        """
+        Get statistics about stored face encodings.
+        
+        Returns:
+            dict: Statistics including total count, unique employees, etc.
+        """
+        collection = cls.get_collection()
+        if not collection:
+            return {"error": "MongoDB collection not available"}
+        
+        try:
+            # Get basic counts
+            total_count = collection.count_documents({})
+            
+            # Get unique employee count
+            unique_employees = len(collection.distinct("employee_id"))
+            
+            # Get recent uploads (last 7 days)
+            week_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+            recent_count = collection.count_documents({"created_at": {"$gte": week_ago}})
+            
+            return {
+                "total_face_encodings": total_count,
+                "unique_employees": unique_employees,
+                "recent_uploads": recent_count,
+                "collection_name": collection.name
+            }
+        except Exception as e:
+            logger.error(f"Error getting statistics: {e}")
+            return {"error": str(e)}

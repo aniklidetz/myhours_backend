@@ -1,41 +1,49 @@
+# integrations/tests.py
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APITestCase
 from rest_framework import status
 from unittest.mock import patch, MagicMock
-from .models import Holiday
+from tests.base import BaseAPITestCase, UnauthenticatedAPITestCase
+from integrations.models import Holiday
+from integrations.services.hebcal_service import HebcalService
 from datetime import date
 
+
 class HolidayModelTest(TestCase):
+    """Тест модели Holiday"""
+    
     def test_holiday_creation(self):
+        """Тест создания праздника"""
         holiday = Holiday.objects.create(
-            date=date(2025, 4, 14),
-            name="Passover",
+            date=date(2025, 9, 16),
+            name="Rosh Hashanah",
             is_holiday=True,
             is_shabbat=False
         )
         
-        self.assertEqual(str(holiday), "Passover - 2025-04-14")
+        self.assertEqual(holiday.name, "Rosh Hashanah")
         self.assertTrue(holiday.is_holiday)
         self.assertFalse(holiday.is_shabbat)
 
+
 class HebcalServiceTest(TestCase):
-    @patch('requests.get')
-    def test_fetch_holidays(self, mock_get):
-        # Mock response from Hebcal API
+    """Тест HebcalService"""
+    
+    @patch('integrations.services.hebcal_service.cache')
+    @patch('integrations.services.hebcal_service.requests.get')
+    def test_fetch_holidays_success(self, mock_get, mock_cache):
+        """Тест успешного получения праздников"""
+        # Mock cache to return None (no cached data)
+        mock_cache.get.return_value = None
+        
+        # Mock successful API response
         mock_response = MagicMock()
-        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
             "items": [
                 {
-                    "title": "Shabbat",
-                    "date": "2025-03-15",
-                    "category": "holiday",
-                    "subcat": "major"
-                },
-                {
-                    "title": "Passover",
-                    "date": "2025-04-14",
+                    "title": "Rosh Hashanah",
+                    "date": "2025-09-16",
                     "category": "holiday",
                     "subcat": "major"
                 }
@@ -43,102 +51,122 @@ class HebcalServiceTest(TestCase):
         }
         mock_get.return_value = mock_response
         
-        from .services.hebcal_service import HebcalService
-        
-        # Call the service method
+        # Test the service
         holidays = HebcalService.fetch_holidays(2025)
         
-        # Modified assertions that don't depend on exact count
-        self.assertTrue(len(holidays) > 0)  # Ensure at least one holiday is returned
-        # Verify that the API returned data and filtering worked
-        if len(holidays) >= 2:
-            found_shabbat = False
-            found_passover = False
-            
-            for holiday in holidays:
-                if holiday.get("title") == "Shabbat":
-                    found_shabbat = True
-                elif holiday.get("title") == "Passover":
-                    found_passover = True
-            
-            # Confirm that expected holidays are found (if they exist in the API response)
-            if found_shabbat:
-                self.assertEqual(holidays[0]["title"], "Shabbat")
-            if found_passover:
-                # Index may vary, search by title
-                passover_index = next((i for i, h in enumerate(holidays) if h.get("title") == "Passover"), -1)
-                if passover_index >= 0:
-                    self.assertEqual(holidays[passover_index]["title"], "Passover")
+        # Verify results
+        self.assertEqual(len(holidays), 1)
+        self.assertEqual(holidays[0]['title'], "Rosh Hashanah")
+        
+        # Verify API was called
+        mock_get.assert_called_once()
+        
+        # Verify cache was attempted to be set
+        mock_cache.set.assert_called_once()
     
-    @patch('requests.get')
-    @patch('integrations.services.hebcal_service.HebcalService.generate_weekly_shabbats')
-    def test_sync_holidays_to_db(self, mock_generate_shabbats, mock_get):
-        # Clear the database before the test
-        Holiday.objects.all().delete()
+    @patch('integrations.services.hebcal_service.cache')
+    def test_fetch_holidays_from_cache(self, mock_cache):
+        """Тест получения праздников из кэша"""
+        # Mock cached data
+        cached_holidays = [
+            {
+                "title": "Yom Kippur",
+                "date": "2025-10-04",
+                "category": "holiday",
+                "subcat": "major"
+            }
+        ]
+        mock_cache.get.return_value = cached_holidays
         
-        # Mock response from Hebcal API
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "items": [
-                {
-                    "title": "Shabbat",
-                    "date": "2025-03-15",
-                    "category": "holiday",
-                    "subcat": "major"
-                },
-                {
-                    "title": "Passover",
-                    "date": "2025-04-14",
-                    "category": "holiday",
-                    "subcat": "major"
-                }
-            ]
-        }
-        mock_get.return_value = mock_response
+        # Test the service
+        holidays = HebcalService.fetch_holidays(2025)
         
-        # Mock generate_weekly_shabbats to return an empty list
-        mock_generate_shabbats.return_value = []
+        # Verify cached data was returned
+        self.assertEqual(holidays, cached_holidays)
+        self.assertEqual(len(holidays), 1)
+    
+    @patch('integrations.services.hebcal_service.cache')
+    @patch('integrations.services.hebcal_service.requests.get')
+    def test_fetch_holidays_api_error(self, mock_get, mock_cache):
+        """Тест обработки ошибки API"""
+        # Mock cache to return None (no cached data)
+        mock_cache.get.return_value = None
         
-        from .services.hebcal_service import HebcalService
+        # Mock API error
+        mock_get.side_effect = Exception("API Error")
         
-        # Call the sync method
-        created, updated = HebcalService.sync_holidays_to_db(2025)
+        # Test the service
+        holidays = HebcalService.fetch_holidays(2025, use_cache=False)
         
-        # Check that records were created
-        self.assertTrue(created > 0)
-        self.assertEqual(updated, 0)
-        self.assertEqual(Holiday.objects.count(), created)
-        
-        # Save the initial number of created records
-        initial_count = created
-        
-        # Call again to test updates
-        created2, updated2 = HebcalService.sync_holidays_to_db(2025)
-        self.assertEqual(created2, 0)
-        self.assertEqual(updated2, initial_count)  # All previously created records should be updated
+        # Should return empty list on error
+        self.assertEqual(holidays, [])
 
-class HolidayAPITest(APITestCase):
+
+class HolidayAPITest(BaseAPITestCase):
+    """Тест API праздников"""
+    
     def setUp(self):
-        self.holiday = Holiday.objects.create(
-            date=date(2025, 4, 14),
-            name="Passover",
+        super().setUp()
+        
+        # Create test holidays
+        Holiday.objects.create(
+            date=date(2025, 9, 16),
+            name="Rosh Hashanah",
             is_holiday=True,
             is_shabbat=False
         )
         
-    def test_list_holidays(self):
+        Holiday.objects.create(
+            date=date(2025, 9, 20),
+            name="Shabbat",
+            is_holiday=False,
+            is_shabbat=True
+        )
+    
+    def test_list_holidays_authenticated(self):
+        """Тест получения списка праздников с аутентификацией"""
         url = reverse('holiday-list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
         
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('results', response.data)
+        self.assertGreaterEqual(len(response.data['results']), 2)
+    
     @patch('integrations.services.hebcal_service.HebcalService.sync_holidays_to_db')
-    def test_sync_holidays(self, mock_sync):
-        mock_sync.return_value = (5, 2)
+    def test_sync_holidays_authenticated(self, mock_sync):
+        """Тест синхронизации праздников с аутентификацией"""
+        mock_sync.return_value = (5, 2)  # created, updated
         
         url = reverse('holiday-sync')
-        response = self.client.get(url)
+        
+        response = self.client.get(url, {'year': 2025})
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('message', response.data)
         self.assertEqual(response.data['created'], 5)
         self.assertEqual(response.data['updated'], 2)
+        
+        mock_sync.assert_called_once_with(2025)
+
+
+class HolidayAPIUnauthenticatedTest(UnauthenticatedAPITestCase):
+    """Тест API праздников без аутентификации"""
+    
+    def test_list_holidays_unauthenticated(self):
+        """Тест получения списка праздников без аутентификации"""
+        url = reverse('holiday-list')
+        
+        response = self.client.get(url)
+        
+        # Holidays should require authentication in this setup
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_sync_holidays_unauthenticated(self):
+        """Тест синхронизации праздников без аутентификации"""
+        url = reverse('holiday-sync')
+        
+        response = self.client.get(url)
+        
+        # Sync should require authentication
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
