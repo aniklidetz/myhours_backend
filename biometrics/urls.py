@@ -1,22 +1,18 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+# biometrics/urls.py
+from django.urls import path
 from .views import (
-    FaceRegistrationView,
-    FaceRecognitionCheckInView,
-    FaceRecognitionCheckOutView,
-    BiometricManagementViewSet
+    register_face,
+    check_in,
+    check_out,
+    biometric_stats
 )
-
-# Create router for ViewSets
-router = DefaultRouter()
-router.register(r'management', BiometricManagementViewSet, basename='biometric-management')
 
 urlpatterns = [
     # Face recognition endpoints
-    path('register/', FaceRegistrationView.as_view(), name='face-register'),
-    path('check-in/', FaceRecognitionCheckInView.as_view(), name='face-check-in'),
-    path('check-out/', FaceRecognitionCheckOutView.as_view(), name='face-check-out'),
+    path('register/', register_face, name='face-register'),
+    path('check-in/', check_in, name='face-check-in'),
+    path('check-out/', check_out, name='face-check-out'),
     
-    # Management endpoints (stats, admin functions)
-    path('', include(router.urls)),
+    # Statistics endpoint
+    path('management/stats/', biometric_stats, name='biometric-stats'),
 ]

@@ -1,10 +1,23 @@
+# users/models.py
 from django.db import models
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 import re
 
 class Employee(models.Model):
-    """Employee model with improved validation"""
+    """Employee model with improved validation and role support"""
+    
+    # Link to Django user
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='employee_profile',
+        null=True,
+        blank=True
+    )
+    
+    # Basic info
     first_name = models.CharField(
         max_length=50, 
         help_text="Employee's first name"
@@ -23,24 +36,51 @@ class Employee(models.Model):
         null=True,
         help_text="Phone number in international format"
     )
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Whether the employee is currently active"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)  # Добавлено
-
+    
+    # Employment details
     EMPLOYMENT_TYPES = [
-        ('monthly', 'Monthly Salary'),
-        ('hourly', 'Hourly Wage'),
-        ('contract', 'Contract Work'),
+        ('full_time', 'Full Time'),
+        ('part_time', 'Part Time'),
+        ('hourly', 'Hourly'),
+        ('contract', 'Contract'),
     ]
     employment_type = models.CharField(
         max_length=10, 
         choices=EMPLOYMENT_TYPES, 
-        default='hourly',
-        help_text="Type of employment contract"
+        default='full_time',
+        help_text="Type of employment"
     )
+    
+    # Role
+    ROLE_CHOICES = [
+        ('employee', 'Employee'),
+        ('accountant', 'Accountant'),
+        ('admin', 'Administrator'),
+    ]
+    role = models.CharField(
+        max_length=20, 
+        choices=ROLE_CHOICES, 
+        default='employee'
+    )
+    
+    # Salary info
+    hourly_rate = models.DecimalField(
+        max_digits=8, 
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Hourly rate for hourly employees"
+    )
+    
+    # Status
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether the employee is currently active"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['last_name', 'first_name']
@@ -55,73 +95,67 @@ class Employee(models.Model):
         """Custom validation"""
         super().clean()
         
-        # Validate phone number format
+        # Validate phone number format if provided
         if self.phone and not self._is_valid_phone(self.phone):
             raise ValidationError({
                 'phone': 'Phone number must be in international format (+972... or +1...)'
-            })
-        
-        # Validate email domain (optional business rule)
-        if self.email and not self._is_valid_business_email(self.email):
-            raise ValidationError({
-                'email': 'Please use a business email address'
             })
 
     def _is_valid_phone(self, phone):
         """Validate phone number format"""
         # Simple international format validation
         phone_pattern = r'^\+\d{1,3}\d{8,15}$'
-        return re.match(phone_pattern, phone.replace(' ', '').replace('-', ''))
-
-    def _is_valid_business_email(self, email):
-        """Validate business email (exclude common personal email providers)"""
-        personal_domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com']
-        domain = email.split('@')[1].lower()
-        return domain not in personal_domains
+        cleaned_phone = phone.replace(' ', '').replace('-', '')
+        return re.match(phone_pattern, cleaned_phone) is not None
 
     def save(self, *args, **kwargs):
-        # Clean data before saving
-        self.full_clean()
-        
-        # Save current state before making changes
-        is_new = self.pk is None
-        old_employment_type = None
-        
-        if not is_new:
-            try:
-                old_employee = Employee.objects.get(pk=self.pk)
-                old_employment_type = old_employee.employment_type
-            except Employee.DoesNotExist:
-                pass
-                
-        # Save the employee
-        super().save(*args, **kwargs)
-
-        # Update salary if employment type has changed
-        if not is_new and old_employment_type and old_employment_type != self.employment_type:
-            self._update_salary_calculation_type()
-
-    def _update_salary_calculation_type(self):
-        """Update salary calculation type when employment type changes"""
-        employment_type_mapping = {
-            'hourly': 'hourly',
-            'monthly': 'monthly',
-            'contract': 'project'
-        }
-
-        try:
-            from payroll.models import Salary
-            salary = Salary.objects.get(employee=self)
-            salary.calculation_type = employment_type_mapping.get(
-                self.employment_type, 'hourly'
+        # Create or update Django user
+        if not self.user and self.email:
+            username = self.email.split('@')[0]
+            # Check if username already exists
+            if User.objects.filter(username=username).exists():
+                username = f"{username}_{self.id or User.objects.count()}"
+            
+            self.user = User.objects.create_user(
+                username=username,
+                email=self.email,
+                first_name=self.first_name,
+                last_name=self.last_name
             )
-            salary.save()
-        except ImportError:
-            # Handle circular import during migrations
-            pass
-        except Salary.DoesNotExist:
-            # No salary record exists yet
-            pass
+            
+            # Set permissions based on role
+            if self.role == 'admin':
+                self.user.is_staff = True
+                self.user.is_superuser = True
+            elif self.role == 'accountant':
+                self.user.is_staff = True
+                self.user.is_superuser = False
+            else:
+                self.user.is_staff = False
+                self.user.is_superuser = False
+            
+            self.user.save()
+        
+        # Update existing user if needed
+        elif self.user:
+            self.user.first_name = self.first_name
+            self.user.last_name = self.last_name
+            self.user.email = self.email
+            
+            # Update permissions based on role
+            if self.role == 'admin':
+                self.user.is_staff = True
+                self.user.is_superuser = True
+            elif self.role == 'accountant':
+                self.user.is_staff = True
+                self.user.is_superuser = False
+            else:
+                self.user.is_staff = False
+                self.user.is_superuser = False
+                
+            self.user.save()
+        
+        super().save(*args, **kwargs)
 
     def get_full_name(self):
         """Return the employee's full name"""
@@ -133,5 +167,3 @@ class Employee(models.Model):
 
     def __str__(self):
         return self.get_full_name()
-
-
