@@ -22,24 +22,40 @@ class FaceRegistrationSerializer(serializers.Serializer):
             )
     
     def validate_image(self, value):
-        """Basic validation for base64 image"""
+        """Enhanced validation for base64 image data"""
         if not value:
             raise serializers.ValidationError("Image data is required")
         
-        # Check if it looks like base64 data
+        # Remove data URI prefix if present
+        if value.startswith('data:image'):
+            if ',' not in value:
+                raise serializers.ValidationError("Invalid data URI format")
+            header, value = value.split(',', 1)
+            # Validate image type
+            if not any(img_type in header for img_type in ['jpeg', 'jpg', 'png', 'webp']):
+                raise serializers.ValidationError("Only JPEG, PNG, and WebP images are supported")
+        
+        # Check minimum length
         if len(value) < 100:
             raise serializers.ValidationError("Image data appears to be too short")
         
-        # Remove data URI prefix for validation
-        if ',' in value:
-            value = value.split(',')[1]
-        
-        # Basic base64 validation
+        # Validate base64 encoding
         import base64
         try:
-            base64.b64decode(value[:100])  # Test decode small portion
-        except Exception:
-            raise serializers.ValidationError("Invalid base64 image data")
+            # Decode the entire image to ensure it's valid
+            decoded = base64.b64decode(value, validate=True)
+            # Check if decoded data looks like an image (basic check)
+            if len(decoded) < 100:
+                raise serializers.ValidationError("Decoded image data is too small")
+            # Check for common image file signatures
+            if not (decoded[:2] == b'\xff\xd8' or  # JPEG
+                    decoded[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
+                    decoded[:4] == b'RIFF' and decoded[8:12] == b'WEBP'):  # WebP
+                raise serializers.ValidationError("Image data does not appear to be a valid image format")
+        except base64.binascii.Error:
+            raise serializers.ValidationError("Invalid base64 encoding")
+        except Exception as e:
+            raise serializers.ValidationError(f"Image validation failed: {str(e)}")
         
         return value
 
@@ -56,13 +72,30 @@ class FaceRecognitionSerializer(serializers.Serializer):
     )
     
     def validate_image(self, value):
-        """Basic validation for base64 image"""
+        """Enhanced validation for base64 image data"""
         if not value:
             raise serializers.ValidationError("Image data is required")
         
-        # Check if it looks like base64 data
+        # Remove data URI prefix if present
+        if value.startswith('data:image'):
+            if ',' not in value:
+                raise serializers.ValidationError("Invalid data URI format")
+            header, value = value.split(',', 1)
+            # Validate image type
+            if not any(img_type in header for img_type in ['jpeg', 'jpg', 'png', 'webp']):
+                raise serializers.ValidationError("Only JPEG, PNG, and WebP images are supported")
+        
+        # Check minimum length
         if len(value) < 100:
             raise serializers.ValidationError("Image data appears to be too short")
+        
+        # Basic base64 validation (lighter than full decode for performance)
+        import base64
+        try:
+            # Test decode a small portion to validate format
+            base64.b64decode(value[:1000], validate=True)
+        except base64.binascii.Error:
+            raise serializers.ValidationError("Invalid base64 encoding")
         
         return value
 

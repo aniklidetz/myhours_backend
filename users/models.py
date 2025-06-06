@@ -167,3 +167,7 @@ class Employee(models.Model):
 
     def __str__(self):
         return self.get_full_name()
+
+
+# Import enhanced token models
+from .token_models import DeviceToken, TokenRefreshLog, BiometricSession

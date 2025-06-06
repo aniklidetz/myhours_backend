@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Salary
 from .serializers import SalarySerializer
@@ -10,6 +11,7 @@ class SalaryViewSet(viewsets.ModelViewSet):
     """Endpoints for employee salaries"""
     queryset = Salary.objects.all().order_by('id')
     serializer_class = SalarySerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['employee', 'currency']
 

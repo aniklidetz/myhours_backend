@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from .models import Holiday
 from .serializers import HolidaySerializer
 from .services.hebcal_service import HebcalService
@@ -11,6 +12,7 @@ class HolidayViewSet(viewsets.ReadOnlyModelViewSet):
     """API for managing holidays and Shabbats"""
     queryset = Holiday.objects.all().order_by('-date')
     serializer_class = HolidaySerializer
+    permission_classes = [IsAuthenticated]
     
     @action(detail=False, methods=['get'])
     def sync(self, request):

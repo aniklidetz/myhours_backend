@@ -14,9 +14,18 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 install -r requirements.txt
 ```
-### 3. Configure Environment
+### 3. Start Databases with Docker
+```bash
+# Start PostgreSQL, MongoDB, and Redis
+docker-compose up -d
+
+# Check services are running
+docker-compose ps
 ```
-.env.example .env # Edit .env with your configuration
+
+### 4. Configure Environment
+```bash
+cp .env.docker .env  # Edit .env with your configuration
 ```
 ### 4. Generate SECRET_KEY
 ```
