@@ -1,47 +1,91 @@
 
 # Environment variables - CRITICAL!
-
 .env
-
 .env.local
-
+.env.docker
 *.env
+# Keep example files for documentation
+!.env.example
+!.env.sample
 
 # Python cache
-
-pycache/
-
+__pycache__/
 *.py[cod]
-
 *$py.class
+*.so
+*.egg-info/
+pip-log.txt
+build/
+dist/
 
 # Django
-
 *.log
-
 db.sqlite3
-
+db.sqlite3-journal
 django_debug.log
 
 # Media files
-
 media/
 
 # Static files
-
 staticfiles/
 
 # Virtualenv
-
 venv/
 
-# IDE
-
+# IDE and editors
 .DS_Store
-
+.AppleDouble
+.LSOverride
 .vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
 
-# Logs
+# Docker
+docker-compose.override.yml
 
+# Postman collections (if not shared)
+MyHours_API.postman_collection.json
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# pytest
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump
+dump.rdb
+
+# Local development files
+local_settings.py
+
+# Logs directory
 logs/
+
+# Test and setup scripts (development only)
+create_*.py
+setup_*.py
+fix_*.py
+validate_*.py
+simple_*.py
+test_*.py
+*_test_data*.py
+*_check.py
+*_validation.py
 

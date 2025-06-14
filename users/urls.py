@@ -1,7 +1,7 @@
 # users/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import EmployeeViewSet
+from .views import EmployeeViewSet, ValidateInvitationView, AcceptInvitationView
 from .auth_views import login_view, logout_view, test_connection
 from .enhanced_auth_views import (
     enhanced_login,
@@ -26,4 +26,8 @@ urlpatterns = [
     path('auth/biometric-verification/', biometric_verification, name='biometric-verification'),
     path('auth/refresh-token/', refresh_token, name='refresh-token'),
     path('auth/logout-device/', logout_device, name='logout-device'),
+    
+    # Invitation endpoints
+    path('invitation/validate/', ValidateInvitationView.as_view(), name='validate-invitation'),
+    path('invitation/accept/', AcceptInvitationView.as_view(), name='accept-invitation'),
 ]

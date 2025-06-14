@@ -41,7 +41,7 @@ def create_test_superuser():
         first_name='Admin',
         last_name='User',
         email=email,
-        role='manager'
+        role='admin'
     )
     
     print(f"✅ Created superuser: {username}")

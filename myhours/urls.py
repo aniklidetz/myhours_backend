@@ -13,6 +13,7 @@ from rest_framework.authentication import TokenAuthentication
 from django.utils import timezone
 
 from rest_framework.decorators import permission_classes, authentication_classes
+from .health import health_check as detailed_health_check
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -58,8 +59,9 @@ api_root.authentication_classes = []
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Health check endpoint (public)
+    # Health check endpoints (public)
     path('api/health/', health_check, name='health-check'),
+    path('health/', detailed_health_check, name='detailed-health-check'),
     
     # API root
     path('api/', api_root, name='api-root'),

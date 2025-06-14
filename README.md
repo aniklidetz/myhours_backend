@@ -1,45 +1,59 @@
 
-# MyHours - Employee Time Tracking System
+# 🚀 MyHours - Employee Time Tracking System
 
-## 🚀 Quick Setup
+Complete biometric-enabled time tracking system with Docker DevOps deployment.
 
-### 1. Clone and Setup Environment
-```
-git clone <https://github.com/aniklidetz/myhours_backend>
-cd myhours-backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-### 2. Install Dependencies
-```
-install -r requirements.txt
-```
-### 3. Start Databases with Docker
+## ⚡ One-Command Setup
+
 ```bash
-# Start PostgreSQL, MongoDB, and Redis
-docker-compose up -d
-
-# Check services are running
-docker-compose ps
+make setup
 ```
 
-### 4. Configure Environment
+That's it! This single command will:
+- Create environment configuration
+- Build all Docker services  
+- Start PostgreSQL, MongoDB, Redis, Django, and Celery
+- Run database migrations
+- Seed test data
+- Show you all service URLs
+
+## 🌐 Access Your Application
+
+After `make setup` completes:
+
+- **🌐 Web App**: http://localhost:8000
+- **👑 Admin Panel**: http://localhost:8000/admin/ (`admin` / `admin123`)
+- **📚 API Docs**: http://localhost:8000/api/schema/swagger/
+- **💓 Health Check**: http://localhost:8000/health/
+
+## 🐳 DevOps Commands
+
 ```bash
-cp .env.docker .env  # Edit .env with your configuration
+make up              # Start all services
+make down            # Stop all services  
+make logs            # View live logs
+make status          # Service status
+make health          # Health check
+make clean           # Reset everything
+make backup          # Backup databases
 ```
-### 4. Generate SECRET_KEY
-```
-python manage.py shell -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())" 
-# Copy the output to SECRET_KEY in .env
-```
-### 5. Database Setup
-```
-python manage.py migrate
-python manage.py createsuperuser
-```
-### 6. Run Development Server
-```
-python manage.py runserver
+
+## 🏗️ Manual Setup (Alternative)
+
+If you prefer manual setup:
+
+```bash
+# 1. Environment
+make env-setup
+# Edit .env file with your settings
+
+# 2. Build & Start
+make build
+make up
+
+# 3. Database
+make migrate
+make superuser
 ```
 
 ### 🏗️ Architecture

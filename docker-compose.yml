@@ -1,4 +1,65 @@
 services:
+  # Django Web Application
+  web:
+    build: .
+    container_name: myhours_web
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./staticfiles:/app/staticfiles
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
+      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB=biometrics_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check", "--deploy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  # Celery Worker
+  celery:
+    build: .
+    container_name: myhours_celery
+    restart: always
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
+      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB=biometrics_db
+    depends_on:
+      - postgres
+      - redis
+      - mongodb
+    networks:
+      - myhours_network
+    command: celery -A myhours worker -l info
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
@@ -64,6 +125,10 @@ volumes:
   redis_data:
     driver: local
   mongodb_data:
+    driver: local
+  media_data:
+    driver: local
+  static_data:
     driver: local
 
 networks:

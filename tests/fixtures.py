@@ -6,11 +6,11 @@ from decimal import Decimal
 
 
 class TestFixtures:
-    """Фабрика тестовых данных"""
+    """Test data factory"""
     
     @staticmethod
     def create_employee(first_name="Test", last_name="User", email=None, **kwargs):
-        """Создание тестового сотрудника"""
+        """Create test employee"""
         if email is None:
             email = f"{first_name.lower()}.{last_name.lower()}@example.com"
             
@@ -29,7 +29,7 @@ class TestFixtures:
     
     @staticmethod
     def create_worklog(employee, hours=8, days_ago=0):
-        """Создание записи рабочего времени"""
+        """Create work time record"""
         check_in = timezone.now() - timezone.timedelta(days=days_ago)
         check_out = check_in + timezone.timedelta(hours=hours)
         
@@ -41,7 +41,7 @@ class TestFixtures:
     
     @staticmethod
     def create_salary(employee, hourly_rate=50.00, **kwargs):
-        """Создание записи зарплаты"""
+        """Create salary record"""
         defaults = {
             'base_salary': Decimal('0.00'),
             'currency': 'ILS'

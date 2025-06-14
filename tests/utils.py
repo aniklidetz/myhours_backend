@@ -1,4 +1,4 @@
-"""Утилиты для тестирования"""
+"""Testing utilities"""
 
 import os
 import sys
@@ -7,13 +7,13 @@ from django.conf import settings
 
 
 def run_tests_with_coverage():
-    """Запуск тестов с покрытием"""
+    """Run tests with coverage"""
     import coverage
     
     cov = coverage.Coverage()
     cov.start()
     
-    # Запуск тестов
+    # Run tests
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myhours.settings')
     TestRunner = get_runner(settings)
     test_runner = TestRunner()
@@ -22,7 +22,7 @@ def run_tests_with_coverage():
     cov.stop()
     cov.save()
     
-    # Создание отчета
+    # Generate report
     print("\n\nCoverage Report:")
     cov.report()
     

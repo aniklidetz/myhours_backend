@@ -109,12 +109,39 @@ class WorkLog(models.Model):
 
     def get_total_hours(self):
         """Calculate the total number of hours worked in a shift"""
+        from decimal import Decimal
         duration = self.get_duration()
-        return round(duration.total_seconds() / 3600, 2)
+        hours = duration.total_seconds() / 3600
+        return round(Decimal(str(hours)), 2)
 
     def is_current_session(self):
         """Check if this is an ongoing work session"""
         return self.check_out is None
+    
+    def send_simple_notifications(self):
+        """Send simple push notifications for work hour warnings"""
+        try:
+            from .simple_notifications import SimpleNotificationService
+            
+            # Check daily hours
+            SimpleNotificationService.check_daily_hours(self.employee, self)
+            
+            # Check weekly hours (only on checkout)
+            if self.check_out:
+                SimpleNotificationService.check_weekly_hours(self.employee)
+            
+            # Check if working on holiday
+            try:
+                from integrations.models import Holiday
+                holidays = Holiday.objects.filter(date=self.check_in.date())
+                if holidays.exists():
+                    holiday = holidays.first()
+                    SimpleNotificationService.notify_holiday_work(self.employee, holiday.name)
+            except ImportError:
+                pass  # Holiday model not available
+                
+        except ImportError:
+            pass  # Notifications not available
 
     def get_status(self):
         """Get human-readable status"""

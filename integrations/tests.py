@@ -10,10 +10,10 @@ from datetime import date
 
 
 class HolidayModelTest(TestCase):
-    """Тест модели Holiday"""
+    """Holiday model test"""
     
     def test_holiday_creation(self):
-        """Тест создания праздника"""
+        """Test holiday creation"""
         holiday = Holiday.objects.create(
             date=date(2025, 9, 16),
             name="Rosh Hashanah",
@@ -27,12 +27,12 @@ class HolidayModelTest(TestCase):
 
 
 class HebcalServiceTest(TestCase):
-    """Тест HebcalService"""
+    """HebcalService test"""
     
     @patch('integrations.services.hebcal_service.cache')
     @patch('integrations.services.hebcal_service.requests.get')
     def test_fetch_holidays_success(self, mock_get, mock_cache):
-        """Тест успешного получения праздников"""
+        """Test successful holiday fetching"""
         # Mock cache to return None (no cached data)
         mock_cache.get.return_value = None
         
@@ -66,7 +66,7 @@ class HebcalServiceTest(TestCase):
     
     @patch('integrations.services.hebcal_service.cache')
     def test_fetch_holidays_from_cache(self, mock_cache):
-        """Тест получения праздников из кэша"""
+        """Test fetching holidays from cache"""
         # Mock cached data
         cached_holidays = [
             {
@@ -88,7 +88,7 @@ class HebcalServiceTest(TestCase):
     @patch('integrations.services.hebcal_service.cache')
     @patch('integrations.services.hebcal_service.requests.get')
     def test_fetch_holidays_api_error(self, mock_get, mock_cache):
-        """Тест обработки ошибки API"""
+        """Test API error handling"""
         # Mock cache to return None (no cached data)
         mock_cache.get.return_value = None
         
@@ -103,7 +103,7 @@ class HebcalServiceTest(TestCase):
 
 
 class HolidayAPITest(BaseAPITestCase):
-    """Тест API праздников"""
+    """Holiday API test"""
     
     def setUp(self):
         super().setUp()
@@ -124,7 +124,7 @@ class HolidayAPITest(BaseAPITestCase):
         )
     
     def test_list_holidays_authenticated(self):
-        """Тест получения списка праздников с аутентификацией"""
+        """Test holiday list retrieval with authentication"""
         url = reverse('holiday-list')
         
         response = self.client.get(url)
@@ -135,7 +135,7 @@ class HolidayAPITest(BaseAPITestCase):
     
     @patch('integrations.services.hebcal_service.HebcalService.sync_holidays_to_db')
     def test_sync_holidays_authenticated(self, mock_sync):
-        """Тест синхронизации праздников с аутентификацией"""
+        """Test holiday synchronization with authentication"""
         mock_sync.return_value = (5, 2)  # created, updated
         
         url = reverse('holiday-sync')
@@ -151,10 +151,10 @@ class HolidayAPITest(BaseAPITestCase):
 
 
 class HolidayAPIUnauthenticatedTest(UnauthenticatedAPITestCase):
-    """Тест API праздников без аутентификации"""
+    """Holiday API test without authentication"""
     
     def test_list_holidays_unauthenticated(self):
-        """Тест получения списка праздников без аутентификации"""
+        """Test holiday list retrieval without authentication"""
         url = reverse('holiday-list')
         
         response = self.client.get(url)
@@ -163,7 +163,7 @@ class HolidayAPIUnauthenticatedTest(UnauthenticatedAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
     def test_sync_holidays_unauthenticated(self):
-        """Тест синхронизации праздников без аутентификации"""
+        """Test holiday synchronization without authentication"""
         url = reverse('holiday-sync')
         
         response = self.client.get(url)

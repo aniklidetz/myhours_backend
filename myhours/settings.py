@@ -33,9 +33,9 @@ INSTALLED_APPS = [
     # Third party
     'rest_framework',
     'django_filters',
-    'corsheaders',  # Добавить: pip install django-cors-headers
-    'rest_framework.authtoken',  # Для аутентификации
-    'drf_spectacular',  # Для OpenAPI документации
+    'corsheaders',  # Add: pip install django-cors-headers
+    'rest_framework.authtoken',  # For authentication
+    'drf_spectacular',  # For OpenAPI documentation
     
     # Local apps
     'core',
@@ -47,7 +47,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Должен быть первым
+    'corsheaders.middleware.CorsMiddleware',  # Must be first
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -177,7 +177,7 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-# CORS settings для React Native
+# CORS settings for React Native
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in config(
     'CORS_ALLOWED_ORIGINS', 
     default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081'
@@ -247,7 +247,7 @@ BIOMETRIC_VERIFICATION_REQUIRED_FOR = [
     'payroll',      # Payroll operations require fresh biometric verification
     'admin_actions', # Admin actions require biometric confirmation
     'data_export',   # Data export requires verification
-    # 'time_tracking', # УБРАЛИ time_tracking - теперь check-in/out без доп. верификации
+    # 'time_tracking', # REMOVED time_tracking - now check-in/out without additional verification
 ]
 
 # Security Settings
@@ -314,7 +314,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Jerusalem'  # Израильская временная зона
+TIME_ZONE = 'Asia/Jerusalem'  # Israeli time zone
 USE_I18N = True
 USE_TZ = True
 
@@ -322,7 +322,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files для загрузки файлов
+# Media files for file uploads
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -385,6 +385,6 @@ if 'test' in sys.argv:
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ':memory:'
     }
-    # Отключаем внешние подключения для тестов
+    # Disable external connections for tests
     MONGO_CLIENT = None
     MONGO_DB = None

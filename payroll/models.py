@@ -69,7 +69,7 @@ class Salary(models.Model):
         from django.utils import timezone
         now = timezone.now()
         result = self.calculate_monthly_salary(now.month, now.year)
-        # Для совместимости со старыми тестами, возвращаем только total_salary
+        # For compatibility with old tests, return only total_salary
         if isinstance(result, dict) and 'total_salary' in result:
             return result['total_salary']
         return result
@@ -165,7 +165,36 @@ class Salary(models.Model):
         
     def _calculate_hourly_salary(self, month, year):
         """
-        Calculates hourly salary.
+        Calculates hourly salary using the improved PayrollCalculationService.
+        This method maintains backward compatibility while using the new service.
+        """
+        try:
+            from payroll.services import PayrollCalculationService
+            
+            # Use the new service for calculation
+            service = PayrollCalculationService(self.employee, year, month)
+            result = service.calculate_monthly_salary()
+            
+            # Convert to the expected format for backward compatibility
+            return {
+                'total_salary': result['total_gross_pay'],
+                'regular_hours': float(result['regular_hours']),
+                'overtime_hours': float(result['overtime_hours']),
+                'holiday_hours': float(result['holiday_hours']),
+                'shabbat_hours': float(result['sabbath_hours']),
+                'compensatory_days': result['compensatory_days_earned'],
+                'warnings': result.get('warnings', []),
+                'legal_violations': result.get('legal_violations', []),
+                'minimum_wage_applied': result.get('minimum_wage_applied', False)
+            }
+            
+        except ImportError:
+            # Fallback to legacy calculation if service is not available
+            return self._calculate_hourly_salary_legacy(month, year)
+    
+    def _calculate_hourly_salary_legacy(self, month, year):
+        """
+        Legacy hourly salary calculation method (original implementation)
         """
         # Retrieve all work logs for the month
         work_logs = WorkLog.objects.filter(
@@ -205,8 +234,8 @@ class Salary(models.Model):
                 if holiday.is_shabbat:
                     # Shabbat - 150% for the first 8 hours
                     if hours_worked <= 8:
-                        total_salary += Decimal(str(hours_worked)) * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['shabbat_hours'] += hours_worked
+                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                        detailed_breakdown['shabbat_hours'] += float(hours_worked)
                     else:
                         # First 8 hours at 150%
                         total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
@@ -214,14 +243,14 @@ class Salary(models.Model):
                         
                         # Remaining hours at higher rates
                         overtime_hours = hours_worked - 8
-                        total_salary += Decimal(str(overtime_hours)) * (self.hourly_rate * Decimal('1.75'))
-                        detailed_breakdown['overtime_hours'] += overtime_hours
+                        total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
+                        detailed_breakdown['overtime_hours'] += float(overtime_hours)
 
                 elif holiday.is_holiday:
                     # Holiday - 150% for the first 8 hours
                     if hours_worked <= 8:
-                        total_salary += Decimal(str(hours_worked)) * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['holiday_hours'] += hours_worked
+                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                        detailed_breakdown['holiday_hours'] += float(hours_worked)
                     else:
                         # 150% for the first 8 hours
                         total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
@@ -229,38 +258,66 @@ class Salary(models.Model):
                         
                         # Next 2 hours at 175%
                         overtime_hours_1 = min(hours_worked - 8, 2)
-                        total_salary += Decimal(str(overtime_hours_1)) * (self.hourly_rate * Decimal('1.75'))
-                        detailed_breakdown['overtime_hours'] += overtime_hours_1
+                        total_salary += overtime_hours_1 * (self.hourly_rate * Decimal('1.75'))
+                        detailed_breakdown['overtime_hours'] += float(overtime_hours_1)
                         
                         # Remaining hours at 200%
                         if hours_worked > 10:
                             overtime_hours_2 = hours_worked - 10
-                            total_salary += Decimal(str(overtime_hours_2)) * (self.hourly_rate * Decimal('2.0'))
-                            detailed_breakdown['overtime_hours'] += overtime_hours_2
-
+                            total_salary += overtime_hours_2 * (self.hourly_rate * Decimal('2.0'))
+                            detailed_breakdown['overtime_hours'] += float(overtime_hours_2)
             else:
-                # Work on a weekday
-                regular_hours = min(hours_worked, 8)
-                total_salary += Decimal(str(regular_hours)) * self.hourly_rate
-                detailed_breakdown['regular_hours'] += regular_hours
-
-                # Overtime hours
-                if hours_worked > 8:
-                    overtime_hours = hours_worked - 8
+                # Check for Sabbath work (Friday evening/Saturday) even if not marked as holiday
+                work_date = log.check_in.date()
+                work_time = log.check_in.time()
+                
+                is_sabbath_work = False
+                if work_date.weekday() == 4 and work_time.hour >= 18:  # Friday evening
+                    is_sabbath_work = True
+                elif work_date.weekday() == 5:  # Saturday
+                    is_sabbath_work = True
+                
+                if is_sabbath_work:
+                    # Add compensatory day for Sabbath work
+                    self._add_compensatory_day(work_date, True)
+                    detailed_breakdown['compensatory_days'] += 1
                     
-                    # First 2 overtime hours
-                    if overtime_hours <= 2:
-                        total_salary += Decimal(str(overtime_hours)) * (self.hourly_rate * Decimal('1.25'))
-                        detailed_breakdown['overtime_hours'] += overtime_hours
+                    # Sabbath - 150% for the first 8 hours
+                    if hours_worked <= 8:
+                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                        detailed_breakdown['shabbat_hours'] += float(hours_worked)
                     else:
-                        # First 2 hours at 125%
-                        total_salary += Decimal('2') * (self.hourly_rate * Decimal('1.25'))
-                        detailed_breakdown['overtime_hours'] += 2
+                        # First 8 hours at 150%
+                        total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
+                        detailed_breakdown['shabbat_hours'] += 8
                         
-                        # Remaining overtime at 150%
-                        remaining_overtime = overtime_hours - 2
-                        total_salary += Decimal(str(remaining_overtime)) * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['overtime_hours'] += remaining_overtime
+                        # Remaining hours at higher rates
+                        overtime_hours = hours_worked - 8
+                        total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
+                        detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                else:
+                    # Work on a regular weekday
+                    regular_hours = min(hours_worked, 8)
+                    total_salary += regular_hours * self.hourly_rate
+                    detailed_breakdown['regular_hours'] += float(regular_hours)
+
+                    # Overtime hours
+                    if hours_worked > 8:
+                        overtime_hours = hours_worked - 8
+                        
+                        # First 2 overtime hours
+                        if overtime_hours <= 2:
+                            total_salary += overtime_hours * (self.hourly_rate * Decimal('1.25'))
+                            detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                        else:
+                            # First 2 hours at 125%
+                            total_salary += Decimal('2') * (self.hourly_rate * Decimal('1.25'))
+                            detailed_breakdown['overtime_hours'] += 2
+                            
+                            # Remaining overtime at 150%
+                            remaining_overtime = overtime_hours - 2
+                            total_salary += remaining_overtime * (self.hourly_rate * Decimal('1.5'))
+                            detailed_breakdown['overtime_hours'] += float(remaining_overtime)
 
         # Minimum wage check
         minimum_wage = Decimal('5300')  # Minimum wage in Israel (NIS)
@@ -386,12 +443,12 @@ class Salary(models.Model):
                 # Bonuses for working on Shabbat/holiday
                 if holiday.is_shabbat:
                     # Shabbat bonus - 50% extra
-                    extra_pay += Decimal(str(hours_worked)) * (self.hourly_rate * Decimal('0.5'))  # bonus only
-                    detailed['shabbat_hours'] += hours_worked
+                    extra_pay += hours_worked * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                    detailed['shabbat_hours'] += float(hours_worked)
                 elif holiday.is_holiday:
                     # Holiday bonus - 50% extra
-                    extra_pay += Decimal(str(hours_worked)) * (self.hourly_rate * Decimal('0.5'))  # bonus only
-                    detailed['holiday_hours'] += hours_worked
+                    extra_pay += hours_worked * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                    detailed['holiday_hours'] += float(hours_worked)
 
             # Overtime bonuses
             if hours_worked > 8:
@@ -399,13 +456,13 @@ class Salary(models.Model):
 
                 # First 2 hours - 25% extra
                 overtime_1 = min(overtime_hours, 2)
-                extra_pay += Decimal(str(overtime_1)) * (self.hourly_rate * Decimal('0.25'))  # bonus only
+                extra_pay += overtime_1 * (self.hourly_rate * Decimal('0.25'))  # bonus only
 
                 # Remaining hours - 50% extra
                 overtime_2 = max(0, overtime_hours - 2)
-                extra_pay += Decimal(str(overtime_2)) * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                extra_pay += overtime_2 * (self.hourly_rate * Decimal('0.5'))  # bonus only
 
-                detailed['overtime_hours'] += overtime_hours
+                detailed['overtime_hours'] += float(overtime_hours)
 
         return {
             'total_extra': round(extra_pay, 2),
@@ -418,10 +475,11 @@ class Salary(models.Model):
         """
         reason = 'shabbat' if is_shabbat else 'holiday'
 
-        # Check if a compensatory day has already been added
+        # Check if a compensatory day has already been added for this specific reason
         exists = CompensatoryDay.objects.filter(
             employee=self.employee,
-            date_earned=work_date
+            date_earned=work_date,
+            reason=reason
         ).exists()
 
         if not exists:
@@ -430,6 +488,12 @@ class Salary(models.Model):
                 date_earned=work_date,
                 reason=reason
             )
+            
+            # Log the creation for audit purposes
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Created compensatory day for {self.employee.get_full_name()} "
+                       f"on {work_date} (reason: {reason})")
 
     def validate_constraints(self):
         """

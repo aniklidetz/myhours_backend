@@ -8,13 +8,14 @@ import re
 class Employee(models.Model):
     """Employee model with improved validation and role support"""
     
-    # Link to Django user
+    # Link to Django user (null until invitation is accepted)
     user = models.OneToOneField(
         User, 
         on_delete=models.CASCADE, 
         related_name='employee_profile',
         null=True,
-        blank=True
+        blank=True,
+        help_text="Django user account (created when invitation is accepted)"
     )
     
     # Basic info
@@ -109,35 +110,9 @@ class Employee(models.Model):
         return re.match(phone_pattern, cleaned_phone) is not None
 
     def save(self, *args, **kwargs):
-        # Create or update Django user
-        if not self.user and self.email:
-            username = self.email.split('@')[0]
-            # Check if username already exists
-            if User.objects.filter(username=username).exists():
-                username = f"{username}_{self.id or User.objects.count()}"
-            
-            self.user = User.objects.create_user(
-                username=username,
-                email=self.email,
-                first_name=self.first_name,
-                last_name=self.last_name
-            )
-            
-            # Set permissions based on role
-            if self.role == 'admin':
-                self.user.is_staff = True
-                self.user.is_superuser = True
-            elif self.role == 'accountant':
-                self.user.is_staff = True
-                self.user.is_superuser = False
-            else:
-                self.user.is_staff = False
-                self.user.is_superuser = False
-            
-            self.user.save()
-        
-        # Update existing user if needed
-        elif self.user:
+        # Don't auto-create user anymore - users are created when invitation is accepted
+        # Update existing user if present
+        if self.user:
             self.user.first_name = self.first_name
             self.user.last_name = self.last_name
             self.user.email = self.email
@@ -167,7 +142,117 @@ class Employee(models.Model):
 
     def __str__(self):
         return self.get_full_name()
+    
+    @property
+    def is_registered(self):
+        """Check if employee has completed registration (has user account)"""
+        return self.user is not None
+    
+    @property
+    def has_biometric(self):
+        """Check if employee has registered biometric data"""
+        if not self.user:
+            return False
+        # Check if biometric profile exists
+        try:
+            from biometrics.models import BiometricProfile
+            return BiometricProfile.objects.filter(employee=self).exists()
+        except:
+            return False
 
 
 # Import enhanced token models
 from .token_models import DeviceToken, TokenRefreshLog, BiometricSession
+
+
+# Invitation model
+import secrets
+from datetime import timedelta
+
+
+class EmployeeInvitation(models.Model):
+    """
+    Model for managing employee invitations
+    """
+    
+    employee = models.OneToOneField(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name='invitation'
+    )
+    
+    # Invitation details
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_invitations'
+    )
+    
+    # Status tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    
+    # Email tracking
+    email_sent = models.BooleanField(default=False)
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        return f"Invitation for {self.employee.email} - {'Accepted' if self.is_accepted else 'Pending'}"
+    
+    @classmethod
+    def create_invitation(cls, employee, invited_by, days_valid=2):
+        """Create a new invitation with secure token"""
+        from django.utils import timezone
+        invitation = cls.objects.create(
+            employee=employee,
+            invited_by=invited_by,
+            token=secrets.token_urlsafe(32),
+            expires_at=timezone.now() + timedelta(days=days_valid)
+        )
+        return invitation
+    
+    @property
+    def is_valid(self):
+        """Check if invitation is still valid"""
+        from django.utils import timezone
+        return (
+            not self.is_accepted and 
+            timezone.now() < self.expires_at
+        )
+    
+    @property
+    def is_accepted(self):
+        """Check if invitation has been accepted"""
+        return self.accepted_at is not None
+    
+    @property
+    def is_expired(self):
+        """Check if invitation has expired"""
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+    
+    def accept(self, user):
+        """Mark invitation as accepted and link user to employee"""
+        from django.utils import timezone
+        self.accepted_at = timezone.now()
+        self.save()
+        
+        # Link the user to the employee
+        self.employee.user = user
+        self.employee.save()
+        
+        return self.employee
+    
+    def get_invitation_url(self, base_url):
+        """Generate the invitation acceptance URL"""
+        return f"{base_url}/invite?token={self.token}"

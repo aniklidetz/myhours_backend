@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='salary',
             name='calculation_type',
-            field=models.CharField(choices=[('hourly', 'Почасовая'), ('monthly', 'Помесячная'), ('project', 'Проектная')], default='hourly', max_length=10),
+            field=models.CharField(choices=[('hourly', 'Hourly'), ('monthly', 'Monthly'), ('project', 'Project-based')], default='hourly', max_length=10),
         ),
         migrations.AddField(
             model_name='salary',
@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='salary',
             name='base_salary',
-            field=models.DecimalField(decimal_places=2, help_text='Месячная ставка или общая стоимость проекта', max_digits=10, validators=[django.core.validators.MinValueValidator(0)]),
+            field=models.DecimalField(decimal_places=2, help_text='Monthly rate or total project cost', max_digits=10, validators=[django.core.validators.MinValueValidator(0)]),
         ),
         migrations.AlterField(
             model_name='salary',
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='salary',
             name='hourly_rate',
-            field=models.DecimalField(decimal_places=2, default=0, help_text='Почасовая ставка', max_digits=6, validators=[django.core.validators.MinValueValidator(0)]),
+            field=models.DecimalField(decimal_places=2, default=0, help_text='Hourly rate', max_digits=6, validators=[django.core.validators.MinValueValidator(0)]),
             preserve_default=False,
         ),
         migrations.CreateModel(
@@ -78,14 +78,14 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('date_earned', models.DateField()),
-                ('reason', models.CharField(choices=[('shabbat', 'Работа в Шаббат'), ('holiday', 'Работа в праздник')], max_length=50)),
+                ('reason', models.CharField(choices=[('shabbat', 'Shabbat work'), ('holiday', 'Holiday work')], max_length=50)),
                 ('date_used', models.DateField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='compensatory_days', to='users.employee')),
             ],
             options={
-                'verbose_name': 'Компенсационный день',
-                'verbose_name_plural': 'Компенсационные дни',
+                'verbose_name': 'Compensatory Day',
+                'verbose_name_plural': 'Compensatory Days',
                 'ordering': ['-date_earned'],
             },
         ),

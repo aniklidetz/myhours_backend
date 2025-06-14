@@ -154,7 +154,7 @@ def register_face(request):
     
     employee_id = serializer.validated_data['employee_id']
     image = serializer.validated_data['image']
-    images = [image]  # Преобразуем одно изображение в список для процессора
+    images = [image]  # Convert single image to list for processor
     
     try:
         # Check if employee exists and user has permission
@@ -171,11 +171,11 @@ def register_face(request):
         result = face_processor.process_multiple_images(images)
         
         if not result['success']:
-            # Для тестирования - создаем mock encodings если обработка не удалась
+            # For testing - create mock encodings if processing failed
             logger.warning(f"Face processing failed for employee {employee_id}, using mock data for testing")
             
-            # Создаем mock encodings для тестирования
-            mock_encodings = [np.random.rand(128).tolist()]  # 128-мерный вектор
+            # Create mock encodings for testing
+            mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
             result = {
                 'success': True,
                 'encodings': mock_encodings,
@@ -186,7 +186,7 @@ def register_face(request):
             
             logger.info(f"Using mock encodings for testing - employee {employee_id}")
         
-        # Если все еще не удалось (что маловероятно с mock данными)
+        # If still failed (unlikely with mock data)
         if not result['success']:
             log_biometric_attempt(
                 request, 
@@ -350,55 +350,52 @@ def check_in(request):
         # Find matching employee
         match_result = face_processor.find_matching_employee(image, all_embeddings)
         
+        # Flag to track if we used fallback testing mode
+        used_fallback = False
+        
         if not match_result['success']:
-            # Для тестирования - используем первого доступного пользователя с зарегистрированной биометрией
-            logger.warning(f"Face recognition failed, using test employee for testing")
+            # For testing - use current authenticated user
+            logger.warning(f"Face recognition failed, using current authenticated user for testing")
             
-            # Находим любого сотрудника с биометрическими данными
-            test_employee = None
-            for employee_id, embeddings in all_embeddings:
-                try:
-                    test_employee = Employee.objects.get(id=employee_id, is_active=True)
-                    break
-                except Employee.DoesNotExist:
-                    continue
-            
-            if test_employee:
-                logger.info(f"Using test employee {test_employee.id} ({test_employee.get_full_name()}) for testing")
+            # Use current user for testing
+            if hasattr(request.user, 'employee_profile'):
+                test_employee = request.user.employee_profile
+                logger.info(f"Using current user employee {test_employee.id} ({test_employee.email}) for testing")
                 match_result = {
                     'success': True,
                     'employee_id': test_employee.id,
                     'confidence': 0.95,  # Mock confidence
                     'processing_time_ms': 100
                 }
+                used_fallback = True
             else:
-                # Нет сотрудников с биометрией - создаем для текущего пользователя
-                if hasattr(request.user, 'employee'):
-                    test_employee = request.user.employee
-                    logger.info(f"Using current user employee {test_employee.id} for testing")
-                    match_result = {
-                        'success': True,
-                        'employee_id': test_employee.id,
-                        'confidence': 0.95,
-                        'processing_time_ms': 100
-                    }
-                else:
-                    # Если ничего не помогло, возвращаем ошибку
-                    log = log_biometric_attempt(
-                        request,
-                        'check_in',
-                        success=False,
-                        error_message=match_result.get('error', 'No match found'),
-                        processing_time=match_result.get('processing_time_ms')
-                    )
-                    
-                    return Response({
-                        'success': False,
-                        'error': match_result.get('error', 'Face not recognized')
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                # If user doesn't have employee profile
+                log = log_biometric_attempt(
+                    request,
+                    'check_in',
+                    success=False,
+                    error_message='User has no employee profile',
+                    processing_time=match_result.get('processing_time_ms')
+                )
+                
+                return Response({
+                    'success': False,
+                    'error': 'User has no employee profile'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee
         employee = Employee.objects.get(id=match_result['employee_id'])
+        
+        # IMPORTANT: Verify that the recognized face belongs to the authenticated user
+        # This ensures multiple employees can check-in simultaneously
+        # Skip this check if we used fallback mode (already authenticated user)
+        if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
+            logger.warning(f"Face recognized as {employee.email} but user is {request.user.email}")
+            return Response({
+                'success': False,
+                'error': 'Face does not match authenticated user',
+                'details': 'Please ensure you are logged in with your own account'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Check if already checked in
         existing_worklog = WorkLog.objects.filter(
@@ -507,60 +504,52 @@ def check_out(request):
         # Find matching employee
         match_result = face_processor.find_matching_employee(image, all_embeddings)
         
+        # Flag to track if we used fallback testing mode
+        used_fallback = False
+        
         if not match_result['success']:
-            # Для тестирования - находим сотрудника с активной сессией (checked in)
-            logger.warning(f"Face recognition failed for check-out, using test employee for testing")
+            # For testing - use current authenticated user
+            logger.warning(f"Face recognition failed for check-out, using current authenticated user for testing")
             
-            # Находим сотрудника с активной рабочей сессией
-            active_worklog = WorkLog.objects.filter(
-                check_out__isnull=True,
-                check_in__isnull=False
-            ).first()
-            
-            if active_worklog:
-                test_employee = active_worklog.employee
-                logger.info(f"Using test employee {test_employee.id} ({test_employee.get_full_name()}) with active session for check-out testing")
+            # Use current user for testing
+            if hasattr(request.user, 'employee_profile'):
+                test_employee = request.user.employee_profile
+                logger.info(f"Using current user employee {test_employee.id} ({test_employee.email}) for check-out testing")
                 match_result = {
                     'success': True,
                     'employee_id': test_employee.id,
                     'confidence': 0.95,  # Mock confidence
                     'processing_time_ms': 100
                 }
+                used_fallback = True
             else:
-                # Нет активных сессий - используем любого сотрудника с биометрией
-                test_employee = None
-                for employee_id, embeddings in all_embeddings:
-                    try:
-                        test_employee = Employee.objects.get(id=employee_id, is_active=True)
-                        break
-                    except Employee.DoesNotExist:
-                        continue
+                # If user doesn't have employee profile
+                log_biometric_attempt(
+                    request,
+                    'check_out',
+                    success=False,
+                    error_message='User has no employee profile',
+                    processing_time=match_result.get('processing_time_ms')
+                )
                 
-                if test_employee:
-                    logger.info(f"No active sessions found, using test employee {test_employee.id} for check-out testing")
-                    match_result = {
-                        'success': True,
-                        'employee_id': test_employee.id,
-                        'confidence': 0.95,
-                        'processing_time_ms': 100
-                    }
-                else:
-                    # Если ничего не помогло, возвращаем ошибку
-                    log_biometric_attempt(
-                        request,
-                        'check_out',
-                        success=False,
-                        error_message=match_result.get('error', 'No match found'),
-                        processing_time=match_result.get('processing_time_ms')
-                    )
-                    
-                    return Response({
-                        'success': False,
-                        'error': match_result.get('error', 'Face not recognized')
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'success': False,
+                    'error': 'User has no employee profile'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee
         employee = Employee.objects.get(id=match_result['employee_id'])
+        
+        # IMPORTANT: Verify that the recognized face belongs to the authenticated user
+        # This ensures multiple employees can check-out simultaneously
+        # Skip this check if we used fallback mode (already authenticated user)
+        if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
+            logger.warning(f"Face recognized as {employee.email} but user is {request.user.email}")
+            return Response({
+                'success': False,
+                'error': 'Face does not match authenticated user',
+                'details': 'Please ensure you are logged in with your own account'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Find open work log
         worklog = WorkLog.objects.filter(

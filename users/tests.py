@@ -8,10 +8,10 @@ from tests.fixtures import TestFixtures
 
 
 class EmployeeModelTest(BaseTestCase):
-    """Тест модели Employee"""
+    """Employee model test"""
     
     def test_employee_creation(self):
-        """Тест создания сотрудника"""
+        """Test employee creation"""
         # Use unique email to avoid conflicts
         employee = Employee.objects.create(
             first_name="Jane",
@@ -25,14 +25,14 @@ class EmployeeModelTest(BaseTestCase):
         self.assertEqual(employee.email, "jane.smith.test@example.com")
     
     def test_employee_get_full_name(self):
-        """Тест метода get_full_name"""
+        """Test get_full_name method"""
         # Use the employee from BaseTestCase
         full_name = self.employee.get_full_name()
         self.assertEqual(full_name, "John Doe")
 
 
 class EmployeeAPITest(BaseAPITestCase):
-    """Тест API сотрудников"""
+    """Employee API test"""
     
     def setUp(self):
         super().setUp()
@@ -45,7 +45,7 @@ class EmployeeAPITest(BaseAPITestCase):
         )
     
     def test_create_employee_authenticated(self):
-        """Тест создания сотрудника с аутентификацией"""
+        """Test employee creation with authentication"""
         url = reverse('employee-list')
         data = {
             'first_name': 'Alice',
@@ -60,7 +60,7 @@ class EmployeeAPITest(BaseAPITestCase):
         self.assertEqual(Employee.objects.filter(email='alice.johnson@example.com').count(), 1)
     
     def test_create_employee_unauthenticated(self):
-        """Тест создания сотрудника без аутентификации"""
+        """Test employee creation without authentication"""
         # Create unauthenticated client
         from rest_framework.test import APIClient
         client = APIClient()
@@ -78,7 +78,7 @@ class EmployeeAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
     
     def test_search_employee(self):
-        """Тест поиска сотрудника"""
+        """Test employee search"""
         url = reverse('employee-list')
         
         response = self.client.get(url, {'search': 'Test'})
