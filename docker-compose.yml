@@ -14,9 +14,11 @@ services:
       - DEBUG=True
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
       - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB=biometrics_db
+      - MONGO_DB_NAME=biometrics_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,9 +51,11 @@ services:
       - DEBUG=True
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
       - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB=biometrics_db
+      - MONGO_DB_NAME=biometrics_db
     depends_on:
       - postgres
       - redis
