@@ -22,7 +22,7 @@ dnspython==2.7.0
 idna==3.10
 python-decouple==3.8
 pytz==2025.1
-requests==2.32.3
+requests==2.32.4
 sqlparse==0.5.3
 urllib3==2.3.0
 
