@@ -12,6 +12,8 @@ services:
       - ./staticfiles:/app/staticfiles
     environment:
       - DEBUG=True
+      - SECRET_KEY=your-secret-key-here-generate-new-one
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
       - REDIS_URL=redis://:redis_password_123@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
@@ -49,6 +51,8 @@ services:
       - ./logs:/app/logs
     environment:
       - DEBUG=True
+      - SECRET_KEY=your-secret-key-here-generate-new-one
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
       - REDIS_URL=redis://:redis_password_123@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/

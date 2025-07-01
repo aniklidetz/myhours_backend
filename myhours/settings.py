@@ -120,6 +120,8 @@ else:
 # MongoDB settings
 MONGO_CONNECTION_STRING = config('MONGO_CONNECTION_STRING', default='mongodb://localhost:27017/')
 MONGO_DB_NAME = config('MONGO_DB_NAME', default='biometrics_db')
+MONGO_HOST = config('MONGO_HOST', default='localhost')
+MONGO_PORT = config('MONGO_PORT', default=27017, cast=int)
 
 try:
     MONGO_CLIENT = MongoClient(MONGO_CONNECTION_STRING)
@@ -132,28 +134,34 @@ except Exception as e:
 # Redis Cache - temporarily use dummy cache to fix auth issues
 REDIS_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/1')
 
-# Temporary: Use dummy cache until Redis auth is fixed
+# Redis Cache Configuration
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "retry_on_timeout": True,
+                "socket_connect_timeout": 5,
+                "socket_timeout": 5,
+            }
+        },
+        "KEY_PREFIX": "myhours",
+        "VERSION": 1,
     }
 }
 
-# Production Redis config (uncomment when Redis auth is fixed):
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": REDIS_URL,
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#             "CONNECTION_POOL_KWARGS": {
-#                 "retry_on_timeout": True,
-#                 "socket_connect_timeout": 5,
-#                 "socket_timeout": 5,
-#             }
-#         }
-#     }
-# }
+# Fallback to dummy cache if Redis fails
+try:
+    from django_redis import get_redis_connection
+    get_redis_connection("default")
+except:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
+    }
 
 # Session settings
 # Use database sessions until Redis auth is fixed
@@ -173,9 +181,9 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_REDIRECT_EXEMPT = []
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+    CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
 
 # CORS settings for React Native
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in config(
@@ -254,6 +262,11 @@ BIOMETRIC_VERIFICATION_REQUIRED_FOR = [
 MAX_FAILED_AUTH_ATTEMPTS = 5
 AUTH_LOCKOUT_DURATION_MINUTES = 15
 REQUIRE_BIOMETRIC_FOR_SENSITIVE_OPS = True
+
+# Feature Flags
+FEATURE_FLAGS = {
+    "ENABLE_PROJECT_PAYROLL": config('ENABLE_PROJECT_PAYROLL', default=False, cast=bool),
+}
 
 # DRF Spectacular settings for OpenAPI
 SPECTACULAR_SETTINGS = {

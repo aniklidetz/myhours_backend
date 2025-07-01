@@ -149,6 +149,15 @@ class Employee(models.Model):
         return self.user is not None
     
     @property
+    def salary_info(self):
+        """Get salary information for this employee"""
+        from payroll.models import Salary
+        try:
+            return Salary.objects.get(employee=self)
+        except Salary.DoesNotExist:
+            return None
+
+    @property
     def has_biometric(self):
         """Check if employee has registered biometric data"""
         if not self.user:

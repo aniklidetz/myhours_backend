@@ -15,6 +15,13 @@ help:
 	@echo "🚀 MyHours Backend DevOps Commands"
 	@echo "=================================="
 	@echo ""
+	@echo "🎬 Demo Commands:"
+	@echo "  make demo-up         - Start demo environment (production-like)"
+	@echo "  make demo-down       - Stop demo environment"
+	@echo "  make demo-setup      - Setup demo data and admin user"
+	@echo "  make demo-logs       - View demo logs"
+	@echo "  make demo-clean      - Clean demo environment completely"
+	@echo ""
 	@echo "🐳 Docker DevOps:"
 	@echo "  make up              - Start entire stack (databases + web + celery)"
 	@echo "  make down            - Stop all services"
@@ -191,6 +198,50 @@ prod-migrate:
 
 prod-collectstatic:
 	docker-compose exec web python manage.py collectstatic --noinput --settings=myhours.settings_prod
+
+# Demo Commands
+demo-up:
+	@echo "🎬 Starting MyHours Demo Environment..."
+	docker-compose -f docker-compose.demo.yml up --build -d
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 20
+	@echo "✅ Demo environment started!"
+	@echo "  🌐 Web:        http://localhost"
+	@echo "  📊 API:        http://localhost/api/v1/"
+	@echo "  🔧 Admin:      http://localhost/admin/"
+
+demo-down:
+	@echo "🛑 Stopping demo environment..."
+	docker-compose -f docker-compose.demo.yml down
+
+demo-logs:
+	docker-compose -f docker-compose.demo.yml logs -f
+
+demo-clean:
+	@echo "🧹 Cleaning demo environment..."
+	docker-compose -f docker-compose.demo.yml down -v
+	docker system prune -f
+
+demo-setup:
+	@echo "🎯 Setting up demo data..."
+	docker-compose -f docker-compose.demo.yml exec web python manage.py migrate
+	docker-compose -f docker-compose.demo.yml exec web python manage.py collectstatic --noinput
+	@echo "👤 Creating admin user..."
+	docker-compose -f docker-compose.demo.yml exec web python manage.py shell -c "\
+from django.contrib.auth.models import User; \
+from users.models import Employee; \
+if not User.objects.filter(username='admin').exists(): \
+    admin = User.objects.create_superuser('admin', 'admin@example.com', 'admin123'); \
+    Employee.objects.create(user=admin, first_name='Demo', last_name='Admin', email='admin@example.com', role='admin', is_superuser=True) \
+else: \
+    print('Admin user already exists') \
+"
+	@echo "✅ Demo setup complete!"
+	@echo "🔑 Admin login: admin / admin123"
+
+demo-health:
+	@echo "🏥 Checking demo health..."
+	curl -f http://localhost/api/health/ || echo "❌ Demo API not responding"
 
 # Quick aliases
 docker-up: up

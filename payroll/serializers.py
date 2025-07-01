@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 from decimal import Decimal
 from .models import Salary, CompensatoryDay
 from users.serializers import EmployeeSerializer
@@ -49,13 +50,30 @@ class SalarySerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_calculation_type(self, value):
+        """Validate calculation type against feature flags"""
+        if value == 'project' and not settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False):
+            raise serializers.ValidationError(
+                "Project payroll calculation is currently disabled. "
+                "Contact administrator to enable this feature."
+            )
+        return value
+
     def validate(self, attrs):
         """Cross-field validation"""
         calculation_type = attrs.get('calculation_type')
         project_start_date = attrs.get('project_start_date')
         project_end_date = attrs.get('project_end_date')
 
+        # Check if project payroll is enabled
         if calculation_type == 'project':
+            if not settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False):
+                raise serializers.ValidationError({
+                    'calculation_type': 
+                        "Project payroll calculation is currently disabled. "
+                        "Contact administrator to enable this feature."
+                })
+            
             if not project_start_date or not project_end_date:
                 raise serializers.ValidationError(
                     "Project start and end dates are required for project-based calculation"

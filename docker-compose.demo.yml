@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # Django Web Application
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: myhours_demo_web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app  # ← Монтируем весь код для hot-reload
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./staticfiles:/app/staticfiles
+    env_file:
+      - .env.demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             python manage.py runserver 0.0.0.0:8000 --noreload"
+    security_opt:
+      - no-new-privileges:true
+
+  # Celery Worker
+  celery:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: myhours_demo_celery
+    restart: unless-stopped
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    env_file:
+      - .env.demo
+    depends_on:
+      - postgres
+      - redis
+      - mongodb
+    networks:
+      - myhours_network
+    command: celery -A myhours worker -l info
+    security_opt:
+      - no-new-privileges:true
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: myhours_demo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: myhours_demo_db
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_pass_2025
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_user -d myhours_demo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: myhours_demo_redis
+    restart: unless-stopped
+    volumes:
+      - redis_demo_data:/data
+    networks:
+      - myhours_network
+    command: redis-server --appendonly yes --requirepass demo_redis_pass
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "demo_redis_pass", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for biometrics (WITH authentication)
+  mongodb:
+    image: mongo:7
+    container_name: myhours_demo_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: demo_mongo
+      MONGO_INITDB_ROOT_PASSWORD: demo_mongo_pass
+      MONGO_INITDB_DATABASE: biometrics_demo_db
+    volumes:
+      - mongodb_demo_data:/data/db
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "demo_mongo", "--password", "demo_mongo_pass", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx reverse proxy (optional for production-like setup)
+  nginx:
+    image: nginx:alpine
+    container_name: myhours_demo_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.demo.conf:/etc/nginx/nginx.conf:ro
+      - ./staticfiles:/app/staticfiles:ro
+    depends_on:
+      - web
+    networks:
+      - myhours_network
+
+volumes:
+  postgres_demo_data:
+    driver: local
+  redis_demo_data:
+    driver: local
+  mongodb_demo_data:
+    driver: local
+
+networks:
+  myhours_network:
+    driver: bridge

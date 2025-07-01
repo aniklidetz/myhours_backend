@@ -3,9 +3,11 @@ from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 import calendar
+import logging
 from users.models import Employee
 from integrations.models import Holiday
 from worktime.models import WorkLog
+from integrations.services.sunrise_sunset_service import SunriseSunsetService
 from decimal import Decimal
 
 class Salary(models.Model):
@@ -32,14 +34,18 @@ class Salary(models.Model):
         max_digits=10, 
         decimal_places=2, 
         validators=[MinValueValidator(0)],
-        help_text='Monthly rate or total project cost'
+        null=True,
+        blank=True,
+        help_text='Monthly salary or total project cost (required for monthly/project types)'
     )
     
     hourly_rate = models.DecimalField(
         max_digits=6, 
         decimal_places=2, 
         validators=[MinValueValidator(0)],
-        help_text='Hourly rate'
+        null=True,
+        blank=True,
+        help_text='Hourly rate (required for hourly type)'
     )
     
     calculation_type = models.CharField(
@@ -267,15 +273,11 @@ class Salary(models.Model):
                             total_salary += overtime_hours_2 * (self.hourly_rate * Decimal('2.0'))
                             detailed_breakdown['overtime_hours'] += float(overtime_hours_2)
             else:
-                # Check for Sabbath work (Friday evening/Saturday) even if not marked as holiday
+                # Check for Sabbath work using precise sunset times
                 work_date = log.check_in.date()
-                work_time = log.check_in.time()
+                work_datetime = log.check_in
                 
-                is_sabbath_work = False
-                if work_date.weekday() == 4 and work_time.hour >= 18:  # Friday evening
-                    is_sabbath_work = True
-                elif work_date.weekday() == 5:  # Saturday
-                    is_sabbath_work = True
+                is_sabbath_work = self._is_sabbath_work_precise(work_datetime)
                 
                 if is_sabbath_work:
                     # Add compensatory day for Sabbath work
@@ -495,6 +497,59 @@ class Salary(models.Model):
             logger.info(f"Created compensatory day for {self.employee.get_full_name()} "
                        f"on {work_date} (reason: {reason})")
 
+    def clean(self):
+        """
+        Validates salary fields based on calculation_type
+        """
+        super().clean()
+        
+        if self.calculation_type == 'hourly':
+            # For hourly type: hourly_rate required, base_salary should be null/0
+            if not self.hourly_rate or self.hourly_rate <= 0:
+                raise ValidationError({
+                    'hourly_rate': 'Hourly rate is required and must be greater than 0 for hourly calculation type.'
+                })
+            if self.base_salary and self.base_salary > 0:
+                raise ValidationError({
+                    'base_salary': 'Base salary should be empty (null/0) for hourly calculation type.'
+                })
+                
+        elif self.calculation_type == 'monthly':
+            # For monthly type: base_salary required, hourly_rate should be null/0
+            if not self.base_salary or self.base_salary <= 0:
+                raise ValidationError({
+                    'base_salary': 'Base salary is required and must be greater than 0 for monthly calculation type.'
+                })
+            if self.hourly_rate and self.hourly_rate > 0:
+                raise ValidationError({
+                    'hourly_rate': 'Hourly rate should be empty (null/0) for monthly calculation type.'
+                })
+                
+        elif self.calculation_type == 'project':
+            # For project type: exactly one field should be filled
+            has_base_salary = self.base_salary and self.base_salary > 0
+            has_hourly_rate = self.hourly_rate and self.hourly_rate > 0
+            
+            if not has_base_salary and not has_hourly_rate:
+                raise ValidationError(
+                    'For project calculation type, either base_salary (for fixed-bid projects) '
+                    'or hourly_rate (for hourly projects) must be specified.'
+                )
+            if has_base_salary and has_hourly_rate:
+                raise ValidationError(
+                    'For project calculation type, specify either base_salary OR hourly_rate, not both.'
+                )
+                
+            # Project dates validation
+            if not self.project_start_date or not self.project_end_date:
+                raise ValidationError(
+                    'Project start and end dates must be specified for project-based payment.'
+                )
+            if self.project_start_date > self.project_end_date:
+                raise ValidationError(
+                    'Project start date cannot be later than end date.'
+                )
+
     def validate_constraints(self):
         """
         Validates constraints on overtime and maximum daily working hours
@@ -525,13 +580,83 @@ class Salary(models.Model):
             if log.get_total_hours() > 12:
                 raise ValidationError(f"Exceeded maximum daily work hours (12 hours) for date {log.check_in.date()}")
 
-        # Additional checks for project-based payment
-        if self.calculation_type == 'project':
-            if not self.project_start_date or not self.project_end_date:
-                raise ValidationError("Project start and end dates must be specified for project-based payment")
-
-            if self.project_start_date > self.project_end_date:
-                raise ValidationError("Project start date cannot be later than end date")
+    def _is_sabbath_work_precise(self, work_datetime):
+        """
+        Check if work occurred during Sabbath using precise sunset times
+        
+        Args:
+            work_datetime (datetime): Work start time
+            
+        Returns:
+            bool: True if work occurred during Sabbath
+        """
+        work_date = work_datetime.date()
+        work_time = work_datetime.time()
+        
+        # Check for registered Sabbath in Holiday model first
+        sabbath_holiday = Holiday.objects.filter(
+            date=work_date,
+            is_shabbat=True
+        ).first()
+        
+        if sabbath_holiday and sabbath_holiday.start_time and sabbath_holiday.end_time:
+            # Use precise times from database if available
+            import pytz
+            
+            # Convert database times to Israel timezone
+            israel_tz = pytz.timezone('Asia/Jerusalem')
+            start_datetime_israel = sabbath_holiday.start_time.astimezone(israel_tz)
+            end_datetime_israel = sabbath_holiday.end_time.astimezone(israel_tz)
+            
+            # Ensure work_datetime is timezone-aware and in Israel timezone
+            if work_datetime.tzinfo is None:
+                work_datetime = timezone.make_aware(work_datetime)
+            work_datetime_israel = work_datetime.astimezone(israel_tz)
+            
+            # Handle Sabbath spanning midnight (Friday evening to Saturday evening)
+            if work_date.weekday() == 4:  # Friday
+                return work_datetime_israel >= start_datetime_israel
+            elif work_date.weekday() == 5:  # Saturday
+                return work_datetime_israel <= end_datetime_israel
+        
+        # Fallback: use SunriseSunsetService for precise calculation
+        try:
+            if work_date.weekday() == 4:  # Friday
+                shabbat_times = SunriseSunsetService.get_shabbat_times(work_date)
+                if not shabbat_times.get('is_estimated', True):
+                    from datetime import datetime
+                    import pytz
+                    
+                    # Parse UTC time from API
+                    shabbat_start_utc = datetime.fromisoformat(shabbat_times['start'].replace('Z', '+00:00'))
+                    
+                    # Convert to Israel timezone (UTC+2/UTC+3)
+                    israel_tz = pytz.timezone('Asia/Jerusalem')
+                    shabbat_start_local = shabbat_start_utc.astimezone(israel_tz)
+                    
+                    # Ensure work_datetime is timezone-aware
+                    if work_datetime.tzinfo is None:
+                        work_datetime = timezone.make_aware(work_datetime)
+                    work_local = work_datetime.astimezone(israel_tz)
+                    
+                    return work_local >= shabbat_start_local
+                else:
+                    # Fallback to 18:00 if API fails
+                    return work_time.hour >= 18
+            elif work_date.weekday() == 5:  # Saturday
+                # All Saturday work is Sabbath work
+                return True
+                
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error checking precise Sabbath times for {work_date}: {e}")
+            # Fallback to simple time check
+            if work_date.weekday() == 4 and work_time.hour >= 18:
+                return True
+            elif work_date.weekday() == 5:
+                return True
+                
+        return False
 
     def __str__(self):
         return f"Salary {self.employee.get_full_name()} ({self.get_calculation_type_display()})"
@@ -548,6 +673,8 @@ class Salary(models.Model):
             self.calculation_type = employment_type_mapping.get(
                 self.employee.employment_type, 'hourly')
 
+        # Validate salary fields based on calculation_type
+        self.clean()
         self.validate_constraints()
         return super().save(*args, **kwargs)
 
