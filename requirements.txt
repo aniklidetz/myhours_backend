@@ -35,4 +35,4 @@ opencv-python==4.11.0.86
 opencv-contrib-python==4.11.0.86
 Pillow==11.1.0
 celery==5.3.4
-cryptography==42.0.8
+cryptography==45.0.4
