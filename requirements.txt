@@ -24,7 +24,7 @@ python-decouple==3.8
 pytz==2025.1
 requests==2.32.3
 sqlparse==0.5.3
-urllib3==2.3.0
+urllib3==2.5.0
 
 # Biometric dependencies
 face-recognition==1.3.0
