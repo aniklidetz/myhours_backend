@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"                # Root of the project where requirements.txt is located
+    schedule:
+      interval: "weekly"          # How often to check for updates (options: "daily", "weekly", "monthly")
+    open-pull-requests-limit: 10  # Maximum number of open PRs at the same time
+    rebase-strategy: "auto"       # Automatically rebase PRs when they become out of date
