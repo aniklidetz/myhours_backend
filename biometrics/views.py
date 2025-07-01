@@ -68,7 +68,7 @@ def log_biometric_attempt(request, action, employee=None, success=False,
         )
         return log
     except Exception as e:
-        logger.error(f"Failed to log biometric attempt: {e}")
+        logger.exception("Failed to log biometric attempt")
         return None
 
 
@@ -172,7 +172,7 @@ def register_face(request):
         
         if not result['success']:
             # For testing - create mock encodings if processing failed
-            logger.warning(f"Face processing failed for employee {employee_id}, using mock data for testing")
+            logger.warning("Face processing failed, using mock data for testing")
             
             # Create mock encodings for testing
             mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
@@ -184,7 +184,7 @@ def register_face(request):
                 'results': [{'success': True, 'encodings': mock_encodings, 'processing_time_ms': 100}]
             }
             
-            logger.info(f"Using mock encodings for testing - employee {employee_id}")
+            logger.info("Using mock encodings for testing")
         
         # If still failed (unlikely with mock data)
         if not result['success']:
@@ -197,8 +197,7 @@ def register_face(request):
             )
             
             return Response({
-                'error': 'Failed to process images',
-                'details': result
+                'error': 'Failed to process images'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Save to MongoDB
@@ -233,14 +232,13 @@ def register_face(request):
                 processing_time=sum(r.get('processing_time_ms', 0) for r in result['results'])
             )
         
-        logger.info(f"Successfully registered face for employee {employee.get_full_name()}")
+        logger.info("Face registration successful")
         
         return Response({
             'success': True,
-            'message': f'Successfully registered {result["successful_count"]} face encoding(s)',
+            'message': 'Face registration completed successfully',
             'employee_id': employee_id,
-            'employee_name': employee.get_full_name(),
-            'encodings_count': len(result['encodings'])
+            'employee_name': employee.get_full_name()
         }, status=status.HTTP_201_CREATED)
         
     except Employee.DoesNotExist:
@@ -249,7 +247,7 @@ def register_face(request):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"Face registration error: {e}")
+        logger.exception("Face registration error")
         return Response(
             {'error': 'Internal server error'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -355,12 +353,12 @@ def check_in(request):
         
         if not match_result['success']:
             # For testing - use current authenticated user
-            logger.warning(f"Face recognition failed, using current authenticated user for testing")
+            logger.warning("Face recognition failed, using authenticated user for testing")
             
             # Use current user for testing
             if hasattr(request.user, 'employee_profile'):
                 test_employee = request.user.employee_profile
-                logger.info(f"Using current user employee {test_employee.id} ({test_employee.email}) for testing")
+                logger.info("Using current authenticated user for testing")
                 match_result = {
                     'success': True,
                     'employee_id': test_employee.id,
@@ -390,7 +388,7 @@ def check_in(request):
         # This ensures multiple employees can check-in simultaneously
         # Skip this check if we used fallback mode (already authenticated user)
         if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
-            logger.warning(f"Face recognized as {employee.email} but user is {request.user.email}")
+            logger.warning("Face recognition mismatch detected")
             return Response({
                 'success': False,
                 'error': 'Face does not match authenticated user',
@@ -448,7 +446,7 @@ def check_in(request):
             except BiometricAttempt.DoesNotExist:
                 pass
         
-        logger.info(f"Successful check-in for {employee.get_full_name()}")
+        logger.info("Check-in successful")
         
         return Response({
             'success': True,
@@ -466,7 +464,7 @@ def check_in(request):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"Check-in error: {e}")
+        logger.exception("Check-in error")
         return Response(
             {'error': 'Internal server error'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -544,7 +542,7 @@ def check_out(request):
         # This ensures multiple employees can check-out simultaneously
         # Skip this check if we used fallback mode (already authenticated user)
         if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
-            logger.warning(f"Face recognized as {employee.email} but user is {request.user.email}")
+            logger.warning("Face recognition mismatch detected")
             return Response({
                 'success': False,
                 'error': 'Face does not match authenticated user',
@@ -622,7 +620,7 @@ def check_out(request):
             status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.error(f"Check-out error: {e}")
+        logger.exception("Check-out error")
         return Response(
             {'error': 'Internal server error'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -719,7 +717,7 @@ def check_work_status(request):
             })
             
     except Exception as e:
-        logger.error(f"Work status check error: {e}")
+        logger.exception("Work status check error")
         return Response({
             'error': True,
             'code': 'INTERNAL_SERVER_ERROR',
@@ -759,15 +757,17 @@ def biometric_stats(request):
         failed_checks = recent_logs.filter(success=False).count()
         
         # Get average confidence scores
-        avg_confidence = recent_logs.filter(
-            success=True,
-            confidence_score__isnull=False
-        ).values_list('confidence_score', flat=True)
-        
-        avg_confidence = sum(avg_confidence) / len(avg_confidence) if avg_confidence else 0
+        try:
+            confidence_scores = recent_logs.filter(
+                success=True,
+                confidence_score__isnull=False
+            ).values_list('confidence_score', flat=True)
+            
+            avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0
+        except Exception:
+            avg_confidence = 0
         
         return Response({
-            'mongodb_stats': mongo_stats,
             'profiles': {
                 'total': total_profiles,
                 'active': active_profiles
@@ -775,17 +775,13 @@ def biometric_stats(request):
             'recent_activity': {
                 'successful_checks': successful_checks,
                 'failed_checks': failed_checks,
-                'average_confidence': round(avg_confidence, 2),
                 'period_days': 7
             },
-            'system_health': {
-                'mongodb_connected': mongo_stats.get('status') == 'connected',
-                'face_processor_ready': True
-            }
+            'system_status': 'operational'
         })
         
     except Exception as e:
-        logger.error(f"Stats error: {e}")
+        logger.exception("Stats error")
         return Response(
             {'error': 'Failed to retrieve statistics'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

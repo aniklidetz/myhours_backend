@@ -140,7 +140,7 @@ def enhanced_login(request):
             except User.DoesNotExist:
                 pass
         if not user:
-            logger.warning(f"Failed login attempt for email: {email}")
+            logger.warning("Failed login attempt - invalid credentials")
             return Response({
                 'error': True,
                 'code': 'AUTHENTICATION_FAILED',
@@ -306,22 +306,19 @@ def biometric_verification(request):
         match_result = face_processor.find_matching_employee(image, all_embeddings)
         
         if not match_result['success']:
-            logger.warning(f"Biometric verification failed for user {request.user.username}")
+            logger.warning("Biometric verification failed")
             return Response({
                 'error': True,
                 'code': 'BIOMETRIC_VERIFICATION_FAILED',
                 'message': 'Biometric verification failed',
-                'details': {
-                    'reason': match_result.get('error', 'No match found'),
-                    'quality_check': match_result.get('quality_check')
-                },
+                'details': None,
                 'error_id': 'bio_003',
                 'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Verify that the matched employee is the requesting user
         if match_result['employee_id'] != employee.id:
-            logger.warning(f"Biometric mismatch: user {request.user.username} matched as employee {match_result['employee_id']}")
+            logger.warning(f"Biometric mismatch detected for user ID {request.user.id}")
             return Response({
                 'error': True,
                 'code': 'BIOMETRIC_MISMATCH',
@@ -363,23 +360,24 @@ def biometric_verification(request):
             'time_tracking': verification_level in ['high', 'medium', 'low']
         }
         
-        logger.info(f"Biometric verification successful: user={request.user.username}, "
-                   f"confidence={confidence_score}, session={biometric_session.session_id}")
+        logger.info("Biometric verification successful for user")
         
+        try:
+            session_id = str(biometric_session.session_id) if biometric_session and biometric_session.session_id else None
+            expires_at = biometric_session.expires_at.isoformat() if biometric_session and biometric_session.expires_at else None
+        except Exception:
+            session_id = None
+            expires_at = None
+            
         return Response({
             'success': True,
-            'biometric_session_id': str(biometric_session.session_id),
-            'confidence_score': confidence_score,
-            'quality_score': quality_score,
-            'session_expires_at': biometric_session.expires_at.isoformat(),
+            'biometric_session_id': session_id,
             'verification_level': verification_level,
-            'operation_type': operation_type,
-            'access_granted': access_granted,
-            'processing_time_ms': match_result.get('processing_time_ms', 0)
+            'access_granted': access_granted
         })
         
     except Exception as e:
-        logger.error(f"Biometric verification error: {e}")
+        logger.exception("Biometric verification error")
         return Response({
             'error': True,
             'code': 'INTERNAL_SERVER_ERROR',
@@ -436,7 +434,7 @@ def refresh_token(request):
             }, status=status.HTTP_400_BAD_REQUEST)
             
     except Exception as e:
-        logger.error(f"Token refresh error: {e}")
+        logger.exception("Token refresh error")
         return Response({
             'error': True,
             'code': 'INTERNAL_SERVER_ERROR',

@@ -43,7 +43,7 @@ def reset_mishka_password():
         
         print(f"✅ Password reset successful!")
         print(f"📧 Email: {employee.email}")
-        print(f"🔑 New password: {new_password}")
+        print(f"🔑 New password: [set successfully]")
         print(f"👤 Role: {employee.role}")
         
     except Exception as e:

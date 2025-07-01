@@ -106,18 +106,18 @@ class FaceRecognitionService:
     def save_employee_face(cls, employee_id, base64_image):
         """Save employee face to database"""
         try:
-            logger.info(f"Starting face registration for employee {employee_id}")
+            logger.info("Starting face registration")
             
             # Decode image
             image = cls.decode_image(base64_image)
             if image is None:
-                logger.error(f"Failed to decode image for employee {employee_id}")
+                logger.error("Failed to decode image for registration")
                 return None
             
             # Extract face features
             face_roi = cls.extract_face_features(image)
             if face_roi is None:
-                logger.error(f"No face detected for employee {employee_id}")
+                logger.error("No face detected for registration")
                 return None
             
             # Flatten the face for storage (create face encoding)
@@ -129,7 +129,7 @@ class FaceRecognitionService:
             # Check if employee already has a face registered
             existing_faces = BiometricService.get_employee_face_encodings(employee_id)
             if existing_faces:
-                logger.info(f"Updating existing face encoding for employee {employee_id}")
+                logger.info("Updating existing face encoding")
                 # For updating, we would need to implement an update method
                 # For now, delete old and create new
                 BiometricService.delete_employee_face_encodings(employee_id)
@@ -142,9 +142,9 @@ class FaceRecognitionService:
             )
             
             if document_id:
-                logger.info(f"Face successfully saved for employee {employee_id} with document ID {document_id}")
+                logger.info("Face successfully saved")
             else:
-                logger.error(f"Failed to save face for employee {employee_id}")
+                logger.error("Failed to save face")
             
             return document_id
         except Exception as e:
@@ -171,7 +171,7 @@ class FaceRecognitionService:
             # Check cache first
             cached_employee_id = cache.get(cache_key)
             if cached_employee_id:
-                logger.info(f"Found cached recognition result for employee {cached_employee_id}")
+                logger.info("Found cached recognition result")
                 return cached_employee_id
                 
         except Exception as e:
@@ -220,7 +220,7 @@ class FaceRecognitionService:
                         
                         # Ensure same shape
                         if stored_face.shape != input_face.shape:
-                            logger.warning(f"Shape mismatch for employee {employee_id}: {stored_face.shape} vs {input_face.shape}")
+                            logger.warning("Face shape mismatch detected")
                             continue
                             
                         # Normalize stored face
@@ -229,18 +229,18 @@ class FaceRecognitionService:
                         # Calculate cosine similarity
                         similarity = np.dot(input_face, stored_face)
                         
-                        logger.debug(f"Employee {employee_id} similarity: {similarity}")
+                        logger.debug("Face similarity calculated")
                         
                         if similarity > threshold and similarity > best_similarity:
                             best_similarity = similarity
                             best_match = employee_id
                             
                     except Exception as e:
-                        logger.error(f"Error comparing with employee {employee_id}: {e}")
+                        logger.error("Error in face comparison")
                         continue
             
             if best_match:
-                logger.info(f"Face matched with employee ID {best_match}, similarity: {best_similarity}")
+                logger.info("Face recognition successful")
                 
                 # Cache the result for 10 minutes
                 if cache_key:

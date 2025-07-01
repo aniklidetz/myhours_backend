@@ -67,5 +67,4 @@ if __name__ == "__main__":
         close_admin_session()
     except Exception as e:
         print(f"❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print("Check the logs for detailed error information.")

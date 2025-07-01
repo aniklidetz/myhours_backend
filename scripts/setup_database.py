@@ -136,7 +136,7 @@ def create_test_users():
                 hourly_rate=user_data['hourly_rate']
             )
             
-            print(f"✅ Created {user_data['role']}: {user_data['email']} / {user_data['password']}")
+            print(f"✅ Created {user_data['role']}: {user_data['email']} (password set)")
         else:
             print(f"ℹ️  User already exists: {user_data['username']}")
 

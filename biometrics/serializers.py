@@ -55,7 +55,7 @@ class FaceRegistrationSerializer(serializers.Serializer):
         except base64.binascii.Error:
             raise serializers.ValidationError("Invalid base64 encoding")
         except Exception as e:
-            raise serializers.ValidationError(f"Image validation failed: {str(e)}")
+            raise serializers.ValidationError("Image validation failed")
         
         return value
 

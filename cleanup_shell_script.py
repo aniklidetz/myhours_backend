@@ -57,7 +57,7 @@ def cleanup_future_dates():
                     total_hours += hours
                 hours_str = f"{hours:.2f}h" if hours else "0h"
                 
-                print(f"{log.id:3d} | {employee_name:15s} | {check_in_date:16s} | {check_out_date:16s} | {hours_str}")
+                print(f"{log.id:3d} | Employee #{i+1:3d} | {check_in_date:16s} | {check_out_date:16s} | {hours_str}")
             
             print("\n" + "=" * 50)
             print("📈 АНАЛИЗ ВЛИЯНИЯ:")
@@ -65,8 +65,7 @@ def cleanup_future_dates():
             print(f"⏰ Общие 'будущие' часы: {total_hours:.2f}h")
             if employees_affected:
                 print("Список затронутых сотрудников:")
-                for emp in sorted(employees_affected):
-                    print(f"  • {emp}")
+                print(f"  • {len(employees_affected)} employees affected")
             
             print("\n🚨 ПОЧЕМУ ЭТО ПРОБЛЕМА:")
             print("  • Искажает расчеты зарплат")

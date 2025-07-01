@@ -10,6 +10,15 @@ import datetime
 
 logger = logging.getLogger('biometrics')
 
+def safe_log_data(data, max_length=8):
+    """Safely log sensitive data by truncating and masking"""
+    if data is None:
+        return "None"
+    data_str = str(data)
+    if len(data_str) > max_length:
+        return f"{data_str[:max_length]}..."
+    return data_str
+
 class BiometricService:
     """
     Service for handling biometric data storage in MongoDB.
@@ -73,7 +82,7 @@ class BiometricService:
         try:
             # Validate inputs
             if not isinstance(employee_id, int) or employee_id <= 0:
-                logger.error(f"Invalid employee_id: {employee_id}")
+                logger.error("Invalid employee_id provided")
                 return None
                 
             if face_encoding is None:
@@ -84,7 +93,7 @@ class BiometricService:
             if isinstance(face_encoding, np.ndarray):
                 face_encoding = face_encoding.tolist()
             elif not isinstance(face_encoding, list):
-                logger.error(f"Invalid face_encoding type: {type(face_encoding)}")
+                logger.error("Invalid face_encoding type provided")
                 return None
             
             # Create document
@@ -113,20 +122,20 @@ class BiometricService:
                     document
                 )
                 document_id = str(existing_doc["_id"])
-                logger.info(f"Updated face encoding for employee {employee_id}")
+                logger.info("Face encoding updated")
             else:
                 # Insert new document
                 result = collection.insert_one(document)
                 document_id = str(result.inserted_id)
-                logger.info(f"Created face encoding for employee {employee_id} with ID: {document_id}")
+                logger.info("Face encoding created successfully")
             
             return document_id
         
         except PyMongoError as e:
-            logger.error(f"MongoDB error while saving face for employee {employee_id}: {e}")
+            logger.exception("MongoDB error while saving face encoding")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error saving face for employee {employee_id}: {e}")
+            logger.exception("Unexpected error saving face encoding")
             return None
     
     @classmethod
@@ -177,8 +186,7 @@ class BiometricService:
                     logger.warning(f"Error processing document {doc.get('_id')}: {e}")
                     continue
             
-            logger.info(f"Retrieved {len(result)} face encodings" + 
-                       (f" for employee {employee_id}" if employee_id else ""))
+            logger.info(f"Retrieved {len(result)} face encodings")
             return result
         
         except PyMongoError as e:
@@ -206,21 +214,21 @@ class BiometricService:
         
         try:
             if not isinstance(employee_id, int) or employee_id <= 0:
-                logger.error(f"Invalid employee_id: {employee_id}")
+                logger.error("Invalid employee_id provided")
                 return 0
             
             # Delete documents
             result = collection.delete_many({"employee_id": int(employee_id)})
             deleted_count = result.deleted_count
             
-            logger.info(f"Deleted {deleted_count} face encodings for employee {employee_id}")
+            logger.info(f"Deleted {deleted_count} face encodings")
             return deleted_count
         
         except PyMongoError as e:
-            logger.error(f"MongoDB error deleting face encodings for employee {employee_id}: {e}")
+            logger.exception("MongoDB error deleting face encodings")
             return 0
         except Exception as e:
-            logger.error(f"Unexpected error deleting face encodings for employee {employee_id}: {e}")
+            logger.exception("Unexpected error deleting face encodings")
             return 0
     
     @classmethod
@@ -244,7 +252,7 @@ class BiometricService:
         try:
             # Validate document_id
             if not document_id or not ObjectId.is_valid(document_id):
-                logger.error(f"Invalid document_id: {document_id}")
+                logger.error("Invalid document_id provided")
                 return False
             
             # Validate face_encoding
@@ -256,7 +264,7 @@ class BiometricService:
             if isinstance(face_encoding, np.ndarray):
                 face_encoding = face_encoding.tolist()
             elif not isinstance(face_encoding, list):
-                logger.error(f"Invalid face_encoding type: {type(face_encoding)}")
+                logger.error("Invalid face_encoding type provided")
                 return False
             
             # Create update document
@@ -282,17 +290,17 @@ class BiometricService:
             
             success = result.modified_count > 0
             if success:
-                logger.info(f"Updated face encoding document {document_id}")
+                logger.info("Face encoding document updated")
             else:
-                logger.warning(f"No document updated for ID {document_id}")
+                logger.warning("No document updated")
                 
             return success
         
         except PyMongoError as e:
-            logger.error(f"MongoDB error updating face encoding {document_id}: {e}")
+            logger.exception("MongoDB error updating face encoding")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error updating face encoding {document_id}: {e}")
+            logger.exception("Unexpected error updating face encoding")
             return False
     
     @classmethod

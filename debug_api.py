@@ -6,6 +6,7 @@ API Debug Script - для диагностики проблем с API и дан
 import os
 import sys
 import django
+import logging
 import requests
 import json
 from datetime import datetime, timedelta
@@ -21,6 +22,7 @@ from payroll.models import Salary
 from core.models import OfficeSettings
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 def print_section(title):
     print(f"\n{'='*50}")
@@ -50,7 +52,8 @@ def check_database_data():
     # Проверка зарплат
     print(f"\n💰 Salaries in database: {Salary.objects.count()}")
     for salary in Salary.objects.all()[:3]:
-        print(f"  - {salary.employee.first_name if salary.employee else 'Unknown'}: {salary.base_salary}₪ ({salary.period_start} - {salary.period_end})")
+        if settings.DEBUG:
+            logger.debug(f"Salary record id={salary.id} - amount configured")
     
     # Проверка токенов
     print(f"\n🔑 Active tokens: {EnhancedDeviceToken.objects.filter(is_active=True).count()}")

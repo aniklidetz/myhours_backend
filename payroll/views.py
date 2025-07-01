@@ -815,10 +815,9 @@ def enhanced_earnings(request):
             'error': 'Salary information not found for this employee'
         }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        logger.error(f"Error calculating enhanced earnings: {e}")
+        logger.exception("Error calculating enhanced earnings")
         return Response({
-            'error': 'Internal server error',
-            'details': str(e) if request.user.is_staff else None
+            'error': 'Internal server error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1073,10 +1072,9 @@ def backward_compatible_earnings(request):
         return Response(enhanced_response)
         
     except Exception as e:
-        logger.error(f"Error in backward_compatible_earnings: {e}")
+        logger.exception("Error in backward_compatible_earnings")
         return Response({
-            'error': 'Internal server error',
-            'details': str(e) if request.user.is_staff else None
+            'error': 'Internal server error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

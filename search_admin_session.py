@@ -88,8 +88,8 @@ def search_admin_sessions():
                 print(f"   ID: {session.id}")
                 print(f"   Started: {session.check_in}")
                 print(f"   Duration: {session.get_total_hours()} hours")
-                print(f"   Location (check-in): {session.location_check_in or 'N/A'}")
-                print(f"   Notes: {session.notes or 'None'}")
+                print(f"   Location: [location data hidden]")
+                print(f"   Notes: [private notes hidden]")
                 print(f"   Status: {session.get_status()}")
         else:
             print("✓ No active work sessions found")

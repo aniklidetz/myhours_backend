@@ -87,7 +87,7 @@ class MongoDBService:
                     }
                 )
                 if result.modified_count > 0:
-                    logger.info(f"Updated embeddings for employee {employee_id}")
+                    logger.info("Face embeddings updated")
                     return str(existing['_id'])
             else:
                 # Create new document
@@ -104,7 +104,7 @@ class MongoDBService:
                 }
                 
                 result = self.collection.insert_one(document)
-                logger.info(f"Created new embeddings document for employee {employee_id}")
+                logger.info("Face embeddings document created")
                 return str(result.inserted_id)
                 
         except Exception as e:
@@ -190,7 +190,7 @@ class MongoDBService:
             )
             
             if result.modified_count > 0:
-                logger.info(f"Deactivated embeddings for employee {employee_id}")
+                logger.info("Face embeddings deactivated")
                 return True
             return False
             
@@ -215,7 +215,7 @@ class MongoDBService:
             result = self.collection.delete_one({"employee_id": employee_id})
             
             if result.deleted_count > 0:
-                logger.info(f"Deleted embeddings for employee {employee_id}")
+                logger.info("Face embeddings deleted")
                 return True
             return False
             

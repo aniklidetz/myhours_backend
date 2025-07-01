@@ -77,7 +77,8 @@ class HolidayViewSet(viewsets.ReadOnlyModelViewSet):
             return Response(times)
             
         except Exception as e:
+            logger.exception("Integration API error")
             return Response(
-                {"error": str(e)},
+                {"error": "Internal server error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

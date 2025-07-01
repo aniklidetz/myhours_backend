@@ -57,7 +57,7 @@ def find_future_records():
             check_out_date = log.check_out.strftime('%d/%m/%Y %H:%M') if log.check_out else "Нет"
             hours = f"{log.hours_worked:.2f}h" if log.hours_worked else "0h"
             
-            print(f"{log.id:3d} | {employee_name:15s} | {check_in_date:16s} | {check_out_date:16s} | {hours}")
+            print(f"{log.id:3d} | Employee #{i+1:3d} | Entry found | Record exists")
     
     return future_worklogs
 
@@ -100,8 +100,7 @@ def analyze_impact(future_worklogs):
     print()
     
     print("Детали по сотрудникам:")
-    for emp, data in employees_affected.items():
-        print(f"  • {emp}: {data['records']} записей, {data['hours']:.2f}h")
+    print(f"  • {len(employees_affected)} employees with {sum(data['records'] for data in employees_affected.values())} total records")
     
     print("\n🚨 ПОЧЕМУ ЭТО ПРОБЛЕМА:")
     print("  • Искажает расчеты зарплат")
@@ -130,29 +129,27 @@ def safe_delete_records(future_worklogs):
         if confirm in ['да', 'yes', 'y']:
             print("\n🔄 Удаляем записи...")
             
-            # Создаем резервную копию данных
-            backup_data = []
-            for log in future_worklogs:
-                backup_data.append({
-                    'id': log.id,
-                    'employee_id': getattr(log, 'employee_id', None),
-                    'check_in': log.check_in,
-                    'check_out': log.check_out,
-                    'hours_worked': log.hours_worked,
-                })
+            # Создаем лог операции (без персональных данных)
+            operation_metadata = {
+                'record_count': future_worklogs.count(),
+                'operation_date': datetime.now().isoformat(),
+                'operation_type': 'cleanup_future_records'
+            }
             
-            # Сохраняем бэкап в файл
-            backup_filename = f"backup_future_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            with open(backup_filename, 'w', encoding='utf-8') as f:
-                f.write("Резервная копия удаленных записей с будущими датами\n")
-                f.write(f"Дата создания: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
-                f.write("=" * 60 + "\n")
-                for item in backup_data:
-                    f.write(f"ID: {item['id']}, Employee: {item['employee_id']}, "
-                           f"Check-in: {item['check_in']}, Check-out: {item['check_out']}, "
-                           f"Hours: {item['hours_worked']}\n")
+            # Сохраняем лог операции (без чувствительных данных)
+            log_filename = f"cleanup_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            import os
+            with open(log_filename, 'w', encoding='utf-8') as f:
+                f.write("Future records cleanup operation log\n")
+                f.write(f"Date: {operation_metadata['operation_date']}\n")
+                f.write(f"Records processed: {operation_metadata['record_count']}\n")
+                f.write("=" * 50 + "\n")
+                f.write("Operation completed - no sensitive data stored\n")
             
-            print(f"💾 Создан бэкап: {backup_filename}")
+            # Устанавливаем безопасные права доступа (только владелец)
+            os.chmod(log_filename, 0o600)
+            
+            print(f"📝 Создан лог операции: {log_filename}")
             
             # Удаляем записи
             deleted_count, deleted_details = future_worklogs.delete()

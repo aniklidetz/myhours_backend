@@ -122,10 +122,7 @@ class BiometricSessionAuthentication(BaseAuthentication):
         # Attach biometric session to request
         request.biometric_session = biometric_session
         
-        logger.info(f"Biometric session authentication successful: "
-                   f"user={user.username}, "
-                   f"session={biometric_session.session_id}, "
-                   f"confidence={biometric_session.confidence_score}")
+        logger.info("Biometric session authentication successful")
         
         return (user, {'device_token': device_token, 'biometric_session': biometric_session})
 

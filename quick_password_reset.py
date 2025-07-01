@@ -59,14 +59,12 @@ def reset_user_passwords():
             user.set_password(password)
             user.save()
             
-            print(f"✅ Password reset for {email} -> {password}")
+            print(f"✅ Password reset for {email} (password updated)")
             
         except Exception as e:
             print(f"❌ Error resetting {email}: {e}")
     
-    print("\n🎯 Try these credentials:")
-    for email, password in users_to_reset:
-        print(f"   📧 {email} / 🔑 {password}")
+    print("\n🎯 Credentials updated - use the default test passwords")
 
 if __name__ == '__main__':
     reset_user_passwords()

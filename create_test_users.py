@@ -63,11 +63,11 @@ for user_data in test_users:
             role=user_data['role']
         )
         
-        print(f"✅ Created {user_data['role']}: {user_data['email']} / password: {user_data['password']}")
+        print(f"✅ Created {user_data['role']}: {user_data['email']} (password set)")
     else:
         print(f"ℹ️ User already exists: {user_data['username']}")
 
 print("\nTest users ready! You can login with:")
-print("- Employee: employee1@example.com / test123")
-print("- Accountant: accountant1@example.com / test123")  
-print("- Admin: admin2@example.com / test123")
+print("- Employee: employee1@example.com (password: test123)")
+print("- Accountant: accountant1@example.com (password: test123)")  
+print("- Admin: admin2@example.com (password: test123)")

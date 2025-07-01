@@ -19,8 +19,8 @@ def login_view(request):
     email = request.data.get('email')
     password = request.data.get('password')
     
-    # Log the attempt
-    logger.info(f"Login attempt for email: {email}")
+    # Log the attempt (without email for security)
+    logger.info("Login attempt received")
     
     # Validate input
     if not email or not password:
@@ -71,14 +71,14 @@ def login_view(request):
             'role': role
         }
         
-        logger.info(f"Login successful for user: {user.username}")
+        logger.info(f"Login successful for user ID: {user.id}")
         
         return Response({
             'token': token.key,
             'user': user_data
         })
     else:
-        logger.warning(f"Login failed for email: {email} - invalid credentials")
+        logger.warning("Login failed - invalid credentials")
         return Response(
             {'error': 'Invalid email or password'}, 
             status=status.HTTP_401_UNAUTHORIZED

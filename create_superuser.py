@@ -45,7 +45,7 @@ def create_test_superuser():
     )
     
     print(f"✅ Created superuser: {username}")
-    print(f"   Password: {password}")
+    print(f"   Password: [hidden]")
     print(f"   Employee ID: {employee.id}")
     print(f"   Email: {email}")
     print()
@@ -77,7 +77,7 @@ def create_test_superuser():
     )
     
     print(f"✅ Created test user: {test_username}")
-    print(f"   Password: {test_password}")
+    print(f"   Password: [hidden]")
     print(f"   Employee ID: {test_employee.id}")
     print(f"   Email: {test_email}")
     
