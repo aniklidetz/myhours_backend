@@ -9,7 +9,7 @@ drf-spectacular==0.27.2
 gunicorn==23.0.0
 
 # Database
-dj-database-url==2.1.0
+dj-database-url==3.0.0
 psycopg2-binary==2.9.10
 pymongo==4.11.1
 redis==5.2.1
