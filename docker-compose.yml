@@ -15,7 +15,7 @@ services:
       - SECRET_KEY=your-secret-key-here-generate-new-one
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
-      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
@@ -54,7 +54,7 @@ services:
       - SECRET_KEY=your-secret-key-here-generate-new-one
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:secure_password_123@postgres:5432/myhours_db
-      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
@@ -101,9 +101,9 @@ services:
       - redis_data:/data
     networks:
       - myhours_network
-    command: redis-server --appendonly yes --requirepass redis_password_123
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_123}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_password_123", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_123}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

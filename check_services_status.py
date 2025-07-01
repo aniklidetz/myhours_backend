@@ -12,6 +12,7 @@ import time
 import redis
 import psycopg2
 from pymongo import MongoClient
+from decouple import config
 
 def check_port(host, port, timeout=5):
     """Check if a port is open"""
@@ -28,11 +29,11 @@ def check_postgresql():
     """Check PostgreSQL connection"""
     try:
         conn = psycopg2.connect(
-            host="localhost",
-            port=5432,
-            database="myhours_db",
-            user="myhours_user",
-            password="secure_password_123"
+            host=config('DB_HOST', default='localhost'),
+            port=config('DB_PORT', default=5432, cast=int),
+            database=config('DB_NAME', default='myhours_db'),
+            user=config('DB_USER', default='myhours_user'),
+            password=config('DB_PASSWORD', default='secure_password_123')
         )
         conn.close()
         print("✅ PostgreSQL: Connected")
@@ -44,7 +45,7 @@ def check_postgresql():
 def check_mongodb():
     """Check MongoDB connection"""
     try:
-        client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=3000)
+        client = MongoClient(config('MONGO_CONNECTION_STRING', default='mongodb://localhost:27017/'), serverSelectionTimeoutMS=3000)
         client.server_info()
         print("✅ MongoDB: Connected")
         return True
@@ -62,8 +63,9 @@ def check_redis():
         return True
     except:
         try:
-            # With password
-            r = redis.Redis(host='localhost', port=6379, password='redis_password_123', decode_responses=True)
+            # With password from environment
+            redis_url = config('REDIS_URL', default='redis://localhost:6379/1')
+            r = redis.from_url(redis_url, decode_responses=True)
             r.ping()
             print("✅ Redis: Connected (with auth)")
             return True
