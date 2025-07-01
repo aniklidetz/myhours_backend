@@ -33,6 +33,6 @@ dlib==19.24.6
 numpy==2.2.3
 opencv-python==4.11.0.86
 opencv-contrib-python==4.11.0.86
-Pillow==11.1.0
+Pillow==11.2.1
 celery==5.3.4
 cryptography==42.0.8
