@@ -1,15 +1,14 @@
 """
-Django management command to seed the database with comprehensive test employee data.
-Creates 10 Israeli employees with diverse work patterns and salary types.
+Django management command to seed the database with test employee data.
+Creates employees with hourly and monthly salary types, including admin and accountant roles.
 """
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
-from django.conf import settings
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import timedelta
 import random
 
 from users.models import Employee
@@ -18,7 +17,7 @@ from worktime.models import WorkLog
 
 
 class Command(BaseCommand):
-    help = 'Seeds database with 10 comprehensive test employees with realistic Israeli names and work patterns'
+    help = 'Seeds database with test employees including admin and accountant roles'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -33,7 +32,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.SUCCESS('🌱 Starting employee seeding...'))
+        self.stdout.write(self.style.SUCCESS('Starting employee seeding...'))
         
         if options['clear']:
             self.clear_test_data()
@@ -44,13 +43,13 @@ class Command(BaseCommand):
                 self.create_work_logs(employees_created)
         
         self.stdout.write(
-            self.style.SUCCESS(f'✅ Successfully created {len(employees_created)} employees!')
+            self.style.SUCCESS(f'Successfully created {len(employees_created)} employees!')
         )
         self.print_summary(employees_created)
 
     def clear_test_data(self):
         """Remove existing test data"""
-        self.stdout.write('🧹 Clearing existing test data...')
+        self.stdout.write('Clearing existing test data...')
         
         test_users = User.objects.filter(email__endswith='@test.com')
         count = test_users.count()
@@ -59,12 +58,37 @@ class Command(BaseCommand):
         self.stdout.write(f'   Removed {count} test users')
 
     def create_employees(self):
-        """Create Israeli employees with diverse characteristics"""
-        
-        # Check if project payroll is enabled
-        project_payroll_enabled = settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False)
+        """Create employees with hourly and monthly salary types"""
         
         employees_data = [
+            {
+                'username': 'leah.benami',
+                'email': 'leah.benami@test.com',
+                'first_name': 'Leah',
+                'last_name': 'Ben-Ami',
+                'role': 'admin',
+                'employment_type': 'monthly',
+                'base_salary': Decimal('25000.00'),
+                'calculation_type': 'monthly',
+                'work_pattern': 'sabbath_worker',
+                'description': 'Senior admin and accountant, works on Sabbaths and holidays',
+                'is_staff': True,
+                'is_superuser': True
+            },
+            {
+                'username': 'noam.peretz',
+                'email': 'noam.peretz@test.com',
+                'first_name': 'Noam',
+                'last_name': 'Peretz',
+                'role': 'accountant',
+                'employment_type': 'monthly',
+                'base_salary': Decimal('22000.00'),
+                'calculation_type': 'monthly',
+                'work_pattern': 'flexible_hours',
+                'description': 'Accountant with flexible working hours',
+                'is_staff': True,
+                'is_superuser': False
+            },
             {
                 'username': 'yosef.abramov',
                 'email': 'yosef.abramov@test.com',
@@ -74,7 +98,7 @@ class Command(BaseCommand):
                 'employment_type': 'hourly',
                 'hourly_rate': Decimal('120.00'),
                 'calculation_type': 'hourly',
-                'work_pattern': 'overtime_lover',  # Постоянные переработки
+                'work_pattern': 'overtime_lover',
                 'description': 'Senior developer with frequent overtime'
             },
             {
@@ -86,7 +110,7 @@ class Command(BaseCommand):
                 'employment_type': 'hourly',
                 'hourly_rate': Decimal('95.00'),
                 'calculation_type': 'hourly',
-                'work_pattern': 'part_time',  # Работает 4 дня в неделю
+                'work_pattern': 'part_time',
                 'description': 'UX Designer working 4 days per week'
             },
             {
@@ -98,43 +122,19 @@ class Command(BaseCommand):
                 'employment_type': 'hourly',
                 'hourly_rate': Decimal('110.00'),
                 'calculation_type': 'hourly',
-                'work_pattern': 'night_shifts',  # Ночные смены
+                'work_pattern': 'night_shifts',
                 'description': 'DevOps engineer with night shift schedules'
-            },
-            {
-                'username': 'leah.benami',
-                'email': 'leah.benami@test.com',
-                'first_name': 'Leah',
-                'last_name': 'Ben-Ami',
-                'role': 'accountant',
-                'employment_type': 'monthly',
-                'base_salary': Decimal('18000.00'),
-                'calculation_type': 'monthly',
-                'work_pattern': 'sabbath_worker',  # Работает по шабатам/праздникам
-                'description': 'Senior accountant, works on Sabbaths and holidays'
-            },
-            {
-                'username': 'noam.peretz',
-                'email': 'noam.peretz@test.com',
-                'first_name': 'Noam',
-                'last_name': 'Peretz',
-                'role': 'staff',
-                'employment_type': 'monthly',
-                'base_salary': Decimal('22000.00'),
-                'calculation_type': 'monthly',
-                'work_pattern': 'flexible_hours',  # Ненормированный день
-                'description': 'Team lead with flexible working hours'
             },
             {
                 'username': 'elior.weisman',
                 'email': 'elior.weisman@test.com',
                 'first_name': 'Elior',
                 'last_name': 'Weisman',
-                'role': 'staff',
+                'role': 'employee',
                 'employment_type': 'monthly',
                 'base_salary': Decimal('25000.00'),
                 'calculation_type': 'monthly',
-                'work_pattern': 'business_trips',  # Частые командировки
+                'work_pattern': 'business_trips',
                 'description': 'Sales manager with frequent business trips'
             },
             {
@@ -143,13 +143,11 @@ class Command(BaseCommand):
                 'first_name': 'Yael',
                 'last_name': 'Bar-On',
                 'role': 'employee',
-                'employment_type': 'contract',
-                'base_salary': Decimal('45000.00'),
-                'calculation_type': 'project',
-                'project_start_date': timezone.now().date() - timedelta(days=30),
-                'project_end_date': timezone.now().date() + timedelta(days=30),
-                'work_pattern': 'long_sprints',  # Длинные спринты 2 × мес.
-                'description': 'Project manager on 2-month sprint cycles'
+                'employment_type': 'hourly',
+                'hourly_rate': Decimal('180.00'),
+                'calculation_type': 'hourly',
+                'work_pattern': 'overtime_lover',
+                'description': 'Senior project manager (hourly)'
             },
             {
                 'username': 'gilad.friedman',
@@ -157,13 +155,11 @@ class Command(BaseCommand):
                 'first_name': 'Gilad',
                 'last_name': 'Friedman',
                 'role': 'employee',
-                'employment_type': 'contract',
-                'base_salary': Decimal('8000.00'),
-                'calculation_type': 'project',
-                'project_start_date': timezone.now().date() - timedelta(days=7),
-                'project_end_date': timezone.now().date() + timedelta(days=7),
-                'work_pattern': 'short_projects',  # Короткие проекты 1–2 нед.
-                'description': 'Consultant on short 1-2 week projects'
+                'employment_type': 'monthly',
+                'base_salary': Decimal('16000.00'),
+                'calculation_type': 'monthly',
+                'work_pattern': 'flexible_hours',
+                'description': 'Consultant on monthly retainer'
             },
             {
                 'username': 'maya.shechter',
@@ -171,13 +167,11 @@ class Command(BaseCommand):
                 'first_name': 'Maya',
                 'last_name': 'Shechter',
                 'role': 'employee',
-                'employment_type': 'contract',
-                'base_salary': Decimal('30000.00'),
-                'calculation_type': 'project',
-                'project_start_date': timezone.now().date() - timedelta(days=60),
-                'project_end_date': timezone.now().date() + timedelta(days=60),
-                'work_pattern': 'remote_work',  # Полностью удалённо
-                'description': 'Remote developer working on 4-month project'
+                'employment_type': 'hourly',
+                'hourly_rate': Decimal('140.00'),
+                'calculation_type': 'hourly',
+                'work_pattern': 'remote_work',
+                'description': 'Remote developer (hourly)'
             },
             {
                 'username': 'omer.klein',
@@ -188,62 +182,10 @@ class Command(BaseCommand):
                 'employment_type': 'hourly',
                 'hourly_rate': Decimal('45.00'),
                 'calculation_type': 'hourly',
-                'work_pattern': 'student_hours',  # Студент, 3 ч в день
+                'work_pattern': 'student_hours',
                 'description': 'Student working 3 hours per day'
             }
         ]
-
-        # Filter out project employees if feature is disabled
-        if not project_payroll_enabled:
-            # Replace project employees with alternative types
-            alternative_employees = []
-            for emp_data in employees_data:
-                if emp_data['calculation_type'] == 'project':
-                    # Convert project employees to hourly equivalents
-                    if emp_data['username'] == 'yael.baron':
-                        # High-skilled project manager -> Senior hourly
-                        emp_data.update({
-                            'calculation_type': 'hourly',
-                            'employment_type': 'hourly',
-                            'hourly_rate': Decimal('180.00'),
-                            'work_pattern': 'overtime_lover',  # Convert long sprints to overtime
-                            'description': 'Senior project manager (hourly)',
-                        })
-                        emp_data.pop('base_salary', None)
-                        emp_data.pop('project_start_date', None)
-                        emp_data.pop('project_end_date', None)
-                    elif emp_data['username'] == 'gilad.friedman':
-                        # Short-term consultant -> Monthly contractor  
-                        emp_data.update({
-                            'calculation_type': 'monthly',
-                            'employment_type': 'monthly',
-                            'base_salary': Decimal('16000.00'),
-                            'work_pattern': 'flexible_hours',  # Convert to flexible schedule
-                            'description': 'Consultant on monthly retainer',
-                        })
-                        emp_data.pop('hourly_rate', None)
-                        emp_data.pop('project_start_date', None)
-                        emp_data.pop('project_end_date', None)
-                    elif emp_data['username'] == 'maya.shechter':
-                        # Remote developer -> Remote hourly
-                        emp_data.update({
-                            'calculation_type': 'hourly',
-                            'employment_type': 'hourly', 
-                            'hourly_rate': Decimal('140.00'),
-                            'work_pattern': 'remote_work',  # Keep remote pattern
-                            'description': 'Remote developer (hourly)',
-                        })
-                        emp_data.pop('base_salary', None)
-                        emp_data.pop('project_start_date', None)
-                        emp_data.pop('project_end_date', None)
-                alternative_employees.append(emp_data)
-            
-            employees_data = alternative_employees
-            self.stdout.write(
-                self.style.WARNING(
-                    '⚠️ Project payroll disabled - converted project employees to hourly/monthly'
-                )
-            )
         
         total_employees = len(employees_data)
         self.stdout.write(f'Creating {total_employees} employees...')
@@ -261,11 +203,18 @@ class Command(BaseCommand):
                     'first_name': emp_data['first_name'],
                     'last_name': emp_data['last_name'],
                     'is_active': True,
+                    'is_staff': emp_data.get('is_staff', False),
+                    'is_superuser': emp_data.get('is_superuser', False),
                 }
             )
             
             if user_created:
                 user.set_password('test123')
+                user.save()
+            elif not user_created:
+                # Update existing user permissions if needed
+                user.is_staff = emp_data.get('is_staff', False)
+                user.is_superuser = emp_data.get('is_superuser', False)
                 user.save()
             
             # Create or get employee
@@ -296,12 +245,6 @@ class Command(BaseCommand):
                 # For monthly: only base_salary, hourly_rate = None
                 salary_defaults['base_salary'] = emp_data['base_salary']
                 salary_defaults['hourly_rate'] = None
-            elif emp_data['calculation_type'] == 'project':
-                # For project: only base_salary (fixed-bid), hourly_rate = None
-                salary_defaults['base_salary'] = emp_data['base_salary']
-                salary_defaults['hourly_rate'] = None
-                salary_defaults['project_start_date'] = emp_data.get('project_start_date')
-                salary_defaults['project_end_date'] = emp_data.get('project_end_date')
             
             salary, sal_created = Salary.objects.get_or_create(
                 employee=employee,
@@ -320,7 +263,7 @@ class Command(BaseCommand):
 
     def create_work_logs(self, employees):
         """Generate realistic work logs for the last 2-3 weeks"""
-        self.stdout.write('📊 Generating work logs for the last 2-3 weeks...')
+        self.stdout.write('Generating work logs for the last 2-3 weeks...')
         
         current_date = timezone.now()
         # Generate logs for the last 3 weeks (21 days)
@@ -493,14 +436,22 @@ class Command(BaseCommand):
 
     def print_summary(self, employees):
         """Print summary of created employees"""
-        self.stdout.write('\n📊 Employee Summary:')
+        self.stdout.write('\nEmployee Summary:')
         
         by_type = {}
+        by_role = {}
+        
         for emp in employees:
             calc_type = emp.salary_info.calculation_type
+            role = emp.role
+            
             if calc_type not in by_type:
                 by_type[calc_type] = []
             by_type[calc_type].append(emp)
+            
+            if role not in by_role:
+                by_role[role] = []
+            by_role[role].append(emp)
         
         for calc_type, emp_list in by_type.items():
             self.stdout.write(f"\n   {calc_type.upper()} ({len(emp_list)} employees):")
@@ -510,12 +461,14 @@ class Command(BaseCommand):
                     rate_info = f"₪{salary_info.hourly_rate}/hour"
                 elif calc_type == 'monthly':
                     rate_info = f"₪{salary_info.base_salary}/month"
-                else:  # project
-                    rate_info = f"₪{salary_info.base_salary}/project"
                 
                 self.stdout.write(f"      • {emp.get_full_name()} - {rate_info}")
         
-        self.stdout.write(f"\n✅ All employees created with password: test123")
-        self.stdout.write(f"📧 Test emails: @test.com domain")
-        self.stdout.write(f"🔄 Re-run with --clear to reset test data")
-        self.stdout.write(f"📊 Add --with-worklogs to generate work history")
+        self.stdout.write(f"\nRoles Summary:")
+        for role, emp_list in by_role.items():
+            self.stdout.write(f"   {role.upper()}: {len(emp_list)} employees")
+        
+        self.stdout.write(f"\nAll employees created with password: test123")
+        self.stdout.write(f"Test emails: @test.com domain")
+        self.stdout.write(f"Re-run with --clear to reset test data")
+        self.stdout.write(f"Add --with-worklogs to generate work history")

@@ -104,20 +104,170 @@ def current_earnings(request):
         target_employee = request.user.employee_profile
     
     try:
-        # Get salary information
-        salary = target_employee.salary_info
-        
-        # Calculate earnings based on period
-        if period == 'daily':
-            earnings = calculate_daily_earnings(salary, target_date)
-        elif period == 'weekly':
-            earnings = calculate_weekly_earnings(salary, target_date)
-        elif period == 'monthly':
-            earnings = calculate_monthly_earnings(salary, target_date)
-        else:
+        # Get salary information with better error handling
+        try:
+            salary = target_employee.salary_info
+        except AttributeError:
             return Response({
-                'error': 'Invalid period. Use daily, weekly, or monthly'
+                'error': 'Employee does not have salary_info relationship configured'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Validate salary configuration exists
+        if not salary:
+            return Response({
+                'error': 'No salary configuration found for this employee',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'suggestion': 'Please create salary configuration in admin panel'
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Validate calculation type
+        if not salary.calculation_type:
+            return Response({
+                'error': 'Salary calculation type not configured',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'suggestion': 'Please set calculation_type in salary configuration'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Check required fields based on calculation type with detailed validation
+        if salary.calculation_type == 'hourly':
+            if not salary.hourly_rate or salary.hourly_rate <= 0:
+                return Response({
+                    'error': 'Hourly rate not configured for hourly employee',
+                    'details': {
+                        'employee_id': target_employee.id,
+                        'calculation_type': salary.calculation_type,
+                        'current_hourly_rate': str(salary.hourly_rate) if salary.hourly_rate else None,
+                        'suggestion': 'Please set a valid hourly_rate > 0 in salary configuration'
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        elif salary.calculation_type in ['monthly', 'project']:
+            if not salary.base_salary or salary.base_salary <= 0:
+                return Response({
+                    'error': f'Base salary not configured for {salary.calculation_type} employee',
+                    'details': {
+                        'employee_id': target_employee.id,
+                        'calculation_type': salary.calculation_type,
+                        'current_base_salary': str(salary.base_salary) if salary.base_salary else None,
+                        'suggestion': f'Please set a valid base_salary > 0 for {salary.calculation_type} calculation type'
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Additional validation for project type
+        if salary.calculation_type == 'project':
+            if not salary.project_start_date or not salary.project_end_date:
+                return Response({
+                    'error': 'Project dates not configured for project-based employee',
+                    'details': {
+                        'employee_id': target_employee.id,
+                        'calculation_type': salary.calculation_type,
+                        'project_start_date': salary.project_start_date.isoformat() if salary.project_start_date else None,
+                        'project_end_date': salary.project_end_date.isoformat() if salary.project_end_date else None,
+                        'suggestion': 'Please set project_start_date and project_end_date in salary configuration'
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Calculate earnings based on period with enhanced error handling
+        try:
+            if period == 'daily':
+                logger.info(f"Calculating daily earnings for employee {target_employee.id} on {target_date}")
+                earnings = calculate_daily_earnings(salary, target_date)
+            elif period == 'weekly':
+                logger.info(f"Calculating weekly earnings for employee {target_employee.id} around {target_date}")
+                earnings = calculate_weekly_earnings(salary, target_date)
+            elif period == 'monthly':
+                logger.info(f"Calculating monthly earnings for employee {target_employee.id} for {target_date.year}-{target_date.month:02d}")
+                earnings = calculate_monthly_earnings(salary, target_date)
+            else:
+                return Response({
+                    'error': 'Invalid period. Use daily, weekly, or monthly'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate calculation result
+            if not earnings:
+                logger.error(f"Calculation returned empty result for employee {target_employee.id}, period: {period}")
+                return Response({
+                    'error': f'Failed to calculate {period} earnings',
+                    'details': {
+                        'employee_id': target_employee.id,
+                        'period': period,
+                        'date': target_date.isoformat(),
+                        'suggestion': 'Check if employee has any work logs for this period'
+                    }
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            logger.info(f"Successfully calculated {period} earnings for employee {target_employee.id}: {earnings.get('total_earnings', 'N/A')}")
+            
+        except ValueError as ve:
+            logger.error(f"Validation error in {period} calculation for employee {target_employee.id}: {ve}")
+            return Response({
+                'error': f'Invalid configuration for {period} earnings calculation',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'period': period,
+                    'validation_error': str(ve),
+                    'suggestion': 'Check salary configuration and calculation type settings'
+                }
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        except AttributeError as ae:
+            logger.error(f"Missing attribute error in {period} calculation for employee {target_employee.id}: {ae}")
+            return Response({
+                'error': f'Missing required data for {period} earnings calculation',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'period': period,
+                    'attribute_error': str(ae),
+                    'suggestion': 'Check if all required relationships (WorkLog, Holiday, etc.) are properly configured'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        except ImportError as ie:
+            logger.error(f"Import error in {period} calculation for employee {target_employee.id}: {ie}")
+            return Response({
+                'error': f'Service dependency missing for {period} earnings calculation',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'period': period,
+                    'import_error': str(ie),
+                    'suggestion': 'PayrollCalculationService may not be available, using fallback calculation'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        except ZeroDivisionError as zde:
+            logger.error(f"Division by zero error in {period} calculation for employee {target_employee.id}: {zde}")
+            return Response({
+                'error': f'Mathematical error in {period} earnings calculation',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'period': period,
+                    'math_error': str(zde),
+                    'suggestion': 'Check if working days or hours configuration is valid (not zero)'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        except Exception as calc_error:
+            logger.error(f"Unexpected error in {period} calculation for employee {target_employee.id}: {calc_error}")
+            logger.error(f"Calculation error details: {type(calc_error).__name__}: {str(calc_error)}")
+            if hasattr(calc_error, '__traceback__'):
+                import traceback
+                logger.error(f"Calculation traceback: {traceback.format_exc()}")
+            
+            return Response({
+                'error': f'Unexpected error during {period} earnings calculation',
+                'details': {
+                    'employee_id': target_employee.id,
+                    'period': period,
+                    'date': target_date.isoformat(),
+                    'error_type': type(calc_error).__name__,
+                    'error_message': str(calc_error),
+                    'suggestion': 'Please contact system administrator to investigate this calculation error'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Add employee information
         earnings.update({
@@ -134,16 +284,27 @@ def current_earnings(request):
         })
         
         return Response(earnings)
-        
-    except Salary.DoesNotExist:
-        return Response({
-            'error': 'Salary information not found for this employee'
-        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        logger.error(f"Error calculating earnings: {e}")
-        return Response({
-            'error': 'Internal server error'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error calculating earnings for employee {target_employee.id}: {e}")
+        logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+        logger.error(f"Period: {period}, Date: {target_date}")
+        # In debug mode, show more details
+        if hasattr(request, 'user') and request.user.is_superuser:
+            return Response({
+                'error': f'Internal server error: {str(e)}',
+                'details': {
+                    'period': period,
+                    'date': target_date.isoformat(),
+                    'employee_id': target_employee.id,
+                    'error_type': type(e).__name__
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({
+                'error': 'Internal server error. Please try again or contact support.',
+                'period': period,
+                'date': target_date.isoformat()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def calculate_daily_earnings(salary, target_date):
@@ -386,13 +547,51 @@ def calculate_weekly_earnings(salary, target_date):
 
 
 def calculate_monthly_earnings(salary, target_date):
-    """Calculate earnings for the month containing target_date"""
+    """Calculate earnings for the month containing target_date with error handling"""
     
     month = target_date.month
     year = target_date.year
     
-    # Use existing monthly calculation method
-    result = salary.calculate_monthly_salary(month, year)
+    try:
+        # Use existing monthly calculation method with validation
+        if not salary:
+            raise ValueError("Salary object is None or invalid")
+        
+        if not hasattr(salary, 'calculate_monthly_salary'):
+            raise AttributeError("Salary object missing calculate_monthly_salary method")
+        
+        # Validate required fields before calculation
+        if salary.calculation_type == 'hourly' and (not salary.hourly_rate or salary.hourly_rate <= 0):
+            raise ValueError(f"Invalid hourly rate for hourly employee: {salary.hourly_rate}")
+        
+        if salary.calculation_type in ['monthly', 'project'] and (not salary.base_salary or salary.base_salary <= 0):
+            raise ValueError(f"Invalid base salary for {salary.calculation_type} employee: {salary.base_salary}")
+        
+        result = salary.calculate_monthly_salary(month, year)
+        
+        if not result:
+            raise ValueError("Salary calculation returned empty result")
+            
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in calculate_monthly_earnings for salary {salary.id}: {e}")
+        logger.error(f"Salary details: calc_type={salary.calculation_type}, hourly_rate={salary.hourly_rate}, base_salary={salary.base_salary}")
+        logger.error(f"Employee: {salary.employee.id} ({salary.employee.get_full_name()})")
+        
+        # Import traceback to get more detailed error info
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Return a safe fallback result
+        return {
+            'total_earnings': 0,
+            'total_hours': 0,
+            'worked_days': 0,
+            'month': month,
+            'year': year,
+            'error': str(e),
+            'calculation_failed': True
+        }
     
     # Get additional details
     work_logs = WorkLog.objects.filter(
@@ -585,11 +784,6 @@ def attendance_report(request):
         })
         
         return Response(attendance_data)
-        
-    except Salary.DoesNotExist:
-        return Response({
-            'error': 'Salary information not found for this employee'
-        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.error(f"Error calculating attendance: {e}")
         return Response({
@@ -779,8 +973,60 @@ def enhanced_earnings(request):
         target_employee = request.user.employee_profile
     
     try:
-        # Get salary information
-        salary = target_employee.salary_info
+        # Try to get salary information, but handle if it doesn't exist
+        try:
+            salary = target_employee.salary_info
+        except Salary.DoesNotExist:
+            # No salary configuration - return zero earnings but still show employee data
+            logger.warning(f"No salary configuration for employee {target_employee.id} ({target_employee.get_full_name()})")
+            
+            # Calculate hours worked even without salary config
+            from worktime.models import WorkLog
+            import calendar
+            
+            start_date = date(target_date.year, target_date.month, 1)
+            _, last_day = calendar.monthrange(target_date.year, target_date.month)
+            end_date = date(target_date.year, target_date.month, last_day)
+            
+            work_logs = WorkLog.objects.filter(
+                employee=target_employee,
+                check_in__date__lte=end_date,
+                check_out__date__gte=start_date,
+                check_out__isnull=False
+            )
+            
+            total_hours = sum(log.get_total_hours() for log in work_logs)
+            worked_days = work_logs.values('check_in__date').distinct().count()
+            
+            # Return data with zero salary but show hours worked
+            return Response({
+                "employee": {
+                    "id": target_employee.id,
+                    "name": target_employee.get_full_name(),
+                    "email": target_employee.email,
+                    "role": target_employee.role
+                },
+                "period": f"{target_date.year}-{target_date.month:02d}",
+                "calculation_type": "not_configured",
+                "currency": "ILS",
+                "month": target_date.month,
+                "year": target_date.year,
+                "total_hours": float(total_hours),
+                "total_salary": 0,
+                "regular_hours": float(total_hours),
+                "overtime_hours": 0,
+                "holiday_hours": 0,
+                "shabbat_hours": 0,
+                "worked_days": worked_days,
+                "base_salary": 0,
+                "hourly_rate": 0,
+                "total_working_days": 0,
+                "work_proportion": 0,
+                "compensatory_days": 0,
+                "bonus": 0,
+                "error": "No salary configuration",
+                "message": "Employee has no salary configuration. Please contact HR to set up salary details."
+            })
         
         # Only support monthly period for enhanced view initially
         if period != 'monthly':
@@ -788,32 +1034,98 @@ def enhanced_earnings(request):
                 'error': 'Enhanced earnings currently only supports monthly period'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create a mock object with required attributes for serializer
-        class EarningsContext:
-            def __init__(self, employee, year, month, salary):
-                self.employee = employee
-                self.year = year
-                self.month = month
-                self.calculation_type = salary.calculation_type
-                self.currency = salary.currency
+        # Use the same logic as backward_compatible_earnings but return enhanced format
+        if salary.calculation_type == 'hourly':
+            # For hourly employees, use backward_compatible_earnings logic
+            # but ensure we always include actual hours from WorkLog
+            pass  # Fall through to calculation below
         
-        context = EarningsContext(
-            target_employee, 
-            target_date.year, 
-            target_date.month,
-            salary
+        # For all employees, calculate using standard method
+        try:
+            calc_result = salary.calculate_monthly_salary(target_date.month, target_date.year)
+        except Exception as calc_error:
+            logger.error(f"Error calculating salary for employee {target_employee.id}: {calc_error}")
+            # Return fallback data with zero calculations
+            calc_result = {
+                'total_salary': 0,
+                'base_salary': 0,
+                'overtime_hours': 0,
+                'holiday_hours': 0,
+                'shabbat_hours': 0,
+                'worked_days': 0,
+                'total_working_days': 0,
+                'work_proportion': 0,
+                'compensatory_days': 0,
+                'total_extra': 0
+            }
+        
+        # Calculate actual hours worked from WorkLog
+        from worktime.models import WorkLog
+        import calendar
+        
+        # Calculate exact month boundaries
+        start_date = date(target_date.year, target_date.month, 1)
+        _, last_day = calendar.monthrange(target_date.year, target_date.month)
+        end_date = date(target_date.year, target_date.month, last_day)
+        
+        # Get work logs for the month with proper filtering
+        work_logs = WorkLog.objects.filter(
+            employee=target_employee,
+            check_in__date__lte=end_date,
+            check_out__date__gte=start_date,
+            check_out__isnull=False
         )
         
-        # Use enhanced serializer
-        serializer = EnhancedEarningsSerializer()
-        enhanced_data = serializer.to_representation(context)
+        # Calculate total hours worked
+        total_hours = sum(log.get_total_hours() for log in work_logs)
+        
+        # Build response based on calculation type
+        if salary.calculation_type == 'hourly':
+            # For hourly employees, extract hours from calc_result
+            regular_hours = float(calc_result.get('regular_hours', total_hours))
+            overtime_hours = float(calc_result.get('overtime_hours', 0))
+            holiday_hours = float(calc_result.get('holiday_hours', 0))
+            shabbat_hours = float(calc_result.get('shabbat_hours', 0))
+            
+            # If calc_result doesn't have hour breakdown, use total_hours
+            if regular_hours == 0 and total_hours > 0:
+                regular_hours = float(total_hours)
+        else:
+            # For monthly employees
+            regular_hours = float(total_hours)
+            overtime_hours = float(calc_result.get('overtime_hours', 0))
+            holiday_hours = float(calc_result.get('holiday_hours', 0))
+            shabbat_hours = float(calc_result.get('shabbat_hours', 0))
+        
+        # Return data in enhanced format compatible with frontend
+        enhanced_data = {
+            "employee": {
+                "id": target_employee.id,
+                "name": target_employee.get_full_name(),
+                "email": target_employee.email,
+                "role": target_employee.role
+            },
+            "period": f"{target_date.year}-{target_date.month:02d}",
+            "calculation_type": salary.calculation_type,
+            "currency": salary.currency,
+            "month": target_date.month,
+            "year": target_date.year,
+            "total_hours": float(total_hours),
+            "total_salary": float(calc_result.get('total_salary', 0)),
+            "regular_hours": regular_hours,
+            "overtime_hours": overtime_hours,
+            "holiday_hours": holiday_hours,
+            "shabbat_hours": shabbat_hours,
+            "worked_days": calc_result.get('worked_days', 0),
+            "base_salary": float(calc_result.get('base_salary', 0)) if salary.calculation_type == 'monthly' else 0,
+            "hourly_rate": float(salary.hourly_rate) if salary.calculation_type == 'hourly' else 0,
+            "total_working_days": calc_result.get('total_working_days', 0),
+            "work_proportion": float(calc_result.get('work_proportion', 0)),
+            "compensatory_days": calc_result.get('compensatory_days', 0),
+            "bonus": float(calc_result.get('total_extra', 0)) if 'total_extra' in calc_result else 0
+        }
         
         return Response(enhanced_data)
-        
-    except Salary.DoesNotExist:
-        return Response({
-            'error': 'Salary information not found for this employee'
-        }, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         logger.exception("Error calculating enhanced earnings")
         return Response({
@@ -956,18 +1268,118 @@ def backward_compatible_earnings(request):
             }, status=status.HTTP_404_NOT_FOUND)
         target_employee = request.user.employee_profile
     
-    # Get current month calculations
+    # Get month calculations based on request parameters
     try:
         from datetime import date
-        current_date = date.today()
-        salary = target_employee.salary_info
+        
+        # Parse year and month from request parameters
+        year = request.GET.get('year')
+        month = request.GET.get('month')
+        
+        if year and month:
+            try:
+                year = int(year)
+                month = int(month)
+                current_date = date(year, month, 1)  # First day of requested month
+            except (ValueError, TypeError):
+                # Invalid year/month, fallback to current date
+                current_date = date.today()
+        else:
+            # No parameters, use current date
+            current_date = date.today()
+        
+        try:
+            salary = target_employee.salary_info
+        except Salary.DoesNotExist:
+            # No salary configuration - return data with zero salary but show hours
+            from worktime.models import WorkLog
+            import calendar
+            
+            start_date = date(current_date.year, current_date.month, 1)
+            _, last_day = calendar.monthrange(current_date.year, current_date.month)
+            end_date = date(current_date.year, current_date.month, last_day)
+            
+            work_logs = WorkLog.objects.filter(
+                employee=target_employee,
+                check_in__date__lte=end_date,
+                check_out__date__gte=start_date,
+                check_out__isnull=False
+            )
+            
+            total_hours = sum(log.get_total_hours() for log in work_logs)
+            worked_days = work_logs.values('check_in__date').distinct().count()
+            
+            return Response({
+                "employee": {
+                    "id": target_employee.id,
+                    "name": target_employee.get_full_name(),
+                    "email": target_employee.email,
+                    "role": target_employee.role
+                },
+                "calculation_type": "not_configured",
+                "currency": "ILS",
+                "date": current_date.isoformat(),
+                "month": current_date.month,
+                "year": current_date.year,
+                "period": "monthly",
+                "total_hours": float(total_hours),
+                "total_salary": 0,
+                "regular_hours": float(total_hours),
+                "overtime_hours": 0,
+                "holiday_hours": 0,
+                "shabbat_hours": 0,
+                "worked_days": worked_days,
+                "compensatory_days": 0,
+                "bonus": 0,
+                "error": "No salary configuration",
+                "message": "Employee has no salary configuration. Please contact HR."
+            })
         
         if salary.calculation_type == 'hourly':
-            calc_result = calculate_monthly_earnings(salary, current_date)
+            # Validate hourly rate
+            if not salary.hourly_rate or salary.hourly_rate <= 0:
+                return Response({
+                    'error': 'Invalid hourly rate configuration',
+                    'details': f'Employee {target_employee.get_full_name()} has no valid hourly rate'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            # Use the correct year and month from the parsed parameters
+            try:
+                calc_result = salary.calculate_monthly_salary(current_date.month, current_date.year)
+            except Exception as calc_error:
+                logger.error(f"Error in backward_compatible_earnings for employee {target_employee.id}: {calc_error}")
+                # Return safe fallback
+                return Response({
+                    "employee": {
+                        "id": target_employee.id,
+                        "name": target_employee.get_full_name(),
+                        "email": target_employee.email,
+                        "role": target_employee.role
+                    },
+                    "calculation_type": salary.calculation_type,
+                    "currency": salary.currency,
+                    "date": current_date.isoformat(),
+                    "month": current_date.month,
+                    "year": current_date.year,
+                    "period": "monthly",
+                    "total_hours": 0,
+                    "total_salary": 0,
+                    "regular_hours": 0,
+                    "overtime_hours": 0,
+                    "holiday_hours": 0,
+                    "shabbat_hours": 0,
+                    "worked_days": 0,
+                    "compensatory_days": 0,
+                    "bonus": 0,
+                    "error": "Calculation failed",
+                    "message": f"Salary calculation failed: {str(calc_error)}"
+                })
             
             # Calculate enhanced breakdown - ensure all values are Decimal
+            # Ensure hourly_rate is not None
+            hourly_rate = salary.hourly_rate or Decimal('0')
+            
             regular_hours = Decimal(str(calc_result.get('regular_hours', 0)))
-            regular_pay = regular_hours * (salary.hourly_rate or Decimal('0'))
+            regular_pay = regular_hours * hourly_rate
             
             overtime_hours = Decimal(str(calc_result.get('overtime_hours', 0)))
             sabbath_hours = Decimal(str(calc_result.get('shabbat_hours', 0)))
@@ -978,11 +1390,11 @@ def backward_compatible_earnings(request):
             overtime_125_hours = min(overtime_hours, Decimal('2') * worked_days)  # Max 2h per day
             overtime_150_hours = max(Decimal('0'), overtime_hours - overtime_125_hours)
             
-            overtime_125_pay = overtime_125_hours * (salary.hourly_rate * Decimal('1.25'))
-            overtime_150_pay = overtime_150_hours * (salary.hourly_rate * Decimal('1.5'))
+            overtime_125_pay = overtime_125_hours * (hourly_rate * Decimal('1.25'))
+            overtime_150_pay = overtime_150_hours * (hourly_rate * Decimal('1.5'))
             
-            sabbath_pay = sabbath_hours * (salary.hourly_rate * Decimal('1.5'))
-            holiday_pay = holiday_hours * (salary.hourly_rate * Decimal('1.5'))
+            sabbath_pay = sabbath_hours * (hourly_rate * Decimal('1.5'))
+            holiday_pay = holiday_hours * (hourly_rate * Decimal('1.5'))
             
             # Structure that matches what React Native expects
             enhanced_response = {
@@ -1038,7 +1450,53 @@ def backward_compatible_earnings(request):
             
         else:
             # Monthly employee - simpler structure
-            calc_result = salary.calculate_monthly_salary(current_date.month, current_date.year)
+            try:
+                calc_result = salary.calculate_monthly_salary(current_date.month, current_date.year)
+            except Exception as calc_error:
+                logger.error(f"Error in backward_compatible_earnings for monthly employee {target_employee.id}: {calc_error}")
+                # Return safe fallback for monthly employees
+                return Response({
+                    "employee": {
+                        "id": target_employee.id,
+                        "name": target_employee.get_full_name(),
+                        "email": target_employee.email,
+                        "role": target_employee.role
+                    },
+                    "base_salary": float(salary.base_salary or 0),
+                    "calculation_type": salary.calculation_type,
+                    "currency": salary.currency,
+                    "date": current_date.isoformat(),
+                    "month": current_date.month,
+                    "year": current_date.year,
+                    "period": "monthly",
+                    "total_hours": 0,
+                    "total_salary": 0,
+                    "worked_days": 0,
+                    "compensatory_days": 0,
+                    "bonus": 0,
+                    "error": "Calculation failed",
+                    "message": f"Monthly salary calculation failed: {str(calc_error)}"
+                })
+            
+            # Calculate actual hours worked for monthly employees
+            from worktime.models import WorkLog
+            import calendar
+            
+            # Calculate exact month boundaries
+            start_date = date(current_date.year, current_date.month, 1)
+            _, last_day = calendar.monthrange(current_date.year, current_date.month)
+            end_date = date(current_date.year, current_date.month, last_day)
+            
+            # Get work logs for the month with proper filtering
+            work_logs = WorkLog.objects.filter(
+                employee=target_employee,
+                check_in__date__lte=end_date,
+                check_out__date__gte=start_date,
+                check_out__isnull=False
+            )
+            
+            # Calculate total hours worked
+            total_hours = sum(log.get_total_hours() for log in work_logs)
             
             enhanced_response = {
                 "base_salary": float(calc_result.get('base_salary', 0)),
@@ -1058,7 +1516,7 @@ def backward_compatible_earnings(request):
                 "period": "monthly",
                 "shabbat_hours": float(calc_result.get('shabbat_hours', 0)),
                 "total_extra": float(calc_result.get('total_extra', 0)),
-                "total_hours": float(calc_result.get('total_hours', 0)),
+                "total_hours": float(total_hours),  # ← ИСПРАВЛЕНО: теперь считаем реальные часы
                 "total_salary": float(calc_result.get('total_salary', 0)),
                 "total_working_days": calc_result.get('total_working_days', 0),
                 "work_proportion": float(calc_result.get('work_proportion', 0)),

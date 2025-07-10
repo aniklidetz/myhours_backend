@@ -170,12 +170,16 @@ class PayrollCalculationService:
         
         Args:
             hours_worked (Decimal): Total hours worked in the day
-            base_rate (Decimal): Base hourly rate
+            base_rate (Decimal): Base hourly rate (can be None for monthly employees)
             is_special_day (bool): True if holiday/Sabbath (different rates apply)
             
         Returns:
             dict: Breakdown of regular and overtime pay
         """
+        # Handle None base_rate for monthly employees
+        if base_rate is None:
+            base_rate = Decimal('0')
+        
         result = {
             'regular_hours': Decimal('0'),
             'regular_pay': Decimal('0'),
@@ -199,6 +203,11 @@ class PayrollCalculationService:
         # Regular hours (up to 8 hours)
         regular_hours = min(hours_worked, Decimal('8'))
         result['regular_hours'] = regular_hours
+        
+        # Additional safety check for None base_rate
+        if base_rate is None:
+            base_rate = Decimal('0')
+            
         result['regular_pay'] = regular_hours * base_rate
         
         # Overtime hours
@@ -206,14 +215,16 @@ class PayrollCalculationService:
             overtime_total = hours_worked - Decimal('8')
             
             # First 2 overtime hours at 125% (or 175% on special days)
-            overtime_rate_1 = base_rate * (Decimal('1.75') if is_special_day else self.OVERTIME_RATE_1)
+            # Ensure base_rate is not None before multiplication
+            safe_base_rate = base_rate if base_rate is not None else Decimal('0')
+            overtime_rate_1 = safe_base_rate * (Decimal('1.75') if is_special_day else self.OVERTIME_RATE_1)
             overtime_hours_1 = min(overtime_total, Decimal('2'))
             result['overtime_hours_1'] = overtime_hours_1
             result['overtime_pay_1'] = overtime_hours_1 * overtime_rate_1
             
             # Additional overtime hours at 150% (or 200% on special days)
             if overtime_total > 2:
-                overtime_rate_2 = base_rate * (Decimal('2.0') if is_special_day else self.OVERTIME_RATE_2)
+                overtime_rate_2 = safe_base_rate * (Decimal('2.0') if is_special_day else self.OVERTIME_RATE_2)
                 overtime_hours_2 = overtime_total - Decimal('2')
                 result['overtime_hours_2'] = overtime_hours_2
                 result['overtime_pay_2'] = overtime_hours_2 * overtime_rate_2
@@ -233,7 +244,7 @@ class PayrollCalculationService:
         """
         work_date = work_log.check_in.date()
         hours_worked = work_log.get_total_hours()
-        base_rate = self.salary.hourly_rate
+        base_rate = self.salary.hourly_rate or Decimal('0')
         
         result = {
             'date': work_date,
@@ -355,11 +366,22 @@ class PayrollCalculationService:
         Returns:
             dict: Comprehensive salary calculation
         """
-        # Get work logs for the month
+        # Get work logs for the month - include sessions that overlap with the month
+        from datetime import date
+        import calendar
+        from django.utils import timezone
+        
+        # Calculate exact month boundaries
+        start_date = date(self.year, self.month, 1)
+        _, last_day = calendar.monthrange(self.year, self.month)
+        end_date = date(self.year, self.month, last_day)
+        
+        # Include work logs that have any overlap with the target month
         work_logs = WorkLog.objects.filter(
             employee=self.employee,
-            check_in__year=self.year,
-            check_in__month=self.month
+            check_in__date__lte=end_date,
+            check_out__date__gte=start_date,
+            check_out__isnull=False  # Only completed sessions
         ).order_by('check_in')
         
         result = {

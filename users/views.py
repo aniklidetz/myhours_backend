@@ -17,6 +17,7 @@ from .serializers import (
     AcceptInvitationSerializer
 )
 import logging
+from core.logging_utils import safe_log_employee, get_safe_logger
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,41 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     filterset_fields = ['employment_type', 'is_active']
 
     def perform_create(self, serializer):
-        """Log employee creation"""
+        """Log employee creation and create default salary configuration"""
         employee = serializer.save()
         logger.info(f"New employee created: {employee.get_full_name()} by user {self.request.user}")
+        
+        # Create default salary configuration based on role
+        from payroll.models import Salary
+        from decimal import Decimal
+        
+        # Default salary configurations based on role
+        salary_defaults = {
+            'admin': {'calculation_type': 'monthly', 'base_salary': Decimal('25000')},
+            'accountant': {'calculation_type': 'monthly', 'base_salary': Decimal('22000')},
+            'project_manager': {'calculation_type': 'monthly', 'base_salary': Decimal('28000')},
+            'employee': {'calculation_type': 'hourly', 'hourly_rate': Decimal('85')}
+        }
+        
+        role_config = salary_defaults.get(employee.role, salary_defaults['employee'])
+        
+        salary_data = {
+            'employee': employee,
+            'calculation_type': role_config['calculation_type'],
+            'currency': 'ILS'
+        }
+        
+        if role_config['calculation_type'] == 'monthly':
+            salary_data['base_salary'] = role_config.get('base_salary', Decimal('20000'))
+            salary_data['hourly_rate'] = None
+        else:
+            salary_data['hourly_rate'] = role_config.get('hourly_rate', Decimal('80'))
+            salary_data['base_salary'] = None
+        
+        # Create salary configuration
+        salary = Salary.objects.create(**salary_data)
+        logger.info(f"Created default salary configuration for {employee.get_full_name()}: "
+                   f"{salary.calculation_type} - {salary.hourly_rate or salary.base_salary} {salary.currency}")
 
     def perform_update(self, serializer):
         """Log employee updates"""
@@ -101,7 +134,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
         
         # TODO: Implement actual email sending
-        logger.info(f"Invitation URL for {employee.email}: {invitation_url}")
+        safe_logger = get_safe_logger(__name__)
+        safe_logger.info("Invitation URL generated", extra=safe_log_employee(employee, "invitation_sent"))
         
         # Mark as sent
         invitation.email_sent = True

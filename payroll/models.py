@@ -109,16 +109,34 @@ class Salary(models.Model):
         """
         Gets the actual worked days in a given month
         """
+        # Get work logs that overlap with the month
+        from datetime import date
+        import calendar
+        
+        # Calculate exact month boundaries
+        start_date = date(year, month, 1)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = date(year, month, last_day)
+        
         work_logs = WorkLog.objects.filter(
             employee=self.employee,
-            check_in__year=year,
-            check_in__month=month
+            check_in__date__lte=end_date,
+            check_out__date__gte=start_date,
+            check_out__isnull=False
         )
         
-        # Get unique dates the employee worked
+        # Get unique dates the employee worked (within the month)
         worked_days = set()
         for log in work_logs:
-            worked_days.add(log.check_in.date())
+            # Count days where work was performed within the month
+            work_start = max(log.check_in.date(), start_date)
+            work_end = min(log.check_out.date(), end_date)
+            
+            from datetime import timedelta
+            current_date = work_start
+            while current_date <= work_end:
+                worked_days.add(current_date)
+                current_date += timedelta(days=1)
             
         return len(worked_days)
 
@@ -139,16 +157,32 @@ class Salary(models.Model):
         """
         Calculates the fixed monthly salary considering worked days.
         """
-        total_working_days = self.get_working_days_in_month(year, month)
-        worked_days = self.get_worked_days_in_month(year, month)
+        # Validate inputs
+        if not self.base_salary or self.base_salary <= 0:
+            raise ValueError("Base salary must be set and greater than 0 for monthly calculation")
         
-        # Calculate the proportion of salary based on worked days
-        if total_working_days > 0:
-            proportion = worked_days / total_working_days
-        else:
-            proportion = Decimal('0')
+        try:
+            total_working_days = self.get_working_days_in_month(year, month)
+            worked_days = self.get_worked_days_in_month(year, month)
             
-        base_pay = self.base_salary * Decimal(str(proportion))
+            # Handle edge case where there are no working days in the month
+            if total_working_days <= 0:
+                logger = logging.getLogger(__name__)
+                logger.warning(f"No working days found for {year}-{month:02d}, returning zero salary")
+                proportion = Decimal('0')
+            else:
+                # Calculate the proportion of salary based on worked days
+                proportion = Decimal(str(worked_days)) / Decimal(str(total_working_days))
+                
+            # Ensure proportion doesn't exceed 1.0 (100%)
+            proportion = min(proportion, Decimal('1.0'))
+            
+            base_pay = self.base_salary * proportion
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error calculating monthly fixed salary for employee {self.employee.id}: {e}")
+            raise ValueError(f"Failed to calculate monthly salary: {str(e)}")
         
         # Check overtime, holiday, and Shabbat work
         extra_pay = self._calculate_extras(month, year)
@@ -174,6 +208,10 @@ class Salary(models.Model):
         Calculates hourly salary using the improved PayrollCalculationService.
         This method maintains backward compatibility while using the new service.
         """
+        # Validate inputs first
+        if not self.hourly_rate or self.hourly_rate <= 0:
+            raise ValueError("Hourly rate must be set and greater than 0 for hourly calculation")
+        
         try:
             from payroll.services import PayrollCalculationService
             
@@ -181,33 +219,75 @@ class Salary(models.Model):
             service = PayrollCalculationService(self.employee, year, month)
             result = service.calculate_monthly_salary()
             
+            # Validate service result
+            if not result or 'total_gross_pay' not in result:
+                logger = logging.getLogger(__name__)
+                logger.error(f"PayrollCalculationService returned invalid result for employee {self.employee.id}")
+                raise ValueError("PayrollCalculationService returned invalid result")
+            
             # Convert to the expected format for backward compatibility
             return {
                 'total_salary': result['total_gross_pay'],
-                'regular_hours': float(result['regular_hours']),
-                'overtime_hours': float(result['overtime_hours']),
-                'holiday_hours': float(result['holiday_hours']),
-                'shabbat_hours': float(result['sabbath_hours']),
-                'compensatory_days': result['compensatory_days_earned'],
+                'regular_hours': float(result.get('regular_hours', 0)),
+                'overtime_hours': float(result.get('overtime_hours', 0)),
+                'holiday_hours': float(result.get('holiday_hours', 0)),
+                'shabbat_hours': float(result.get('sabbath_hours', 0)),
+                'compensatory_days': result.get('compensatory_days_earned', 0),
                 'warnings': result.get('warnings', []),
                 'legal_violations': result.get('legal_violations', []),
                 'minimum_wage_applied': result.get('minimum_wage_applied', False)
             }
             
-        except ImportError:
+        except ImportError as ie:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"PayrollCalculationService not available for employee {self.employee.id}: {ie}")
             # Fallback to legacy calculation if service is not available
+            return self._calculate_hourly_salary_legacy(month, year)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in PayrollCalculationService for employee {self.employee.id}: {e}")
+            # Fallback to legacy calculation if service fails
             return self._calculate_hourly_salary_legacy(month, year)
     
     def _calculate_hourly_salary_legacy(self, month, year):
         """
         Legacy hourly salary calculation method (original implementation)
         """
-        # Retrieve all work logs for the month
-        work_logs = WorkLog.objects.filter(
-            employee=self.employee,
-            check_in__year=year,
-            check_in__month=month
-        ).order_by('check_in')
+        # Validate inputs
+        if not self.hourly_rate or self.hourly_rate <= 0:
+            raise ValueError("Hourly rate must be set and greater than 0 for hourly calculation")
+        
+        try:
+            # Retrieve all work logs for the month - include sessions that overlap
+            from datetime import date
+            import calendar
+            
+            # Calculate exact month boundaries
+            start_date = date(year, month, 1)
+            _, last_day = calendar.monthrange(year, month)
+            end_date = date(year, month, last_day)
+            
+            # Include work logs that have any overlap with the target month
+            work_logs = WorkLog.objects.filter(
+                employee=self.employee,
+                check_in__date__lte=end_date,
+                check_out__date__gte=start_date,
+                check_out__isnull=False  # Only completed sessions
+            ).order_by('check_in')
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error retrieving work logs for employee {self.employee.id}: {e}")
+            # Return empty result if we can't get work logs
+            return {
+                'total_salary': Decimal('0.00'),
+                'regular_hours': 0,
+                'shabbat_hours': 0,
+                'holiday_hours': 0,
+                'overtime_hours': 0,
+                'compensatory_days': 0,
+                'error': f'Failed to retrieve work logs: {str(e)}'
+            }
 
         total_salary = Decimal('0')
         detailed_breakdown = {
@@ -218,108 +298,145 @@ class Salary(models.Model):
             'compensatory_days': 0
         }
 
-        for log in work_logs:
-            holiday = Holiday.objects.filter(
-                date=log.check_in.date()
-            ).first()
+        try:
+            for log in work_logs:
+                try:
+                    holiday = Holiday.objects.filter(
+                        date=log.check_in.date()
+                    ).first()
 
-            hours_worked = log.get_total_hours()
-
-            # Check for maximum workday duration
-            if hours_worked > 12:
-                # warnings
-                detailed_breakdown['warnings'] = detailed_breakdown.get('warnings', [])
-                detailed_breakdown['warnings'].append(f"Exceeded maximum workday duration ({log.check_in.date()}): {hours_worked} hours")
-
-            if holiday:
-                # Work on a holiday or Shabbat - add a compensatory day
-                self._add_compensatory_day(log.check_in.date(), holiday.is_shabbat)
-                detailed_breakdown['compensatory_days'] += 1
-
-                # Work on a holiday
-                if holiday.is_shabbat:
-                    # Shabbat - 150% for the first 8 hours
-                    if hours_worked <= 8:
-                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['shabbat_hours'] += float(hours_worked)
-                    else:
-                        # First 8 hours at 150%
-                        total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['shabbat_hours'] += 8
-                        
-                        # Remaining hours at higher rates
-                        overtime_hours = hours_worked - 8
-                        total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
-                        detailed_breakdown['overtime_hours'] += float(overtime_hours)
-
-                elif holiday.is_holiday:
-                    # Holiday - 150% for the first 8 hours
-                    if hours_worked <= 8:
-                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['holiday_hours'] += float(hours_worked)
-                    else:
-                        # 150% for the first 8 hours
-                        total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['holiday_hours'] += 8
-                        
-                        # Next 2 hours at 175%
-                        overtime_hours_1 = min(hours_worked - 8, 2)
-                        total_salary += overtime_hours_1 * (self.hourly_rate * Decimal('1.75'))
-                        detailed_breakdown['overtime_hours'] += float(overtime_hours_1)
-                        
-                        # Remaining hours at 200%
-                        if hours_worked > 10:
-                            overtime_hours_2 = hours_worked - 10
-                            total_salary += overtime_hours_2 * (self.hourly_rate * Decimal('2.0'))
-                            detailed_breakdown['overtime_hours'] += float(overtime_hours_2)
-            else:
-                # Check for Sabbath work using precise sunset times
-                work_date = log.check_in.date()
-                work_datetime = log.check_in
-                
-                is_sabbath_work = self._is_sabbath_work_precise(work_datetime)
-                
-                if is_sabbath_work:
-                    # Add compensatory day for Sabbath work
-                    self._add_compensatory_day(work_date, True)
-                    detailed_breakdown['compensatory_days'] += 1
+                    hours_worked = log.get_total_hours()
                     
-                    # Sabbath - 150% for the first 8 hours
-                    if hours_worked <= 8:
-                        total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['shabbat_hours'] += float(hours_worked)
-                    else:
-                        # First 8 hours at 150%
-                        total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                        detailed_breakdown['shabbat_hours'] += 8
-                        
-                        # Remaining hours at higher rates
-                        overtime_hours = hours_worked - 8
-                        total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
-                        detailed_breakdown['overtime_hours'] += float(overtime_hours)
-                else:
-                    # Work on a regular weekday
-                    regular_hours = min(hours_worked, 8)
-                    total_salary += regular_hours * self.hourly_rate
-                    detailed_breakdown['regular_hours'] += float(regular_hours)
+                    # Validate hours_worked - skip if None or invalid
+                    if hours_worked is None:
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Skipping work log {log.id} for employee {self.employee.id}: hours_worked is None")
+                        continue
+                    
+                    # Validate hourly_rate - should not be None for hourly calculations
+                    if self.hourly_rate is None:
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Hourly rate is None for employee {self.employee.id} (salary {self.id})")
+                        continue
+                    
+                    # Convert to Decimal for precise calculations
+                    hours_worked = Decimal(str(hours_worked))
+                    
+                    # Check for maximum workday duration
+                    if hours_worked > 12:
+                        # warnings
+                        detailed_breakdown['warnings'] = detailed_breakdown.get('warnings', [])
+                        detailed_breakdown['warnings'].append(f"Exceeded maximum workday duration ({log.check_in.date()}): {hours_worked} hours")
 
-                    # Overtime hours
-                    if hours_worked > 8:
-                        overtime_hours = hours_worked - 8
+                    if holiday:
+                        # Work on a holiday or Shabbat - add a compensatory day
+                        self._add_compensatory_day(log.check_in.date(), holiday.is_shabbat)
+                        detailed_breakdown['compensatory_days'] += 1
+
+                        # Work on a holiday
+                        if holiday.is_shabbat:
+                            # Shabbat - 150% for the first 8 hours
+                            if hours_worked <= Decimal('8'):
+                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['shabbat_hours'] += float(hours_worked)
+                            else:
+                                # First 8 hours at 150%
+                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['shabbat_hours'] += 8
+                                
+                                # Remaining hours at higher rates
+                                overtime_hours = hours_worked - Decimal('8')
+                                total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
+                                detailed_breakdown['overtime_hours'] += float(overtime_hours)
+
+                        elif holiday.is_holiday:
+                            # Holiday - 150% for the first 8 hours
+                            if hours_worked <= Decimal('8'):
+                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['holiday_hours'] += float(hours_worked)
+                            else:
+                                # 150% for the first 8 hours
+                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['holiday_hours'] += 8
+                                
+                                # Next 2 hours at 175%
+                                overtime_hours_1 = min(hours_worked - Decimal('8'), Decimal('2'))
+                                total_salary += overtime_hours_1 * (self.hourly_rate * Decimal('1.75'))
+                                detailed_breakdown['overtime_hours'] += float(overtime_hours_1)
+                                
+                                # Remaining hours at 200%
+                                if hours_worked > Decimal('10'):
+                                    overtime_hours_2 = hours_worked - Decimal('10')
+                                    total_salary += overtime_hours_2 * (self.hourly_rate * Decimal('2.0'))
+                                    detailed_breakdown['overtime_hours'] += float(overtime_hours_2)
+                    else:
+                        # Check for Sabbath work using precise sunset times
+                        work_date = log.check_in.date()
+                        work_datetime = log.check_in
                         
-                        # First 2 overtime hours
-                        if overtime_hours <= 2:
-                            total_salary += overtime_hours * (self.hourly_rate * Decimal('1.25'))
-                            detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                        is_sabbath_work = self._is_sabbath_work_precise(work_datetime)
+                        
+                        if is_sabbath_work:
+                            # Add compensatory day for Sabbath work
+                            self._add_compensatory_day(work_date, True)
+                            detailed_breakdown['compensatory_days'] += 1
+                    
+                            # Sabbath - 150% for the first 8 hours
+                            if hours_worked <= Decimal('8'):
+                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['shabbat_hours'] += float(hours_worked)
+                            else:
+                                # First 8 hours at 150%
+                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
+                                detailed_breakdown['shabbat_hours'] += 8
+                                
+                                # Remaining hours at higher rates
+                                overtime_hours = hours_worked - Decimal('8')
+                                total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
+                                detailed_breakdown['overtime_hours'] += float(overtime_hours)
                         else:
-                            # First 2 hours at 125%
-                            total_salary += Decimal('2') * (self.hourly_rate * Decimal('1.25'))
-                            detailed_breakdown['overtime_hours'] += 2
-                            
-                            # Remaining overtime at 150%
-                            remaining_overtime = overtime_hours - 2
-                            total_salary += remaining_overtime * (self.hourly_rate * Decimal('1.5'))
-                            detailed_breakdown['overtime_hours'] += float(remaining_overtime)
+                            # Work on a regular weekday
+                            regular_hours = min(hours_worked, Decimal('8'))
+                            total_salary += regular_hours * self.hourly_rate
+                            detailed_breakdown['regular_hours'] += float(regular_hours)
+
+                            # Overtime hours
+                            if hours_worked > Decimal('8'):
+                                overtime_hours = hours_worked - Decimal('8')
+                                
+                                # First 2 overtime hours
+                                if overtime_hours <= Decimal('2'):
+                                    total_salary += overtime_hours * (self.hourly_rate * Decimal('1.25'))
+                                    detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                                else:
+                                    # First 2 hours at 125%
+                                    total_salary += Decimal('2') * (self.hourly_rate * Decimal('1.25'))
+                                    detailed_breakdown['overtime_hours'] += 2
+                                    
+                                    # Remaining overtime at 150%
+                                    remaining_overtime = overtime_hours - Decimal('2')
+                                    total_salary += remaining_overtime * (self.hourly_rate * Decimal('1.5'))
+                                    detailed_breakdown['overtime_hours'] += float(remaining_overtime)
+                
+                except Exception as log_error:
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Error processing work log {log.id} for employee {self.employee.id}: {log_error}")
+                    # Continue with next log instead of failing entire calculation
+                    continue
+        
+        except Exception as calc_error:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in hourly salary calculation for employee {self.employee.id}: {calc_error}")
+            # Return fallback result
+            return {
+                'total_salary': Decimal('0.00'),
+                'regular_hours': 0,
+                'shabbat_hours': 0,
+                'holiday_hours': 0,
+                'overtime_hours': 0,
+                'compensatory_days': 0,
+                'error': str(calc_error)
+            }
 
         # Minimum wage check
         minimum_wage = Decimal('5300')  # Minimum wage in Israel (NIS)
@@ -416,6 +533,18 @@ class Salary(models.Model):
         """
         Calculates additional payments for overtime, holidays, and Shabbat
         """
+        # For employees without hourly_rate, we can't calculate extra pay
+        if not self.hourly_rate or self.hourly_rate <= 0:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Employee {self.employee.id} has no valid hourly_rate - skipping extras calculation")
+            return {
+                'total_extra': Decimal('0.00'),
+                'shabbat_hours': 0,
+                'holiday_hours': 0,
+                'overtime_hours': 0,
+                'compensatory_days': 0
+            }
+        
         work_logs = WorkLog.objects.filter(
             employee=self.employee,
             check_in__year=year,
@@ -436,6 +565,12 @@ class Salary(models.Model):
             ).first()
 
             hours_worked = log.get_total_hours()
+            
+            # Skip if hours_worked is None or invalid
+            if hours_worked is None or hours_worked <= 0:
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Invalid hours_worked for log {log.id}: {hours_worked}")
+                continue
 
             if holiday:
                 # Add compensatory day

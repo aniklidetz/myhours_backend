@@ -80,10 +80,25 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         """Build detailed pay breakdown"""
         # Get salary object from employee
         salary = context_instance.employee.salary_info
-        base_rate = salary.hourly_rate or Decimal('0')
+        
+        # Handle both hourly and monthly employees
+        if salary.calculation_type == 'hourly':
+            base_rate = salary.hourly_rate or Decimal('0')
+            regular_hours = Decimal(str(result.get('regular_hours', 0)))
+            holiday_hours = Decimal(str(result.get('holiday_hours', 0)))
+            sabbath_hours = Decimal(str(result.get('sabbath_hours', 0)))
+            
+            regular_pay = float(regular_hours * base_rate)
+            holiday_pay = float(holiday_hours * base_rate * Decimal('1.5'))
+            sabbath_pay = float(sabbath_hours * base_rate * Decimal('1.5'))
+        else:
+            # For monthly employees, use the calculated amounts from result
+            regular_pay = float(result.get('base_salary', 0))
+            holiday_pay = float(result.get('holiday_extra', 0))
+            sabbath_pay = float(result.get('shabbat_extra', 0))
         
         return {
-            "regular_pay": float(result.get('regular_hours', 0) * base_rate),
+            "regular_pay": regular_pay,
             "overtime_pay": {
                 "first_2h": 0,         # Calculated from daily breakdown
                 "additional": 0,       # Calculated from daily breakdown  
@@ -91,8 +106,8 @@ class EnhancedEarningsSerializer(serializers.Serializer):
                 "sabbath_overtime": 0
             },
             "special_day_pay": {
-                "holiday_base": float(result.get('holiday_hours', 0) * base_rate * Decimal('1.5')),
-                "sabbath_base": float(result.get('sabbath_hours', 0) * base_rate * Decimal('1.5')),
+                "holiday_base": holiday_pay,
+                "sabbath_base": sabbath_pay,
                 "friday_evening": 0
             },
             "bonuses": {

@@ -12,10 +12,10 @@ services:
       - ./staticfiles:/app/staticfiles
     environment:
       - DEBUG=True
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here-generate-new-one}
+      - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
-      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD:-secure_password_123}@postgres:5432/myhours_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379/0
+      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
@@ -51,10 +51,10 @@ services:
       - ./logs:/app/logs
     environment:
       - DEBUG=True
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here-generate-new-one}
+      - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
-      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD:-secure_password_123}@postgres:5432/myhours_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379/0
+      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
@@ -76,7 +76,7 @@ services:
     environment:
       POSTGRES_DB: myhours_db
       POSTGRES_USER: myhours_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "5432:5432"
@@ -101,9 +101,9 @@ services:
       - redis_data:/data
     networks:
       - myhours_network
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_123}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_123}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
