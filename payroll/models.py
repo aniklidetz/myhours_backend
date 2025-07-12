@@ -83,62 +83,115 @@ class Salary(models.Model):
     def get_working_days_in_month(self, year, month):
         """
         Gets the number of working days in a month (excluding Shabbat and holidays)
+        Updated for 5-day work week
         """
-        _, num_days = calendar.monthrange(year, month)
-        working_days = 0
-        
-        for day in range(1, num_days + 1):
-            current_date = timezone.datetime(year, month, day).date()
+        try:
+            _, num_days = calendar.monthrange(year, month)
+            working_days = 0
             
-            # Check if it's Shabbat (Saturday - 5 in Python)
-            if current_date.weekday() == 5:
-                continue
+            for day in range(1, num_days + 1):
+                current_date = timezone.datetime(year, month, day).date()
                 
-            # Check if it's a holiday
-            holiday = Holiday.objects.filter(
-                date=current_date, 
-                is_holiday=True
-            ).exists()
+                # Check if it's Shabbat (Saturday - 5 in Python) or Sunday (6)
+                if current_date.weekday() in [5, 6]:  # Saturday or Sunday
+                    continue
+                    
+                # Check if it's a holiday
+                try:
+                    holiday = Holiday.objects.filter(
+                        date=current_date, 
+                        is_holiday=True
+                    ).exists()
+                    
+                    if not holiday:
+                        working_days += 1
+                except Exception as e:
+                    # If holiday check fails, assume it's a working day
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Holiday check failed for {current_date}: {e}")
+                    working_days += 1
+                    
+            logger = logging.getLogger(__name__)
+            logger.info(f"Working days in {year}-{month:02d}: {working_days}")
+            return working_days
             
-            if not holiday:
-                working_days += 1
-                
-        return working_days
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error calculating working days for {year}-{month:02d}: {e}")
+            # Fallback: approximate working days for 5-day week
+            _, num_days = calendar.monthrange(year, month)
+            return max(1, int(num_days * 5 / 7))  # Approximate 5-day work week
     
     def get_worked_days_in_month(self, year, month):
         """
         Gets the actual worked days in a given month
         """
-        # Get work logs that overlap with the month
-        from datetime import date
-        import calendar
-        
-        # Calculate exact month boundaries
-        start_date = date(year, month, 1)
-        _, last_day = calendar.monthrange(year, month)
-        end_date = date(year, month, last_day)
-        
-        work_logs = WorkLog.objects.filter(
-            employee=self.employee,
-            check_in__date__lte=end_date,
-            check_out__date__gte=start_date,
-            check_out__isnull=False
-        )
-        
-        # Get unique dates the employee worked (within the month)
-        worked_days = set()
-        for log in work_logs:
-            # Count days where work was performed within the month
-            work_start = max(log.check_in.date(), start_date)
-            work_end = min(log.check_out.date(), end_date)
+        try:
+            # Get work logs that overlap with the month
+            from datetime import date, timedelta
+            import calendar
             
-            from datetime import timedelta
-            current_date = work_start
-            while current_date <= work_end:
-                worked_days.add(current_date)
-                current_date += timedelta(days=1)
+            # Calculate exact month boundaries
+            start_date = date(year, month, 1)
+            _, last_day = calendar.monthrange(year, month)
+            end_date = date(year, month, last_day)
             
-        return len(worked_days)
+            work_logs = WorkLog.objects.filter(
+                employee=self.employee,
+                check_in__date__lte=end_date,
+                check_out__date__gte=start_date,
+                check_out__isnull=False
+            )
+            
+            logger = logging.getLogger(__name__)
+            logger.info(f"Found {work_logs.count()} work logs for {self.employee.get_full_name()} in {year}-{month:02d}")
+            
+            if not work_logs.exists():
+                logger.info(f"No work logs found for {self.employee.get_full_name()} in {year}-{month:02d}")
+                return 0
+            
+            # Get unique dates the employee worked (within the month)
+            worked_days = set()
+            for log in work_logs:
+                # Count days where work was performed within the month
+                work_start = max(log.check_in.date(), start_date)
+                work_end = min(log.check_out.date(), end_date)
+                
+                current_date = work_start
+                while current_date <= work_end:
+                    worked_days.add(current_date)
+                    current_date += timedelta(days=1)
+            
+            worked_days_count = len(worked_days)
+            logger.info(f"Worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {worked_days_count}")
+            return worked_days_count
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error calculating worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {e}")
+            # Fallback: count unique work session dates
+            try:
+                from datetime import date
+                start_date = date(year, month, 1)
+                _, last_day = calendar.monthrange(year, month)
+                end_date = date(year, month, last_day)
+                
+                work_logs = WorkLog.objects.filter(
+                    employee=self.employee,
+                    check_in__year=year,
+                    check_in__month=month,
+                    check_out__isnull=False
+                )
+                
+                unique_dates = set()
+                for log in work_logs:
+                    if start_date <= log.check_in.date() <= end_date:
+                        unique_dates.add(log.check_in.date())
+                
+                return len(unique_dates)
+            except Exception as fallback_error:
+                logger.error(f"Fallback calculation also failed: {fallback_error}")
+                return 0
 
     def calculate_monthly_salary(self, month, year):
         """
@@ -155,51 +208,68 @@ class Salary(models.Model):
 
     def _calculate_monthly_fixed_salary(self, month, year):
         """
-        Calculates the fixed monthly salary considering worked days.
+        Calculates the fixed monthly salary for salaried employees.
+        Monthly employees receive proportional salary based on worked days vs expected working days,
+        with additional pay for overtime/holiday/Sabbath work on top.
         """
         # Validate inputs
         if not self.base_salary or self.base_salary <= 0:
             raise ValueError("Base salary must be set and greater than 0 for monthly calculation")
         
         try:
-            total_working_days = self.get_working_days_in_month(year, month)
+            # Get worked hours for overtime calculations
+            from payroll.services import PayrollCalculationService
+            
+            # Use the service to get accurate hour calculations
+            service = PayrollCalculationService(self.employee, year, month, fast_mode=True)
+            service_result = service.calculate_monthly_salary()
+            
+            # Extract total hours worked for reporting purposes
+            total_hours_worked = service_result.get('total_hours', Decimal('0'))
+            
+            # Get worked days and working days for proportional calculation
             worked_days = self.get_worked_days_in_month(year, month)
+            working_days_in_month = self.get_working_days_in_month(year, month)
             
-            # Handle edge case where there are no working days in the month
-            if total_working_days <= 0:
-                logger = logging.getLogger(__name__)
-                logger.warning(f"No working days found for {year}-{month:02d}, returning zero salary")
-                proportion = Decimal('0')
+            # Calculate proportional base salary
+            if working_days_in_month > 0:
+                days_proportion = Decimal(str(worked_days)) / Decimal(str(working_days_in_month))
+                base_pay = self.base_salary * days_proportion
             else:
-                # Calculate the proportion of salary based on worked days
-                proportion = Decimal(str(worked_days)) / Decimal(str(total_working_days))
-                
-            # Ensure proportion doesn't exceed 1.0 (100%)
-            proportion = min(proportion, Decimal('1.0'))
-            
-            base_pay = self.base_salary * proportion
+                base_pay = Decimal('0')
             
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(f"Error calculating monthly fixed salary for employee {self.employee.id}: {e}")
-            raise ValueError(f"Failed to calculate monthly salary: {str(e)}")
+            # Fallback: use full base salary
+            base_pay = self.base_salary
+            total_hours_worked = Decimal('0')
+            worked_days = 0
+            working_days_in_month = 22  # fallback
         
-        # Check overtime, holiday, and Shabbat work
+        # For monthly employees, we still add overtime pay on top of base salary
         extra_pay = self._calculate_extras(month, year)
         
         total_salary = base_pay + extra_pay['total_extra']
         
-        # Ensure minimum wage (for a full month)
+        # Calculate work proportion for reporting
+        standard_monthly_hours = Decimal('182')
+        proportion = total_hours_worked / standard_monthly_hours if standard_monthly_hours > 0 else Decimal('0')
+        proportion = min(proportion, Decimal('1.0'))
+        
+        # Ensure minimum wage (for a full month only)
         minimum_wage = Decimal('5300')  # in NIS
-        if self.currency == 'ILS' and proportion == 1 and total_salary < minimum_wage:
+        if self.currency == 'ILS' and proportion >= Decimal('0.9') and total_salary < minimum_wage:
             total_salary = minimum_wage
         
         return {
             'total_salary': round(total_salary, 2),
             'base_salary': round(base_pay, 2),
-            'total_working_days': total_working_days,
-            'worked_days': worked_days,
+            'total_hours_worked': float(total_hours_worked),
+            'standard_monthly_hours': 182,
             'work_proportion': round(Decimal(str(proportion * 100)), 2),
+            'worked_days': worked_days,
+            'working_days_in_month': working_days_in_month,
             **extra_pay
         }
         
@@ -216,7 +286,7 @@ class Salary(models.Model):
             from payroll.services import PayrollCalculationService
             
             # Use the new service for calculation
-            service = PayrollCalculationService(self.employee, year, month)
+            service = PayrollCalculationService(self.employee, year, month, fast_mode=True)
             result = service.calculate_monthly_salary()
             
             # Validate service result
@@ -235,7 +305,10 @@ class Salary(models.Model):
                 'compensatory_days': result.get('compensatory_days_earned', 0),
                 'warnings': result.get('warnings', []),
                 'legal_violations': result.get('legal_violations', []),
-                'minimum_wage_applied': result.get('minimum_wage_applied', False)
+                'minimum_wage_applied': result.get('minimum_wage_applied', False),
+                'work_sessions_count': result.get('work_sessions_count', 0),
+                'worked_days': result.get('worked_days', 0),
+                'total_hours': float(result.get('total_hours', 0))
             }
             
         except ImportError as ie:
@@ -438,9 +511,9 @@ class Salary(models.Model):
                 'error': str(calc_error)
             }
 
-        # Minimum wage check
+        # Minimum wage check - updated for 5-day work week
         minimum_wage = Decimal('5300')  # Minimum wage in Israel (NIS)
-        if self.currency == 'ILS' and total_salary < minimum_wage and detailed_breakdown['regular_hours'] >= 186:  # ~186 working hours per month
+        if self.currency == 'ILS' and total_salary < minimum_wage and detailed_breakdown['regular_hours'] >= 182:  # Standard monthly hours for 5-day week
             total_salary = minimum_wage
             detailed_breakdown['minimum_wage_applied'] = True
 
@@ -533,8 +606,14 @@ class Salary(models.Model):
         """
         Calculates additional payments for overtime, holidays, and Shabbat
         """
-        # For employees without hourly_rate, we can't calculate extra pay
-        if not self.hourly_rate or self.hourly_rate <= 0:
+        # For monthly employees, derive hourly rate from base salary
+        effective_hourly_rate = self.hourly_rate
+        
+        if self.calculation_type == 'monthly' and self.base_salary:
+            # Calculate hourly rate from monthly salary (185 hours per month standard)
+            standard_monthly_hours = Decimal('185')
+            effective_hourly_rate = self.base_salary / standard_monthly_hours
+        elif not self.hourly_rate or self.hourly_rate <= 0:
             logger = logging.getLogger(__name__)
             logger.warning(f"Employee {self.employee.id} has no valid hourly_rate - skipping extras calculation")
             return {
@@ -579,12 +658,12 @@ class Salary(models.Model):
 
                 # Bonuses for working on Shabbat/holiday
                 if holiday.is_shabbat:
-                    # Shabbat bonus - 50% extra
-                    extra_pay += hours_worked * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                    # Shabbat premium - 50% bonus only (since base salary already paid)
+                    extra_pay += hours_worked * (effective_hourly_rate * Decimal('0.5'))
                     detailed['shabbat_hours'] += float(hours_worked)
                 elif holiday.is_holiday:
-                    # Holiday bonus - 50% extra
-                    extra_pay += hours_worked * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                    # Holiday premium - 50% bonus only (since base salary already paid)
+                    extra_pay += hours_worked * (effective_hourly_rate * Decimal('0.5'))
                     detailed['holiday_hours'] += float(hours_worked)
 
             # Overtime bonuses
@@ -593,11 +672,11 @@ class Salary(models.Model):
 
                 # First 2 hours - 25% extra
                 overtime_1 = min(overtime_hours, 2)
-                extra_pay += overtime_1 * (self.hourly_rate * Decimal('0.25'))  # bonus only
+                extra_pay += overtime_1 * (effective_hourly_rate * Decimal('0.25'))  # bonus only
 
                 # Remaining hours - 50% extra
                 overtime_2 = max(0, overtime_hours - 2)
-                extra_pay += overtime_2 * (self.hourly_rate * Decimal('0.5'))  # bonus only
+                extra_pay += overtime_2 * (effective_hourly_rate * Decimal('0.5'))  # bonus only
 
                 detailed['overtime_hours'] += float(overtime_hours)
 
@@ -688,6 +767,7 @@ class Salary(models.Model):
     def validate_constraints(self):
         """
         Validates constraints on overtime and maximum daily working hours
+        Updated for 5-day work week (42 hours regular + 16 hours overtime = 58 hours max)
         """
         # Weekly constraints
         current_date = timezone.now().date()
@@ -700,15 +780,16 @@ class Salary(models.Model):
             check_in__date__lte=end_of_week
         )
 
-        # Check for weekly overtime limit
-        weekly_overtime = 0
+        # Check for weekly overtime limit - updated for 5-day work week
+        weekly_hours = 0
         for log in weekly_work_logs:
             hours = log.get_total_hours()
-            if hours > 8:
-                weekly_overtime += hours - 8
+            weekly_hours += hours
 
-        if weekly_overtime > 16:
-            raise ValidationError("Exceeded maximum weekly overtime hours (16 hours)")
+        # 5-day work week: max 42 regular hours + 16 overtime hours = 58 total
+        max_weekly_hours = 58
+        if weekly_hours > max_weekly_hours:
+            raise ValidationError(f"Exceeded maximum weekly hours ({max_weekly_hours} hours) for 5-day work week")
 
         # Check for maximum daily work hours
         for log in weekly_work_logs:

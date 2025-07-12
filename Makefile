@@ -68,7 +68,7 @@ env-setup:
 # Docker DevOps Commands
 up: env-setup
 	@echo "🚀 Starting MyHours full stack..."
-	docker-compose up -d
+	docker-compose --env-file .env up -d
 	@echo "⏳ Waiting for services to be ready..."
 	@sleep 15
 	@echo "✅ Stack is up! Services:"
@@ -79,22 +79,22 @@ up: env-setup
 
 down:
 	@echo "🛑 Stopping all services..."
-	docker-compose down
+	docker-compose --env-file .env down
 	@echo "✅ All services stopped"
 
 restart: down up
 
 build:
 	@echo "🔨 Building Docker images..."
-	docker-compose build --no-cache
+	docker-compose --env-file .env build --no-cache
 	@echo "✅ Build complete"
 
 logs:
-	docker-compose logs -f
+	docker-compose --env-file .env logs -f
 
 status:
 	@echo "📊 Service Status:"
-	docker-compose ps
+	docker-compose --env-file .env ps
 
 health:
 	@echo "🏥 Health Check:"
@@ -107,28 +107,28 @@ test:
 
 docker-test:
 	@echo "🧪 Running tests in Docker..."
-	docker-compose exec web python manage.py test --keepdb
+	docker-compose --env-file .env exec web python manage.py test --keepdb
 
 # Database Operations
 migrate:
 	@echo "🔄 Running migrations..."
-	docker-compose exec web python manage.py migrate
+	docker-compose --env-file .env exec web python manage.py migrate
 
 makemigrations:
 	@echo "📝 Creating migrations..."
-	docker-compose exec web python manage.py makemigrations
+	docker-compose --env-file .env exec web python manage.py makemigrations
 
 shell:
 	@echo "🐍 Opening Django shell..."
-	docker-compose exec web python manage.py shell
+	docker-compose --env-file .env exec web python manage.py shell
 
 superuser:
 	@echo "👤 Creating superuser..."
-	docker-compose exec web python manage.py createsuperuser
+	docker-compose --env-file .env exec web python manage.py createsuperuser
 
 seed:
 	@echo "🌱 Seeding database..."
-	docker-compose exec web python scripts/setup_database.py
+	docker-compose --env-file .env exec web python scripts/setup_database.py
 
 # Database Access
 psql:
@@ -150,16 +150,32 @@ backup:
 	docker exec myhours_postgres pg_dump -U myhours_user myhours_db > backups/postgres_$(shell date +%Y%m%d_%H%M%S).sql
 	docker exec myhours_mongodb mongodump --db biometrics_db --out /tmp/mongo_backup
 	docker cp myhours_mongodb:/tmp/mongo_backup backups/mongodb_$(shell date +%Y%m%d_%H%M%S)
+	docker-compose exec web python backup_data.py
 	@echo "✅ Backup complete in ./backups/"
+
+quick-backup:
+	@echo "🚀 Quick data backup..."
+	docker-compose exec web python backup_data.py
 
 restore:
 	@echo "📥 Restore functionality - implement with specific backup file"
 	@echo "Usage: docker exec -i myhours_postgres psql -U myhours_user -d myhours_db < backups/your_backup.sql"
 
+update-init-backup:
+	@echo "📦 Updating initialization backup..."
+	@mkdir -p docker-entrypoint-initdb.d
+	@rm -f docker-entrypoint-initdb.d/postgres_*.sql
+	@if [ -f "backups/$$(ls -t backups/postgres_*.sql | head -1 | xargs basename)" ]; then \
+		cp "backups/$$(ls -t backups/postgres_*.sql | head -1 | xargs basename)" docker-entrypoint-initdb.d/; \
+		echo "✅ Copied $$(ls -t backups/postgres_*.sql | head -1 | xargs basename) to init directory"; \
+	else \
+		echo "❌ No backup found in backups/ directory"; \
+	fi
+
 # Cleanup
 clean:
 	@echo "🧹 Cleaning up..."
-	docker-compose down -v --remove-orphans
+	docker-compose --env-file .env down -v --remove-orphans
 	docker system prune -f
 	@echo "✅ Cleanup complete"
 
