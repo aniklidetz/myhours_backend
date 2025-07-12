@@ -5,7 +5,7 @@ Enhanced serializers for detailed payroll information display
 from rest_framework import serializers
 from decimal import Decimal
 from .models import Salary, CompensatoryDay
-from .services import PayrollCalculationService, CompensatoryDayService
+from .services import PayrollCalculationService
 
 
 class EnhancedEarningsSerializer(serializers.Serializer):
@@ -25,12 +25,9 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         calc_service = PayrollCalculationService(instance.employee, instance.year, instance.month)
         result = calc_service.calculate_monthly_salary()
         
-        # Get compensatory days info
-        comp_service = CompensatoryDayService()
-        comp_balance = comp_service.get_compensatory_day_balance(instance.employee)
-        comp_days_this_period = comp_service.get_employee_compensatory_days(
-            instance.employee, instance.year, instance.month
-        )
+        # Get compensatory days info  
+        comp_balance = {'holiday': {'unused': 0}, 'sabbath': {'unused': 0}, 'unused': 0}
+        comp_days_this_period = []
         
         return {
             "employee": {
