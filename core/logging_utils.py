@@ -1,5 +1,5 @@
 """
-Утилиты для безопасного логирования с автоматическим маскированием PII данных
+Utilities for safe logging with automatic PII data masking
 """
 import re
 import hashlib
@@ -9,13 +9,13 @@ from typing import Any, Dict, Optional, Union
 
 def mask_email(email: str) -> str:
     """
-    Маскирует email адрес для безопасного логирования
+    Masks email address for safe logging
     
     Args:
-        email: Email адрес для маскирования
+        email: Email address to mask
         
     Returns:
-        Маскированный email (например: a***@example.com)
+        Masked email (e.g., a***@example.com)
     """
     if not email or '@' not in email:
         return '[invalid_email]'
@@ -29,18 +29,18 @@ def mask_email(email: str) -> str:
 
 def mask_phone(phone: str) -> str:
     """
-    Маскирует номер телефона для безопасного логирования
+    Masks phone number for safe logging
     
     Args:
-        phone: Номер телефона для маскирования
+        phone: Phone number to mask
         
     Returns:
-        Маскированный номер (например: ***4567)
+        Masked phone number (e.g., ***4567)
     """
     if not phone:
         return '[no_phone]'
     
-    # Убираем все нецифровые символы
+    # Remove all non-digit characters
     digits = re.sub(r'\D', '', phone)
     
     if len(digits) < 4:
@@ -51,16 +51,16 @@ def mask_phone(phone: str) -> str:
 
 def mask_coordinates(lat: float, lng: float) -> str:
     """
-    Маскирует GPS координаты для безопасного логирования
+    Masks GPS coordinates for safe logging
     
     Args:
-        lat: Широта
-        lng: Долгота
+        lat: Latitude
+        lng: Longitude
         
     Returns:
-        Обобщённое местоположение
+        Generalized location
     """
-    # Простое определение зоны по координатам
+    # Simple zone detection by coordinates
     if 32.0 <= lat <= 32.1 and 34.7 <= lng <= 34.9:
         return "Office Area"
     elif 31.5 <= lat <= 33.0 and 34.0 <= lng <= 35.5:
@@ -71,13 +71,13 @@ def mask_coordinates(lat: float, lng: float) -> str:
 
 def mask_name(full_name: str) -> str:
     """
-    Маскирует полное имя для безопасного логирования
+    Masks full name for safe logging
     
     Args:
-        full_name: Полное имя для маскирования
+        full_name: Full name to mask
         
     Returns:
-        Инициалы (например: M.P.)
+        Initials (e.g., M.P.)
     """
     if not full_name or not full_name.strip():
         return '[no_name]'
@@ -93,14 +93,14 @@ def mask_name(full_name: str) -> str:
 
 def hash_user_id(user_id: Union[int, str], salt: str = "myhours_2025") -> str:
     """
-    Создаёт хэш от user ID для безопасного логирования
+    Creates hash from user ID for safe logging
     
     Args:
-        user_id: ID пользователя
-        salt: Соль для хэширования
+        user_id: User ID
+        salt: Salt for hashing
         
     Returns:
-        Хэшированный ID (первые 8 символов)
+        Hashed ID (first 8 characters)
     """
     if not user_id:
         return '[no_id]'
@@ -112,14 +112,14 @@ def hash_user_id(user_id: Union[int, str], salt: str = "myhours_2025") -> str:
 
 def safe_log_user(user, action: str = "action") -> Dict[str, Any]:
     """
-    Создаёт безопасный объект для логирования данных пользователя
+    Creates safe object for logging user data
     
     Args:
-        user: Объект пользователя (Django User model)
-        action: Описание действия
+        user: User object (Django User model)
+        action: Action description
         
     Returns:
-        Словарь с безопасными для логирования данными
+        Dictionary with safe data for logging
     """
     if not user:
         return {"action": action, "user": "anonymous"}
@@ -131,7 +131,7 @@ def safe_log_user(user, action: str = "action") -> Dict[str, Any]:
         "is_superuser": getattr(user, 'is_superuser', False)
     }
     
-    # Маскируем email если присутствует
+    # Mask email if present
     if hasattr(user, 'email') and user.email:
         safe_data["email_masked"] = mask_email(user.email)
     
@@ -140,14 +140,14 @@ def safe_log_user(user, action: str = "action") -> Dict[str, Any]:
 
 def safe_log_employee(employee, action: str = "action") -> Dict[str, Any]:
     """
-    Создаёт безопасный объект для логирования данных сотрудника
+    Creates safe object for logging employee data
     
     Args:
-        employee: Объект сотрудника (Employee model)
-        action: Описание действия
+        employee: Employee object (Employee model)
+        action: Action description
         
     Returns:
-        Словарь с безопасными для логирования данными
+        Dictionary with safe data for logging
     """
     if not employee:
         return {"action": action, "employee": "none"}
@@ -159,7 +159,7 @@ def safe_log_employee(employee, action: str = "action") -> Dict[str, Any]:
         "employment_type": getattr(employee, 'employment_type', 'unknown')
     }
     
-    # Маскируем персональные данные
+    # Mask personal data
     if hasattr(employee, 'email') and employee.email:
         safe_data["email_masked"] = mask_email(employee.email)
     
@@ -176,14 +176,14 @@ def safe_log_employee(employee, action: str = "action") -> Dict[str, Any]:
 
 def safe_log_location(lat: Optional[float], lng: Optional[float]) -> str:
     """
-    Создаёт безопасное представление местоположения для логирования
+    Creates safe location representation for logging
     
     Args:
-        lat: Широта
-        lng: Долгота
+        lat: Latitude
+        lng: Longitude
         
     Returns:
-        Обобщённое местоположение
+        Generalized location
     """
     if lat is None or lng is None:
         return "Location Unknown"
@@ -193,24 +193,24 @@ def safe_log_location(lat: Optional[float], lng: Optional[float]) -> str:
 
 def get_safe_logger(name: str) -> logging.Logger:
     """
-    Создаёт logger с предупреждением о безопасности
+    Creates logger with security warnings
     
     Args:
-        name: Имя logger'а
+        name: Logger name
         
     Returns:
-        Настроенный logger
+        Configured logger
     """
     logger = logging.getLogger(name)
     
-    # Добавляем фильтр для обнаружения потенциальных PII
+    # Add filter for detecting potential PII
     class PIIDetectionFilter(logging.Filter):
         def filter(self, record):
             message = record.getMessage()
             
-            # Простые паттерны для обнаружения PII
+            # Simple patterns for detecting PII
             email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-            coord_pattern = r'\b\d{1,3}\.\d{4,}\b'  # Точные координаты
+            coord_pattern = r'\b\d{1,3}\.\d{4,}\b'  # Precise coordinates
             
             if re.search(email_pattern, message):
                 record.msg = "[WARNING: Potential email detected in log] " + record.msg
@@ -224,18 +224,18 @@ def get_safe_logger(name: str) -> logging.Logger:
     return logger
 
 
-# Примеры использования:
+# Usage examples:
 """
-# В views.py вместо:
+# In views.py instead of:
 logger.info(f"Invitation URL for {employee.email}: {invitation_url}")
 
-# Используйте:
+# Use:
 logger.info(f"Invitation URL generated", extra=safe_log_employee(employee, "invitation_sent"))
 
-# Вместо:
+# Instead of:
 logger.info(f"User {user.email} logged in from {lat}, {lng}")
 
-# Используйте:
+# Use:
 safe_logger = get_safe_logger(__name__)
 safe_logger.info(f"User login", extra={
     **safe_log_user(user, "login"),

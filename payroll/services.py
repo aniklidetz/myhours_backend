@@ -1,11 +1,11 @@
 """
-Улучшенный сервис расчёта зарплаты с интеграцией внешних API
+Enhanced payroll calculation service with external API integration
 
-Объединяет:
-1. Текущую рабочую логику PayrollCalculationService
-2. Интеграцию с SunriseSunsetService для точных времён шабата  
-3. Интеграцию с HebcalService для еврейских праздников
-4. Мониторинг API интеграций и fallback механизмы
+Combines:
+1. Current working logic of PayrollCalculationService
+2. Integration with SunriseSunsetService for precise Sabbath times  
+3. Integration with HebcalService for Jewish holidays
+4. API integration monitoring and fallback mechanisms
 """
 
 from django.utils import timezone
@@ -28,46 +28,46 @@ logger = logging.getLogger(__name__)
 
 class EnhancedPayrollCalculationService:
     """
-    УЛУЧШЕННЫЙ сервис расчёта зарплаты с полной интеграцией внешних API
+    ENHANCED payroll calculation service with full external API integration
     
-    Сохраняет всю текущую рабочую логику и добавляет:
-    - Точные времена шабата через SunriseSunsetService
-    - Автоматическую синхронизацию праздников через HebcalService
-    - Мониторинг API интеграций
-    - Fallback на существующую логику при недоступности API
+    Preserves all current working logic and adds:
+    - Precise Sabbath times via SunriseSunsetService
+    - Automatic holiday synchronization via HebcalService
+    - API integration monitoring
+    - Fallback to existing logic when APIs are unavailable
     """
     
-    # Константы израильского трудового права для 5-дневной рабочей недели
+    # Israeli labor law constants for 5-day work week
     MAX_DAILY_HOURS = Decimal('12')
-    MAX_WEEKLY_REGULAR_HOURS = Decimal('42')  # 5-дневная неделя
+    MAX_WEEKLY_REGULAR_HOURS = Decimal('42')  # 5-day week
     MAX_WEEKLY_OVERTIME_HOURS = Decimal('16')
     MINIMUM_WAGE_ILS = Decimal('5300')
     MONTHLY_WORK_HOURS = Decimal('182')
     
-    # Дневные нормы часов для 5-дневной недели
-    REGULAR_DAILY_HOURS = Decimal('8.6')  # 4 дня в неделю
-    SHORT_DAILY_HOURS = Decimal('7.6')    # 1 день в неделю (обычно пятница)
+    # Daily hour norms for 5-day week
+    REGULAR_DAILY_HOURS = Decimal('8.6')  # 4 days per week
+    SHORT_DAILY_HOURS = Decimal('7.6')    # 1 day per week (usually Friday)
     
-    # Константы для ночных смен
+    # Constants for night shifts
     NIGHT_SHIFT_START = 22  # 22:00
     NIGHT_SHIFT_END = 6     # 06:00
-    NIGHT_SHIFT_MAX_REGULAR_HOURS = Decimal('7')  # Макс. обычные часы для ночной смены
+    NIGHT_SHIFT_MAX_REGULAR_HOURS = Decimal('7')  # Max regular hours for night shift
     
-    # Коэффициенты оплаты
-    OVERTIME_RATE_1 = Decimal('1.25')  # Первые 2 часа сверхурочных
-    OVERTIME_RATE_2 = Decimal('1.50')  # Дополнительные сверхурочные
-    HOLIDAY_RATE = Decimal('1.50')     # Коэффициент работы в праздник
-    SABBATH_RATE = Decimal('1.50')     # Коэффициент работы в шабат
+    # Payment coefficients
+    OVERTIME_RATE_1 = Decimal('1.25')  # First 2 overtime hours
+    OVERTIME_RATE_2 = Decimal('1.50')  # Additional overtime hours
+    HOLIDAY_RATE = Decimal('1.50')     # Holiday work coefficient
+    SABBATH_RATE = Decimal('1.50')     # Sabbath work coefficient
     
     def __init__(self, employee, year, month, fast_mode=False):
         """
-        Инициализация улучшенного расчёта зарплаты
+        Initialize enhanced payroll calculation
         
         Args:
-            employee (Employee): Объект сотрудника
-            year (int): Год для расчёта
-            month (int): Месяц для расчёта
-            fast_mode (bool): Быстрый режим без внешних API для списочных view
+            employee (Employee): Employee object
+            year (int): Year for calculation
+            month (int): Month for calculation
+            fast_mode (bool): Fast mode without external APIs for list views
         """
         self.employee = employee
         self.year = year
@@ -80,14 +80,14 @@ class EnhancedPayrollCalculationService:
         # Debug logging for fast mode
         logger.info(f"🚀 EnhancedPayrollCalculationService initialized with fast_mode={self.fast_mode}")
         
-        # Координаты для Израиля (можно сделать настраиваемыми)
-        self.default_lat = 31.7683  # Иерусалим
+        # Coordinates for Israel (can be made configurable)
+        self.default_lat = 31.7683  # Jerusalem
         self.default_lng = 35.2137
         
-        # Timezone для Израиля
+        # Timezone for Israel
         self.israel_tz = pytz.timezone('Asia/Jerusalem')
         
-        # Отслеживание использования API
+        # API usage tracking
         self.api_usage = {
             'sunrise_sunset_calls': 0,
             'hebcal_calls': 0,
