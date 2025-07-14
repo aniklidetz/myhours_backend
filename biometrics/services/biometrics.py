@@ -333,5 +333,5 @@ class BiometricService:
                 "collection_name": collection.name
             }
         except Exception as e:
-            logger.error(f"Error getting statistics: {e}")
-            return {"error": str(e)}
+            logger.exception("Error getting biometric statistics")
+            return {"error": "Failed to retrieve biometric statistics"}

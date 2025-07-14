@@ -33,7 +33,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Log employee creation and create default salary configuration"""
         employee = serializer.save()
-        logger.info(f"New employee created: {employee.get_full_name()} by user {self.request.user}")
+        logger.info("New employee created", extra={
+            **safe_log_employee(employee, "employee_created"),
+            "created_by": safe_log_employee(self.request.user, "creator") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
+        })
         
         # Create default salary configuration based on role
         from payroll.models import Salary
@@ -64,19 +67,28 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         
         # Create salary configuration
         salary = Salary.objects.create(**salary_data)
-        logger.info(f"Created default salary configuration for {employee.get_full_name()}: "
-                   f"{salary.calculation_type} - {salary.hourly_rate or salary.base_salary} {salary.currency}")
+        logger.info("Created default salary configuration", extra={
+            **safe_log_employee(employee, "salary_config_created"),
+            "calculation_type": salary.calculation_type,
+            "currency": salary.currency
+        })
 
     def perform_update(self, serializer):
         """Log employee updates"""
         employee = serializer.save()
-        logger.info(f"Employee updated: {employee.get_full_name()} by user {self.request.user}")
+        logger.info("Employee updated", extra={
+            **safe_log_employee(employee, "employee_updated"),
+            "updated_by": safe_log_employee(self.request.user, "updater") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
+        })
 
     def perform_destroy(self, instance):
         """Soft delete instead of hard delete"""
         instance.is_active = False
         instance.save()
-        logger.info(f"Employee deactivated: {instance.get_full_name()} by user {self.request.user}")
+        logger.info("Employee deactivated", extra={
+            **safe_log_employee(instance, "employee_deactivated"),
+            "deactivated_by": safe_log_employee(self.request.user, "deactivator") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
+        })
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -84,7 +96,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee = self.get_object()
         employee.is_active = True
         employee.save()
-        logger.info(f"Employee activated: {employee.get_full_name()} by user {request.user}")
+        logger.info("Employee activated", extra={
+            **safe_log_employee(employee, "employee_activated"),
+            "activated_by": safe_log_employee(request.user, "activator") if hasattr(request.user, 'employee') else str(request.user.id)[:8]
+        })
         return Response({'status': 'Employee activated'})
 
     @action(detail=True, methods=['post'])
@@ -93,7 +108,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee = self.get_object()
         employee.is_active = False
         employee.save()
-        logger.info(f"Employee deactivated: {employee.get_full_name()} by user {request.user}")
+        logger.info("Employee deactivated", extra={
+            **safe_log_employee(employee, "employee_deactivated"),
+            "deactivated_by": safe_log_employee(request.user, "deactivator") if hasattr(request.user, 'employee') else str(request.user.id)[:8]
+        })
         return Response({'status': 'Employee deactivated'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])

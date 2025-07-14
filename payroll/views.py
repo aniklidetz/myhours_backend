@@ -15,6 +15,7 @@ from .models import Salary, CompensatoryDay
 from .serializers import SalarySerializer
 from .enhanced_serializers import EnhancedEarningsSerializer, CompensatoryDayDetailSerializer
 from worktime.models import WorkLog
+from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def payroll_list(request):
                     employee = request.user.employee_profile
                     salary = employee.salary_info  # Проверяем наличие зарплаты
                     employees = [employee]
-                    logger.info(f"Employee view: {employee.get_full_name()}")
+                    logger.info("Employee view", extra=safe_log_employee(employee, "payroll_view"))
                 except Salary.DoesNotExist:
                     logger.warning(f"Employee {request.user.username} has no salary configuration")
                     return Response([])  # Возвращаем пустой массив если нет зарплаты
@@ -81,7 +82,7 @@ def payroll_list(request):
         for employee in employees:
             try:
                 salary = employee.salary_info
-                logger.info(f"Processing employee: {employee.get_full_name()}")
+                logger.info("Processing employee", extra=safe_log_employee(employee, "payroll_processing"))
                 
                 # Получаем рабочие логи быстро
                 work_logs = WorkLog.objects.filter(

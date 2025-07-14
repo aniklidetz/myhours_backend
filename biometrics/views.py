@@ -592,7 +592,10 @@ def check_out(request):
         # Calculate hours worked
         hours_worked = worklog.get_total_hours()
         
-        logger.info(f"Successful check-out for {employee.get_full_name()}")
+        logger.info("Successful check-out completed", extra={
+            "employee_id": str(employee.id)[:8],
+            "hours_worked": hours_worked
+        })
         
         return Response({
             'success': True,

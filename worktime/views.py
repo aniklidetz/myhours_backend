@@ -8,6 +8,7 @@ from .models import WorkLog
 from .serializers import WorkLogSerializer
 from .filters import WorkLogFilter
 import logging
+from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +38,19 @@ class WorkLogViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Log work session creation"""
         worklog = serializer.save()
-        logger.info(f"Work session started: {worklog.employee.get_full_name()} at {worklog.check_in}")
+        logger.info("Work session started", extra={
+            **safe_log_employee(worklog.employee, "work_session"),
+            "check_in_time": worklog.check_in.isoformat() if worklog.check_in else None
+        })
 
     def perform_update(self, serializer):
         """Log work session updates"""
         worklog = serializer.save()
         if worklog.check_out:
-            logger.info(f"Work session ended: {worklog.employee.get_full_name()}, duration: {worklog.get_total_hours()}h")
+            logger.info("Work session ended", extra={
+                **safe_log_employee(worklog.employee, "work_session"),
+                "duration_hours": worklog.get_total_hours()
+            })
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -51,7 +58,10 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         worklog = self.get_object()
         worklog.is_approved = True
         worklog.save()
-        logger.info(f"Work log approved: {worklog} by user {request.user}")
+        logger.info("Work log approved", extra={
+            "worklog_id": str(worklog.id)[:8],
+            "approved_by": safe_log_employee(request.user, "approver") if hasattr(request.user, 'employee') else str(request.user.id)[:8]
+        })
         return Response({'status': 'Work log approved'})
 
     @action(detail=False, methods=['get'])

@@ -95,11 +95,11 @@ class FaceProcessor:
             }
             
         except Exception as e:
-            logger.error(f"Failed to check image quality: {e}")
+            logger.exception("Failed to check image quality")
             return {
                 'quality_score': 0,
                 'passed': False,
-                'error': str(e)
+                'error': "Image quality check failed"
             }
     
     def detect_faces(self, image: np.ndarray) -> Tuple[List, List]:

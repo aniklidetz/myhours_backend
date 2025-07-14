@@ -21,6 +21,7 @@ from payroll.models import Salary, CompensatoryDay
 from integrations.models import Holiday
 from integrations.services.sunrise_sunset_service import SunriseSunsetService
 from integrations.services.hebcal_service import HebcalService
+from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,11 @@ class EnhancedPayrollCalculationService:
             models.Q(check_out__date__gte=start_date)
         ).order_by('check_in')
         
-        logger.info(f"📊 Найдено {work_logs.count()} рабочих сессий для {self.employee.get_full_name()} "
+        logger.info("📊 Найдено рабочих сессий для сотрудника", extra={
+            **safe_log_employee(self.employee, "payroll_sessions"),
+            "session_count": work_logs.count(),
+            "period": f"{self.year}-{self.month:02d}"
+        })
                    f"в {self.year}-{self.month:02d}")
         
         return work_logs
@@ -571,7 +576,10 @@ class EnhancedPayrollCalculationService:
             ).first()
             
             if existing:
-                logger.debug(f"Компенсационный день уже существует для {self.employee.get_full_name()} "
+                logger.debug("Компенсационный день уже существует", extra={
+                    **safe_log_employee(self.employee, "compensatory_exists"),
+                    "date": compensatory_date.isoformat()
+                })
                            f"на {work_date} (причина: {reason})")
                 return False, existing
             
@@ -581,7 +589,11 @@ class EnhancedPayrollCalculationService:
                 reason=reason
             )
             
-            logger.info(f"Создан компенсационный день для {self.employee.get_full_name()} "
+            logger.info("Создан компенсационный день", extra={
+                **safe_log_employee(self.employee, "compensatory_created"),
+                "date": compensatory_date.isoformat(),
+                "reason": reason
+            })
                        f"на {work_date} (причина: {reason})"
                        + (f" - {work_hours}ч отработано" if work_hours else ""))
             

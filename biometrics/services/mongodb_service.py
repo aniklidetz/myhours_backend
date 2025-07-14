@@ -260,13 +260,13 @@ class MongoDBService:
             }
             
         except Exception as e:
-            logger.error(f"Failed to get statistics: {e}")
+            logger.exception("Failed to get MongoDB statistics")
             return {
                 "total_employees": 0,
                 "active_employees": 0,
                 "total_embeddings": 0,
                 "status": "error",
-                "error": str(e)
+                "error": "Statistics retrieval failed"
             }
     
     def health_check(self) -> bool:
