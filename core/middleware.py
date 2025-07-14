@@ -5,6 +5,7 @@ import logging
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 from django.http import JsonResponse
+from core.logging_utils import safe_log_user, hash_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +70,11 @@ class APILoggingMiddleware(MiddlewareMixin):
         Log incoming API requests
         """
         if request.path.startswith('/api/') and request.path not in ['/api/schema/', '/api/docs/', '/api/redoc/']:
-            # Don't log sensitive data
+            # Безопасное логирование без PII
             log_data = {
                 'method': request.method,
                 'path': request.path,
-                'user': str(request.user) if hasattr(request, 'user') and request.user.is_authenticated else 'Anonymous',
+                'user_hash': hash_user_id(request.user.id) if hasattr(request, 'user') and request.user.is_authenticated else 'anonymous',
                 'ip': self.get_client_ip(request),
                 'user_agent': request.META.get('HTTP_USER_AGENT', '')[:100],  # Truncate long user agents
             }
@@ -98,7 +99,7 @@ class APILoggingMiddleware(MiddlewareMixin):
                 'method': request.method,
                 'path': request.path,
                 'status_code': response.status_code,
-                'user': str(request.user) if hasattr(request, 'user') and request.user.is_authenticated else 'Anonymous',
+                'user_hash': hash_user_id(request.user.id) if hasattr(request, 'user') and request.user.is_authenticated else 'anonymous',
                 'ip': self.get_client_ip(request),
             }
             

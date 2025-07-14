@@ -66,12 +66,11 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
             })
             return None
         
-        # Показать старые данные
-        logger.info(f"Тип расчета: {salary.calculation_type}")
-        if salary.calculation_type == 'hourly':
-            logger.info(f"Часовая ставка: {salary.hourly_rate} ₪/ч")
-        elif salary.calculation_type == 'monthly':
-            logger.info(f"Месячная зарплата: {salary.base_salary} ₪")
+        # Показать старые данные безопасно
+        logger.info("Salary configuration loaded", extra={
+            **safe_log_employee(employee, "salary_loaded"),
+            "calculation_type": salary.calculation_type
+        })
         
         # Получить рабочие логи для анализа
         work_logs = WorkLog.objects.filter(
@@ -91,13 +90,14 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
         calc_service = PayrollCalculationService(employee, year, month)
         new_result = calc_service.calculate_monthly_salary()
         
-        logger.info("=== НОВЫЙ РАСЧЕТ ===")
-        logger.info(f"Общая зарплата: {new_result['total_gross_pay']} ₪")
-        logger.info(f"Обычные часы: {new_result['regular_hours']}ч")
-        logger.info(f"Сверхурочные часы: {new_result['overtime_hours']}ч")
-        logger.info(f"Часы в праздники: {new_result['holiday_hours']}ч")
-        logger.info(f"Часы в субботу: {new_result['sabbath_hours']}ч")
-        logger.info(f"Компенсационные дни: {new_result['compensatory_days_earned']}")
+        logger.info("Payroll calculation completed", extra={
+            **safe_log_employee(employee, "payroll_calculated"),
+            "regular_hours": float(new_result['regular_hours']),
+            "overtime_hours": float(new_result['overtime_hours']),
+            "holiday_hours": float(new_result['holiday_hours']),
+            "sabbath_hours": float(new_result['sabbath_hours']),
+            "compensatory_days": new_result['compensatory_days_earned']
+        })
         
         # Показать нарушения и предупреждения
         if new_result.get('legal_violations'):
