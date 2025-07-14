@@ -227,6 +227,15 @@ def register_face(request):
                 success=True,
                 processing_time=sum(r.get('processing_time_ms', 0) for r in result['results'])
             )
+            
+            # IMPORTANT: Mark device token as biometrically verified after successful registration
+            # This allows immediate use of check-in/check-out without additional verification
+            device_token = getattr(request, 'device_token', None)
+            if device_token:
+                device_token.mark_biometric_verified()
+                logger.info("Device token marked as biometrically verified after registration")
+            else:
+                logger.warning("No device token found during biometric registration")
         
         logger.info("Face registration successful")
         
