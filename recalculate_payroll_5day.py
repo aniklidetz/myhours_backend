@@ -18,6 +18,7 @@ from users.models import Employee
 from payroll.models import Salary
 from payroll.services import PayrollCalculationService
 from worktime.models import WorkLog
+from core.logging_utils import safe_log_employee
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -42,7 +43,7 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
             logger.error(f"Сотрудник '{employee_name_or_id}' не найден")
             return None
         
-        logger.info(f"Пересчет для сотрудника: {employee.get_full_name()}")
+        logger.info("Пересчет для сотрудника", extra=safe_log_employee(employee, "payroll_recalc"))
         
         # Если не указан период, используем текущий месяц
         if not year or not month:
@@ -56,10 +57,13 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
         try:
             salary = employee.salary_info
             if not salary:
-                logger.error(f"У сотрудника {employee.get_full_name()} нет salary configuration")
+                logger.error("У сотрудника нет salary configuration", extra=safe_log_employee(employee, "missing_salary"))
                 return None
         except Exception as e:
-            logger.error(f"Ошибка получения salary для {employee.get_full_name()}: {e}")
+            logger.error("Ошибка получения salary для сотрудника", extra={
+                **safe_log_employee(employee, "salary_error"),
+                "error_type": type(e).__name__
+            })
             return None
         
         # Показать старые данные

@@ -28,7 +28,8 @@ def health_check(request):
         status['timestamp'] = timezone.now().isoformat()
         status['services']['django'] = {'status': 'healthy'}
     except Exception as e:
-        status['services']['django'] = {'status': 'unhealthy', 'error': str(e)}
+        logger.exception("Django health check failed")
+        status['services']['django'] = {'status': 'unhealthy', 'error': 'Service unavailable'}
         status['status'] = 'unhealthy'
     
     # Check Database
@@ -37,7 +38,8 @@ def health_check(request):
             cursor.execute("SELECT 1")
         status['services']['postgresql'] = {'status': 'healthy'}
     except Exception as e:
-        status['services']['postgresql'] = {'status': 'unhealthy', 'error': str(e)}
+        logger.exception("PostgreSQL health check failed")
+        status['services']['postgresql'] = {'status': 'unhealthy', 'error': 'Database connection failed'}
         status['status'] = 'unhealthy'
     
     # Check Redis
@@ -46,7 +48,8 @@ def health_check(request):
         cache.get('health_check')
         status['services']['redis'] = {'status': 'healthy'}
     except Exception as e:
-        status['services']['redis'] = {'status': 'unhealthy', 'error': str(e)}
+        logger.exception("Redis health check failed")
+        status['services']['redis'] = {'status': 'unhealthy', 'error': 'Cache service unavailable'}
         status['status'] = 'unhealthy'
     
     # Check MongoDB
@@ -57,7 +60,8 @@ def health_check(request):
         client.server_info()
         status['services']['mongodb'] = {'status': 'healthy'}
     except Exception as e:
-        status['services']['mongodb'] = {'status': 'unhealthy', 'error': str(e)}
+        logger.exception("MongoDB health check failed")
+        status['services']['mongodb'] = {'status': 'unhealthy', 'error': 'MongoDB service unavailable'}
         status['status'] = 'unhealthy'
     
     http_status = 200 if status['status'] == 'healthy' else 503
