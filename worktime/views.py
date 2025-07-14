@@ -19,6 +19,21 @@ class WorkLogViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = WorkLogFilter
 
+    def get_queryset(self):
+        """Filter work logs to only show current user's data unless user is admin"""
+        queryset = super().get_queryset()
+        
+        # Admins can see all logs
+        if self.request.user.is_staff or self.request.user.is_superuser:
+            return queryset
+        
+        # Regular users can only see their own logs
+        if hasattr(self.request.user, 'employee_profile'):
+            return queryset.filter(employee=self.request.user.employee_profile)
+        
+        # Users without employee profile see no logs
+        return queryset.none()
+
     def perform_create(self, serializer):
         """Log work session creation"""
         worklog = serializer.save()

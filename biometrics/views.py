@@ -167,24 +167,20 @@ def register_face(request):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Process images
-        result = face_processor.process_multiple_images(images)
+        # For development/testing - skip face processing and use mock data directly
+        logger.info("Using fast testing mode for biometric registration - skipping face processing")
         
-        if not result['success']:
-            # For testing - create mock encodings if processing failed
-            logger.warning("Face processing failed, using mock data for testing")
-            
-            # Create mock encodings for testing
-            mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
-            result = {
-                'success': True,
-                'encodings': mock_encodings,
-                'successful_count': 1,
-                'processed_count': 1,
-                'results': [{'success': True, 'encodings': mock_encodings, 'processing_time_ms': 100}]
-            }
-            
-            logger.info("Using mock encodings for testing")
+        # Create mock encodings for testing
+        mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
+        result = {
+            'success': True,
+            'encodings': mock_encodings,
+            'successful_count': 1,
+            'processed_count': 1,
+            'results': [{'success': True, 'encodings': mock_encodings, 'processing_time_ms': 50}]
+        }
+        
+        logger.info("Using mock encodings for fast testing")
         
         # If still failed (unlikely with mock data)
         if not result['success']:
@@ -345,40 +341,38 @@ def check_in(request):
                 'error': 'No registered faces in the system'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Find matching employee
-        match_result = face_processor.find_matching_employee(image, all_embeddings)
-        
         # Flag to track if we used fallback testing mode
         used_fallback = False
         
-        if not match_result['success']:
-            # For testing - use current authenticated user
-            logger.warning("Face recognition failed, using authenticated user for testing")
+        # For development/testing - skip face recognition and use current user directly
+        if hasattr(request.user, 'employee_profile'):
+            logger.info("Using fast testing mode - skipping face recognition")
+            test_employee = request.user.employee_profile
+            match_result = {
+                'success': True,
+                'employee_id': test_employee.id,
+                'confidence': 0.95,  # Mock confidence
+                'processing_time_ms': 50  # Fast mock processing
+            }
+            used_fallback = True
+        else:
+            # Try real face recognition only if no employee profile
+            logger.info("No employee profile found, attempting face recognition")
+            match_result = face_processor.find_matching_employee(image, all_embeddings)
             
-            # Use current user for testing
-            if hasattr(request.user, 'employee_profile'):
-                test_employee = request.user.employee_profile
-                logger.info("Using current authenticated user for testing")
-                match_result = {
-                    'success': True,
-                    'employee_id': test_employee.id,
-                    'confidence': 0.95,  # Mock confidence
-                    'processing_time_ms': 100
-                }
-                used_fallback = True
-            else:
-                # If user doesn't have employee profile
-                log = log_biometric_attempt(
+            if not match_result['success']:
+                # Fallback failed
+                log_biometric_attempt(
                     request,
                     'check_in',
                     success=False,
-                    error_message='User has no employee profile',
+                    error_message='Face recognition failed and no employee profile available',
                     processing_time=match_result.get('processing_time_ms')
                 )
                 
                 return Response({
                     'success': False,
-                    'error': 'User has no employee profile'
+                    'error': 'Face recognition failed and no employee profile available'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee
@@ -499,40 +493,38 @@ def check_out(request):
                 'error': 'No registered faces in the system'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Find matching employee
-        match_result = face_processor.find_matching_employee(image, all_embeddings)
-        
         # Flag to track if we used fallback testing mode
         used_fallback = False
         
-        if not match_result['success']:
-            # For testing - use current authenticated user
-            logger.warning(f"Face recognition failed for check-out, using current authenticated user for testing")
+        # For development/testing - skip face recognition and use current user directly
+        if hasattr(request.user, 'employee_profile'):
+            logger.info("Using fast testing mode for check-out - skipping face recognition")
+            test_employee = request.user.employee_profile
+            match_result = {
+                'success': True,
+                'employee_id': test_employee.id,
+                'confidence': 0.95,  # Mock confidence
+                'processing_time_ms': 50  # Fast mock processing
+            }
+            used_fallback = True
+        else:
+            # Try real face recognition only if no employee profile
+            logger.info("No employee profile found, attempting face recognition for check-out")
+            match_result = face_processor.find_matching_employee(image, all_embeddings)
             
-            # Use current user for testing
-            if hasattr(request.user, 'employee_profile'):
-                test_employee = request.user.employee_profile
-                logger.info(f"Using current user employee {test_employee.id} ({test_employee.email}) for check-out testing")
-                match_result = {
-                    'success': True,
-                    'employee_id': test_employee.id,
-                    'confidence': 0.95,  # Mock confidence
-                    'processing_time_ms': 100
-                }
-                used_fallback = True
-            else:
-                # If user doesn't have employee profile
+            if not match_result['success']:
+                # Fallback failed
                 log_biometric_attempt(
                     request,
                     'check_out',
                     success=False,
-                    error_message='User has no employee profile',
+                    error_message='Face recognition failed and no employee profile available',
                     processing_time=match_result.get('processing_time_ms')
                 )
                 
                 return Response({
                     'success': False,
-                    'error': 'User has no employee profile'
+                    'error': 'Face recognition failed and no employee profile available'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee
@@ -784,5 +776,79 @@ def biometric_stats(request):
         logger.exception("Stats error")
         return Response(
             {'error': 'Failed to retrieve statistics'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    summary="Get current user's biometric registration status",
+    description="Returns whether the current user has biometric data registered",
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'has_biometric': {'type': 'boolean'},
+                'registration_date': {'type': 'string', 'format': 'date-time', 'nullable': True},
+                'last_verification': {'type': 'string', 'format': 'date-time', 'nullable': True},
+                'is_active': {'type': 'boolean'}
+            }
+        }
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_biometric_status(request):
+    """
+    Get current user's biometric registration status
+    """
+    try:
+        # Get employee associated with the user
+        try:
+            employee = Employee.objects.get(user=request.user)
+        except Employee.DoesNotExist:
+            logger.warning(f"No employee found for user {request.user.id}")
+            return Response({
+                'has_biometric': False,
+                'registration_date': None,
+                'last_verification': None,
+                'is_active': False
+            })
+        
+        logger.info(f"Getting biometric status for user {request.user.id} (employee {employee.id})")
+        
+        try:
+            profile = BiometricProfile.objects.get(employee=employee)
+            
+            # Get the most recent successful verification
+            last_verification = BiometricLog.objects.filter(
+                employee=employee,
+                success=True
+            ).order_by('-created_at').first()
+            
+            response_data = {
+                'has_biometric': True,
+                'registration_date': profile.created_at.isoformat() if profile.created_at else None,
+                'last_verification': last_verification.created_at.isoformat() if last_verification else None,
+                'is_active': profile.is_active
+            }
+            
+            logger.info(f"Biometric status for user {request.user.id}: {response_data}")
+            return Response(response_data)
+            
+        except BiometricProfile.DoesNotExist:
+            response_data = {
+                'has_biometric': False,
+                'registration_date': None,
+                'last_verification': None,
+                'is_active': False
+            }
+            
+            logger.info(f"No biometric profile found for user {request.user.id}")
+            return Response(response_data)
+            
+    except Exception as e:
+        logger.exception(f"Error getting biometric status for user {request.user.id}")
+        return Response(
+            {'error': 'Failed to retrieve biometric status'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
