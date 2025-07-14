@@ -126,16 +126,17 @@ def quick_reset_current_month():
     logger.info(f"   ✅ Обработано: {success_count} сотрудников")
     
     logger.info(f"\n📋 ПОДРОБНЫЕ РЕЗУЛЬТАТЫ:")
+    from core.logging_utils import mask_name
     total_payroll = 0
     for result in results:
-        logger.info(f"   {result['name']}:")
-        logger.info(f"      💰 {result['total_pay']} ₪")
-        logger.info(f"      ⏰ {result['regular_hours']}ч обычных + {result['overtime_hours']}ч сверхурочных")
+        logger.info(f"   Employee {mask_name(result['name'])}:")
+        logger.info(f"      💰 Payroll calculated successfully")
+        logger.info(f"      ⏰ {result['regular_hours']}h regular + {result['overtime_hours']}h overtime")
         if result['comp_days'] > 0:
-            logger.info(f"      📅 {result['comp_days']} компенсационных дней")
+            logger.info(f"      📅 {result['comp_days']} compensation days")
         total_payroll += result['total_pay']
     
-    logger.info(f"\n💰 ОБЩИЙ PAYROLL ЗА МЕСЯЦ: {total_payroll} ₪")
+    logger.info(f"\n💰 Total employees processed: {len(results)}, payroll calculation completed")
     
     # Проверяем созданные компенсационные дни
     new_comp_days = CompensatoryDay.objects.filter(

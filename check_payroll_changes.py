@@ -49,10 +49,12 @@ def check_employee_overtime_changes(employee_name_or_id, year=None, month=None):
             employee = Employee.objects.get(id=employee_name_or_id)
         
         if not employee:
-            logger.error(f"Сотрудник '{employee_name_or_id}' не найден")
+            from core.logging_utils import hash_user_id
+            logger.error("Сотрудник не найден", extra={"employee_ref": hash_user_id(str(employee_name_or_id))})
             return None
         
-        logger.info(f"📊 Анализ для: {employee.get_full_name()}")
+        from core.logging_utils import safe_log_employee
+        logger.info("📊 Начат анализ сотрудника", extra=safe_log_employee(employee, "payroll_analysis"))
         
         # Если не указан период, используем текущий месяц
         if not year or not month:
@@ -176,10 +178,8 @@ def check_employee_overtime_changes(employee_name_or_id, year=None, month=None):
             'overtime_change': total_new_overtime - total_old_overtime
         }
         
-    except Exception as e:
-        logger.error(f"Ошибка при анализе для {employee_name_or_id}: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        logger.exception("Ошибка при анализе сотрудника", extra=safe_log_employee(employee, "analysis_error"))
         return None
 
 def check_all_employees_changes(year=None, month=None):
@@ -198,8 +198,9 @@ def check_all_employees_changes(year=None, month=None):
     # Сводка
     logger.info(f"\n{'='*60}")
     logger.info("📊 СВОДКА ИЗМЕНЕНИЙ:")
+    from core.logging_utils import mask_name
     for result in results:
-        logger.info(f"   {result['employee']}: {result['overtime_change']:+.1f}ч сверхурочных")
+        logger.info(f"   Employee {mask_name(result['employee'])}: {result['overtime_change']:+.1f}h overtime change")
     
     return results
 

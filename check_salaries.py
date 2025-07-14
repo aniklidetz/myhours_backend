@@ -20,14 +20,15 @@ print(f"Total active employees: {employees.count()}\n")
 missing_salary = []
 has_salary = []
 
+from core.logging_utils import mask_name
 for emp in employees:
     try:
         salary = emp.salary_info
         has_salary.append(emp)
-        print(f"✅ {emp.get_full_name()} (ID: {emp.id}) - Has salary: {salary.calculation_type}, Rate: {salary.hourly_rate or salary.base_salary}")
+        print(f"✅ {mask_name(emp.get_full_name())} (ID: [REDACTED]) - Has salary: {salary.calculation_type}")
     except Salary.DoesNotExist:
         missing_salary.append(emp)
-        print(f"❌ {emp.get_full_name()} (ID: {emp.id}) - NO SALARY RECORD")
+        print(f"❌ {mask_name(emp.get_full_name())} (ID: [REDACTED]) - NO SALARY RECORD")
 
 print(f"\n\nSummary:")
 print(f"Employees with salary: {len(has_salary)}")
@@ -36,4 +37,4 @@ print(f"Employees WITHOUT salary: {len(missing_salary)}")
 if missing_salary:
     print("\nEmployees missing salary configuration:")
     for emp in missing_salary:
-        print(f"  - {emp.get_full_name()} (ID: {emp.id}, Role: {emp.role})")
+        print(f"  - {mask_name(emp.get_full_name())} (ID: [REDACTED], Role: {emp.role})")

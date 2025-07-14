@@ -40,7 +40,8 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
             employee = Employee.objects.get(id=employee_name_or_id)
         
         if not employee:
-            logger.error(f"Сотрудник '{employee_name_or_id}' не найден")
+            from core.logging_utils import hash_user_id
+            logger.error("Сотрудник не найден", extra={"employee_ref": hash_user_id(str(employee_name_or_id))})
             return None
         
         logger.info("Пересчет для сотрудника", extra=safe_log_employee(employee, "payroll_recalc"))
@@ -140,10 +141,8 @@ def recalculate_employee_payroll(employee_name_or_id, year=None, month=None):
         
         return new_result
         
-    except Exception as e:
-        logger.error(f"Ошибка при пересчете для {employee_name_or_id}: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        logger.exception("Ошибка при пересчете зарплаты")
         return None
 
 def recalculate_all_employees(year=None, month=None):
@@ -167,7 +166,7 @@ if __name__ == "__main__":
         year = int(sys.argv[2]) if len(sys.argv) > 2 else None
         month = int(sys.argv[3]) if len(sys.argv) > 3 else None
         
-        logger.info(f"Пересчет для: {employee_name}")
+        logger.info("Пересчет зарплаты начат")
         result = recalculate_employee_payroll(employee_name, year, month)
         
         if result:
