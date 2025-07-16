@@ -15,6 +15,7 @@ django.setup()
 from users.models import Employee
 from payroll.models import Salary
 from decimal import Decimal
+from core.logging_utils import mask_name, mask_email
 
 def check_specific_employees():
     """Check the specific employees causing errors"""
@@ -28,8 +29,8 @@ def check_specific_employees():
         
         try:
             emp = Employee.objects.get(id=emp_id)
-            print(f"Name: {emp.get_full_name()}")
-            print(f"Email: {emp.email}")
+            print(f"Name: {mask_name(emp.get_full_name())}")
+            print(f"Email: {mask_email(emp.email)}")
             print(f"Role: {emp.role}")
             
             # Check salary
@@ -37,8 +38,8 @@ def check_specific_employees():
                 salary = emp.salary_info
                 print(f"✅ Salary exists")
                 print(f"  Calculation type: {salary.calculation_type}")
-                print(f"  Base salary: {salary.base_salary}")
-                print(f"  Hourly rate: {salary.hourly_rate}")
+                print(f"  Base salary: [REDACTED]")
+                print(f"  Hourly rate: [REDACTED]")
                 print(f"  Currency: {salary.currency}")
                 
                 # Test the specific fix

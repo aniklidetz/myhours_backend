@@ -11,7 +11,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app  # ← Монтируем весь код для hot-reload
+      - .:/app  # ← Mount all code for hot-reload
       - ./media:/app/media
       - ./logs:/app/logs
       - ./staticfiles:/app/staticfiles

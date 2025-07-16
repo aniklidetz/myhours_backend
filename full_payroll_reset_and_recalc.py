@@ -94,16 +94,15 @@ def recalculate_all_employees_payroll(months_back=3):
         
         # Проверяем salary configuration
         try:
+            from core.logging_utils import safe_log_employee
             salary = employee.salary_info
-            logger.info(f"💼 Тип расчета: {salary.calculation_type}")
-            
-            if salary.calculation_type == 'hourly':
-                logger.info(f"💰 Часовая ставка: {salary.hourly_rate} ₪/ч")
-            elif salary.calculation_type == 'monthly':
-                logger.info(f"💰 Месячная зарплата: {salary.base_salary} ₪")
+            logger.info("💼 Salary configuration loaded", extra={
+                **safe_log_employee(employee, "salary_check"),
+                "calculation_type": salary.calculation_type
+            })
                 
-        except Exception as e:
-            logger.error(f"❌ Ошибка salary configuration для {employee.get_full_name()}: {e}")
+        except Exception:
+            logger.exception("❌ Salary configuration error", extra=safe_log_employee(employee, "salary_error"))
             error_count += 1
             continue
         

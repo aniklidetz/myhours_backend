@@ -227,6 +227,15 @@ def register_face(request):
                 success=True,
                 processing_time=sum(r.get('processing_time_ms', 0) for r in result['results'])
             )
+            
+            # IMPORTANT: Mark device token as biometrically verified after successful registration
+            # This allows immediate use of check-in/check-out without additional verification
+            device_token = getattr(request, 'device_token', None)
+            if device_token:
+                device_token.mark_biometric_verified()
+                logger.info("Device token marked as biometrically verified after registration")
+            else:
+                logger.warning("No device token found during biometric registration")
         
         logger.info("Face registration successful")
         
@@ -721,6 +730,14 @@ def check_work_status(request):
             'error_id': 'status_002',
             'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def test_endpoint(request):
+    """
+    Test endpoint to verify URL loading works
+    """
+    return Response({'message': 'Test endpoint is working', 'timestamp': timezone.now()})
 
 
 @api_view(['GET'])

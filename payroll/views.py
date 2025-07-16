@@ -28,16 +28,20 @@ def payroll_list(request):
     """
     try:
         # Проверяем права доступа
-        logger.info(f"Payroll request from user: {request.user.username}, has_profile: {hasattr(request.user, 'employee_profile')}")
+        from core.logging_utils import hash_user_id
+        logger.info("Payroll request received", extra={
+            "user_hash": hash_user_id(request.user.id),
+            "has_profile": hasattr(request.user, 'employee_profile')
+        })
         
         if hasattr(request.user, 'employee_profile'):
             user_role = request.user.employee_profile.role
-            logger.info(f"User role: {user_role}")
+            logger.info("User role checked", extra={"role": user_role})
             
             if user_role in ['admin', 'accountant']:
                 # Админ - получаем всех сотрудников с зарплатами
                 employees = Employee.objects.filter(salary_info__isnull=False).select_related('salary_info')
-                logger.info(f"Admin view: found {employees.count()} employees with salaries")
+                logger.info("Admin payroll view", extra={"employees_count": employees.count()})
             else:
                 # Обычный сотрудник - только свои данные
                 try:
@@ -108,9 +112,15 @@ def payroll_list(request):
                         payroll_service = PayrollCalculationService(employee, current_date.year, current_date.month, fast_mode=True)
                         result = payroll_service.calculate_monthly_salary_enhanced()
                         estimated_salary = float(result.get('total_gross_pay', 0))
-                        logger.info(f"  Enhanced fast calculation: ₪{estimated_salary}")
+                        logger.info("Enhanced calculation completed", extra={
+                            **safe_log_employee(employee, "enhanced_calc"),
+                            "calculation_type": "enhanced_fast"
+                        })
                     except Exception as e:
-                        logger.warning(f"  Enhanced calculation failed: {e}, using fallback")
+                        logger.warning("Enhanced calculation failed, using fallback", extra={
+                            **safe_log_employee(employee, "calc_fallback"),
+                            "error_type": type(e).__name__
+                        })
                         base_rate = float(salary.hourly_rate or 0)
                         estimated_salary = total_hours * base_rate * 1.3  # Примерная оценка с премиями
                 else:
@@ -118,9 +128,15 @@ def payroll_list(request):
                     try:
                         result = salary.calculate_monthly_salary(current_date.month, current_date.year)
                         estimated_salary = float(result.get('total_salary', 0))
-                        logger.info(f"  Monthly proportional calculation: ₪{estimated_salary}")
+                        logger.info("Monthly calculation completed", extra={
+                            **safe_log_employee(employee, "monthly_calc"),
+                            "calculation_type": "monthly_proportional"
+                        })
                     except Exception as e:
-                        logger.warning(f"  Monthly calculation failed: {e}, using base salary")
+                        logger.warning("Monthly calculation failed, using base salary", extra={
+                            **safe_log_employee(employee, "monthly_fallback"),
+                            "error_type": type(e).__name__
+                        })
                         estimated_salary = float(salary.base_salary or 0)
                 
                 employee_data = {
@@ -142,13 +158,19 @@ def payroll_list(request):
                 }
                 
                 payroll_data.append(employee_data)
-                logger.info(f"  Added to payroll_data: ₪{estimated_salary}")
+                logger.info("Employee added to payroll data", extra=safe_log_employee(employee, "payroll_added"))
                 
             except Exception as e:
-                logger.error(f"Error calculating payroll for employee {employee.id}: {e}")
+                logger.error("Error calculating payroll for employee", extra={
+                    **safe_log_employee(employee, "payroll_error"),
+                    "error_type": type(e).__name__
+                })
                 continue
         
-        logger.info(f"Payroll list returned {len(payroll_data)} records for user {request.user.username}")
+        logger.info("Payroll list completed", extra={
+            "user_hash": hash_user_id(request.user.id),
+            "records_count": len(payroll_data)
+        })
         return Response(payroll_data)
         
     except Exception as e:
@@ -283,11 +305,11 @@ def enhanced_earnings(request):
                 # Get detailed breakdown for better transparency
                 detailed_breakdown = service.get_detailed_breakdown()
             
-        except Exception as calc_error:
-            logger.error(f"Error in enhanced_earnings for employee {target_employee.id}: {calc_error}")
+        except Exception:
+            logger.exception("Error in enhanced_earnings calculation", extra=safe_log_employee(target_employee, "calc_error"))
             return Response({
                 'error': 'Calculation failed',
-                'details': str(calc_error)
+                'details': 'An internal error occurred during salary calculation. Please contact support.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Prepare enhanced response structure with different field mapping for monthly vs hourly
@@ -510,8 +532,8 @@ def backward_compatible_earnings(request):
                     }
                 }
             })
-        except Exception as e:
-            logger.error(f"Error using enhanced service: {e}")
+        except Exception:
+            logger.exception("Error using enhanced service", extra=safe_log_employee(target_employee, "enhanced_service_error"))
             # Fallback to old logic
             pass
         
@@ -532,8 +554,8 @@ def backward_compatible_earnings(request):
                 # Получаем детализированный разбор для большей прозрачности
                 detailed_breakdown = service.get_detailed_breakdown()
                 
-            except Exception as calc_error:
-                logger.error(f"Error in backward_compatible_earnings for employee {target_employee.id}: {calc_error}")
+            except Exception:
+                logger.exception("Error in backward_compatible_earnings calculation", extra=safe_log_employee(target_employee, "backward_calc_error"))
                 # Возвращаем безопасный fallback
                 return Response({
                     "employee": {
@@ -652,8 +674,8 @@ def backward_compatible_earnings(request):
             try:
                 service = PayrollCalculationService(target_employee, current_date.year, current_date.month, fast_mode=True)
                 service_result = service.calculate_monthly_salary()
-            except Exception as calc_error:
-                logger.error(f"Error in backward_compatible_earnings for monthly employee {target_employee.id}: {calc_error}")
+            except Exception:
+                logger.exception("Error in backward_compatible_earnings for monthly employee", extra=safe_log_employee(target_employee, "monthly_calc_error"))
                 # Возвращаем безопасный fallback для месячных сотрудников
                 return Response({
                     "employee": {
