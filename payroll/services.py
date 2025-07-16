@@ -98,41 +98,40 @@ class EnhancedPayrollCalculationService:
         
     def get_work_logs_for_month(self):
         """
-        ИСПРАВЛЕНО: Корректная фильтрация рабочих логов для месяца
+        FIXED: Correct filtering of work logs for the month
         
         Returns:
-            QuerySet: Рабочие логи для указанного месяца
+            QuerySet: Work logs for the specified month
         """
-        # Вычисляем точные границы месяца
+        # Calculate exact month boundaries
         start_date = date(self.year, self.month, 1)
         _, last_day = calendar.monthrange(self.year, self.month)
         end_date = date(self.year, self.month, last_day)
         
-        # ИСПРАВЛЕНО: более точная фильтрация
+        # FIXED: more precise filtering
         work_logs = WorkLog.objects.filter(
             employee=self.employee,
-            check_out__isnull=False  # Только завершённые сессии
+            check_out__isnull=False  # Only completed sessions
         ).filter(
-            # Сессия пересекается с месяцем
+            # Session intersects with the month
             models.Q(check_in__date__lte=end_date) & 
             models.Q(check_out__date__gte=start_date)
         ).order_by('check_in')
         
-        logger.info("📊 Найдено рабочих сессий для сотрудника", extra={
+        logger.info("📊 Found work sessions for employee", extra={
             **safe_log_employee(self.employee, "payroll_sessions"),
             "session_count": work_logs.count(),
             "period": f"{self.year}-{self.month:02d}"
         })
-                   f"в {self.year}-{self.month:02d}")
         
         return work_logs
     
     def is_sabbath_work_precise(self, work_datetime):
         """
-        УЛУЧШЕНО: Точное определение работы в шабат с использованием SunriseSunsetService
+        IMPROVED: Precise determination of Sabbath work using SunriseSunsetService
         
         Args:
-            work_datetime (datetime): Время начала работы
+            work_datetime (datetime): Work start time
             
         Returns:
             tuple: (is_sabbath, sabbath_type, sabbath_info)
@@ -148,13 +147,13 @@ class EnhancedPayrollCalculationService:
         ).first()
         
         if sabbath_holiday:
-            # Используем точные времена из базы данных если они есть
+            # Use precise times from database if available
             if sabbath_holiday.start_time and sabbath_holiday.end_time:
-                # Конвертируем в израильский timezone
+                # Convert to Israeli timezone
                 start_time_israel = sabbath_holiday.start_time.astimezone(self.israel_tz)
                 end_time_israel = sabbath_holiday.end_time.astimezone(self.israel_tz)
                 
-                # Проверяем, попадает ли работа в период шабата
+                # Check if work falls within Sabbath period
                 if work_datetime.tzinfo is None:
                     work_datetime = timezone.make_aware(work_datetime)
                 work_datetime_israel = work_datetime.astimezone(self.israel_tz)
@@ -162,7 +161,7 @@ class EnhancedPayrollCalculationService:
                 if start_time_israel <= work_datetime_israel <= end_time_israel:
                     return True, 'registered_sabbath_precise', sabbath_holiday
             else:
-                # Нет точных времён, используем дату
+                # No precise times, use date only
                 return True, 'registered_sabbath', sabbath_holiday
         
         # 2. Use SunriseSunsetService for precise calculation (only if not in fast mode)
@@ -171,55 +170,55 @@ class EnhancedPayrollCalculationService:
             try:
                 self.api_usage['sunrise_sunset_calls'] += 1
                 
-                if work_date.weekday() == 4:  # Пятница
+                if work_date.weekday() == 4:  # Friday
                     shabbat_times = SunriseSunsetService.get_shabbat_times(work_date)
                 
                 if not shabbat_times.get('is_estimated', True):
-                    # У нас есть точные времена от API
+                    # We have precise times from API
                     self.api_usage['precise_sabbath_times'] += 1
                     
                     shabbat_start_str = shabbat_times['start']
                     
-                    # Парсим UTC время от API
+                    # Parse UTC time from API
                     try:
                         if shabbat_start_str.endswith('Z'):
                             shabbat_start_str = shabbat_start_str.replace('Z', '+00:00')
                         shabbat_start_utc = datetime.fromisoformat(shabbat_start_str)
                         
-                        # Конвертируем в израильский timezone
+                        # Convert to Israeli timezone
                         if shabbat_start_utc.tzinfo is None:
                             shabbat_start_utc = pytz.UTC.localize(shabbat_start_utc)
                         
                         shabbat_start_local = shabbat_start_utc.astimezone(self.israel_tz)
                         
-                        # Обеспечиваем timezone-aware для work_datetime
+                        # Ensure timezone-aware for work_datetime
                         if work_datetime.tzinfo is None:
                             work_datetime = timezone.make_aware(work_datetime)
                         work_local = work_datetime.astimezone(self.israel_tz)
                         
                         if work_local >= shabbat_start_local:
-                            logger.info(f"✅ Точная работа в шабат обнаружена на {work_date}: "
-                                      f"работа в {work_local.strftime('%H:%M')}, "
-                                      f"шабат начинается в {shabbat_start_local.strftime('%H:%M')}")
+                            logger.info(f"✅ Precise Sabbath work detected on {work_date}: "
+                                      f"work at {work_local.strftime('%H:%M')}, "
+                                      f"Sabbath starts at {shabbat_start_local.strftime('%H:%M')}")
                             return True, 'friday_evening_precise', shabbat_times
                             
                     except Exception as parse_error:
-                        logger.warning(f"Ошибка парсинга точного времени шабата для {work_date}: {parse_error}")
+                        logger.warning(f"Error parsing precise Sabbath time for {work_date}: {parse_error}")
                         self.api_usage['fallback_calculations'] += 1
-                        # Fallback к простой проверке времени
+                        # Fallback to simple time check
                         if work_datetime.time().hour >= 18:
                             return True, 'friday_evening_fallback', None
                 else:
-                    # Используем примерное время (18:00)
+                    # Use estimated time (18:00)
                     self.api_usage['fallback_calculations'] += 1
                     if work_datetime.time().hour >= 18:
                         return True, 'friday_evening_estimated', shabbat_times
                         
                 
-                if work_date.weekday() == 5:  # Суббота
-                    # Для субботы проверяем окончание шабата
+                if work_date.weekday() == 5:  # Saturday
+                    # For Saturday, check Sabbath end time
                     try:
-                        # Получаем времена шабата для пятницы (которая началась в этот шабат)
+                        # Get Sabbath times for Friday (which started this Sabbath)
                         friday_date = work_date - timedelta(days=1)
                         shabbat_times = SunriseSunsetService.get_shabbat_times(friday_date)
                         
@@ -242,28 +241,28 @@ class EnhancedPayrollCalculationService:
                                 work_local = work_datetime.astimezone(self.israel_tz)
                                 
                                 if work_local <= shabbat_end_local:
-                                    logger.info(f"✅ Точная работа в шабат обнаружена на {work_date}: "
-                                              f"работа в {work_local.strftime('%H:%M')}, "
-                                              f"шабат заканчивается в {shabbat_end_local.strftime('%H:%M')}")
+                                    logger.info(f"✅ Precise Sabbath work detected on {work_date}: "
+                                              f"work at {work_local.strftime('%H:%M')}, "
+                                              f"Sabbath ends at {shabbat_end_local.strftime('%H:%M')}")
                                     return True, 'saturday_precise', shabbat_times
                             except Exception as parse_error:
-                                logger.warning(f"Ошибка парсинга времени окончания шабата для {work_date}: {parse_error}")
+                                logger.warning(f"Error parsing Sabbath end time for {work_date}: {parse_error}")
                         
-                        # Fallback: вся суббота считается шабатом
+                        # Fallback: entire Saturday is considered Sabbath
                         self.api_usage['fallback_calculations'] += 1
                         return True, 'saturday_all_day', shabbat_times
                         
                     except Exception as api_error:
-                        logger.warning(f"Ошибка SunriseSunsetService для субботы {work_date}: {api_error}")
+                        logger.warning(f"SunriseSunsetService error for Saturday {work_date}: {api_error}")
                         self.api_usage['fallback_calculations'] += 1
-                        # Fallback: вся суббота считается шабатом
+                        # Fallback: entire Saturday is considered Sabbath
                         return True, 'saturday_fallback', None
                     
             except Exception as e:
                 logger.warning(f"Ошибка использования SunriseSunsetService для {work_date}: {e}")
                 self.api_usage['fallback_calculations'] += 1
         
-        # Fallback к простой проверке (или быстрый режим)
+        # Fallback to simple check (or fast mode)
         if work_date.weekday() == 4 and work_datetime.time().hour >= 18:
             return True, 'friday_evening_simple', None
         elif work_date.weekday() == 5:
@@ -273,23 +272,23 @@ class EnhancedPayrollCalculationService:
     
     def is_holiday_work_enhanced(self, work_date):
         """
-        УЛУЧШЕНО: Проверка работы в праздник с использованием HebcalService
+        IMPROVED: Holiday work check using HebcalService
         
         Args:
-            work_date (date): Дата работы
+            work_date (date): Work date
             
         Returns:
-            Holiday object или None
+            Holiday object or None
         """
-        # 1. Проверяем базу данных
+        # 1. Check database
         holiday = Holiday.objects.filter(
             date=work_date,
             is_holiday=True,
-            is_shabbat=False  # Исключаем шабаты (обрабатываются отдельно)
+            is_shabbat=False  # Exclude Sabbaths (handled separately)
         ).first()
         
         if holiday:
-            logger.info(f"📅 Найден зарегистрированный праздник: {holiday.name} на {work_date}")
+            logger.info(f"📅 Found registered holiday: {holiday.name} on {work_date}")
             return holiday
         
         # 2. If not in database, check via HebcalService (only if not in fast mode)
@@ -298,14 +297,14 @@ class EnhancedPayrollCalculationService:
             try:
                 self.api_usage['hebcal_calls'] += 1
                 
-                # Получаем праздники для года (с кэшированием)
+                # Get holidays for the year (with caching)
                 holidays_data = HebcalService.fetch_holidays(
                     year=work_date.year, 
                     month=work_date.month,
                     use_cache=True
                 )
                 
-                # Ищем праздник на эту дату
+                # Look for holiday on this date
                 for holiday_data in holidays_data:
                     holiday_date_str = holiday_data.get("date")
                     if holiday_date_str:
@@ -314,9 +313,9 @@ class EnhancedPayrollCalculationService:
                             if holiday_date == work_date:
                                 title = holiday_data.get("title", "Unknown Holiday")
                                 self.api_usage['api_holidays_found'] += 1
-                                logger.info(f"📅 Найден праздник через HebcalService: {title} на {work_date}")
+                                logger.info(f"📅 Found holiday via HebcalService: {title} on {work_date}")
                                 
-                                # Создаём временный объект Holiday для возврата
+                                # Create temporary Holiday object for return
                                 temp_holiday = type('Holiday', (), {
                                     'name': title,
                                     'date': work_date,
@@ -329,48 +328,48 @@ class EnhancedPayrollCalculationService:
                             continue
                         
             except Exception as api_error:
-                logger.warning(f"Ошибка HebcalService для {work_date}: {api_error}")
+                logger.warning(f"HebcalService error for {work_date}: {api_error}")
         
         return None
     
     def sync_missing_holidays_for_month(self):
         """
-        НОВОЕ: Синхронизирует отсутствующие праздники для расчётного месяца
+        NEW: Synchronizes missing holidays for the calculation month
         """
-        # В быстром режиме пропускаем синхронизацию
+        # Skip synchronization in fast mode
         if self.fast_mode:
-            logger.info(f"⚡ Быстрый режим: пропускаем синхронизацию праздников для {self.year}-{self.month:02d}")
+            logger.info(f"⚡ Fast mode: skipping holiday synchronization for {self.year}-{self.month:02d}")
             return
             
         try:
-            logger.info(f"🔄 Синхронизация праздников для {self.year}-{self.month:02d}")
+            logger.info(f"🔄 Synchronizing holidays for {self.year}-{self.month:02d}")
             
-            # Проверяем, есть ли праздники в базе для этого месяца
+            # Check if holidays exist in database for this month
             existing_holidays = Holiday.objects.filter(
                 date__year=self.year,
                 date__month=self.month
             ).count()
             
             if existing_holidays == 0:
-                logger.info("Праздники не найдены в базе, синхронизируем из HebcalService...")
+                logger.info("Holidays not found in database, synchronizing from HebcalService...")
                 
-                # Синхронизируем праздники для года
+                # Synchronize holidays for the year
                 created_count, updated_count = HebcalService.sync_holidays_to_db(self.year)
                 
                 if created_count > 0 or updated_count > 0:
-                    logger.info(f"✅ Синхронизированы праздники: {created_count} создано, {updated_count} обновлено")
+                    logger.info(f"✅ Synchronized holidays: {created_count} created, {updated_count} updated")
                 else:
-                    logger.warning("Праздники не были синхронизированы")
+                    logger.warning("Holidays were not synchronized")
             else:
-                logger.debug(f"Найдено {existing_holidays} существующих праздников для {self.year}-{self.month:02d}")
+                logger.debug(f"Found {existing_holidays} existing holidays for {self.year}-{self.month:02d}")
                 
         except Exception as sync_error:
-            logger.error(f"Ошибка синхронизации праздников: {sync_error}")
-            # Не останавливаем расчёт зарплаты из-за ошибки синхронизации
+            logger.error(f"Holiday synchronization error: {sync_error}")
+            # Don't stop payroll calculation due to sync error
     
     def is_night_shift(self, work_log):
         """
-        Проверка ночной смены согласно израильскому праву
+        Night shift check according to Israeli law
         """
         check_in = work_log.check_in
         check_out = work_log.check_out
@@ -394,7 +393,7 @@ class EnhancedPayrollCalculationService:
     
     def calculate_overtime_pay(self, hours_worked, base_rate, is_special_day=False, is_night_shift=False):
         """
-        ИСПРАВЛЕНО: Расчёт сверхурочной оплаты согласно израильскому трудовому праву
+        FIXED: Overtime pay calculation according to Israeli labor law
         """
         if base_rate is None:
             base_rate = Decimal('0')
@@ -402,9 +401,9 @@ class EnhancedPayrollCalculationService:
         result = {
             'regular_hours': Decimal('0'),
             'regular_pay': Decimal('0'),
-            'overtime_hours_1': Decimal('0'),  # Первые 2 часа сверхурочных
+            'overtime_hours_1': Decimal('0'),  # First 2 overtime hours
             'overtime_pay_1': Decimal('0'),
-            'overtime_hours_2': Decimal('0'),  # Дополнительные сверхурочные
+            'overtime_hours_2': Decimal('0'),  # Additional overtime hours
             'overtime_pay_2': Decimal('0'),
             'total_pay': Decimal('0'),
             'rate_used': base_rate
@@ -413,14 +412,14 @@ class EnhancedPayrollCalculationService:
         if hours_worked <= 0:
             return result
         
-        # Проверка превышения максимального рабочего дня
+        # Check for exceeding maximum work day
         if hours_worked > self.MAX_DAILY_HOURS:
-            warning = (f"Сотрудник {self.employee.get_full_name()} превысил максимальный "
-                      f"рабочий день: {hours_worked}ч > {self.MAX_DAILY_HOURS}ч")
+            warning = (f"Employee {self.employee.get_full_name()} exceeded maximum "
+                      f"work day: {hours_worked}h > {self.MAX_DAILY_HOURS}h")
             self.warnings.append(warning)
             logger.warning(warning)
         
-        # Определение обычных часов в зависимости от типа смены
+        # Determine regular hours based on shift type
         if is_night_shift:
             max_regular_hours = self.NIGHT_SHIFT_MAX_REGULAR_HOURS
         else:
@@ -429,40 +428,40 @@ class EnhancedPayrollCalculationService:
         regular_hours = min(hours_worked, max_regular_hours)
         result['regular_hours'] = regular_hours
         
-        # Расчёт обычной оплаты
+        # Calculate regular pay
         if is_special_day:
-            # Работа в праздник/шабат получает 150% за все часы
+            # Holiday/Sabbath work gets 150% for all hours
             result['regular_pay'] = regular_hours * base_rate * self.HOLIDAY_RATE
         else:
             result['regular_pay'] = regular_hours * base_rate
         
-        # Сверхурочные часы
+        # Overtime hours
         if hours_worked > max_regular_hours:
             overtime_total = hours_worked - max_regular_hours
             
             if is_special_day:
-                # Коэффициенты для сверхурочных в праздник/шабат
-                # Первые 2 часа сверхурочных: 175% (150% базовый + 25% сверхурочный)
+                # Overtime rates for holiday/Sabbath work
+                # First 2 overtime hours: 175% (150% base + 25% overtime)
                 overtime_rate_1 = base_rate * Decimal('1.75')
                 overtime_hours_1 = min(overtime_total, Decimal('2'))
                 result['overtime_hours_1'] = overtime_hours_1
                 result['overtime_pay_1'] = overtime_hours_1 * overtime_rate_1
                 
-                # Дополнительные сверхурочные: 200% (150% базовый + 50% сверхурочный)
+                # Additional overtime: 200% (150% base + 50% overtime)
                 if overtime_total > 2:
                     overtime_rate_2 = base_rate * Decimal('2.0')
                     overtime_hours_2 = overtime_total - Decimal('2')
                     result['overtime_hours_2'] = overtime_hours_2
                     result['overtime_pay_2'] = overtime_hours_2 * overtime_rate_2
             else:
-                # Обычные дневные коэффициенты сверхурочных
-                # Первые 2 часа сверхурочных: 125%
+                # Regular daily overtime rates
+                # First 2 overtime hours: 125%
                 overtime_rate_1 = base_rate * self.OVERTIME_RATE_1
                 overtime_hours_1 = min(overtime_total, Decimal('2'))
                 result['overtime_hours_1'] = overtime_hours_1
                 result['overtime_pay_1'] = overtime_hours_1 * overtime_rate_1
                 
-                # Дополнительные сверхурочные: 150%
+                # Additional overtime: 150%
                 if overtime_total > 2:
                     overtime_rate_2 = base_rate * self.OVERTIME_RATE_2
                     overtime_hours_2 = overtime_total - Decimal('2')
@@ -474,7 +473,7 @@ class EnhancedPayrollCalculationService:
     
     def calculate_daily_pay_enhanced(self, work_log):
         """
-        УЛУЧШЕНО: Расчёт оплаты за день с полной интеграцией внешних сервисов
+        IMPROVED: Daily pay calculation with full external service integration
         """
         work_date = work_log.check_in.date()
         hours_worked = work_log.get_total_hours()
@@ -496,43 +495,43 @@ class EnhancedPayrollCalculationService:
             'special_day_bonus': Decimal('0'),
             'total_pay': Decimal('0'),
             'breakdown': {},
-            'api_sources': []  # Отслеживание источников данных
+            'api_sources': []  # Track data sources
         }
         
-        # Проверка ночной смены
+        # Check for night shift
         is_night, night_hours = self.is_night_shift(work_log)
         result['is_night_shift'] = is_night
         result['night_hours'] = night_hours
         
-        # УЛУЧШЕНО: Проверка работы в праздник с HebcalService
+        # IMPROVED: Holiday work check with HebcalService
         holiday = self.is_holiday_work_enhanced(work_date)
         if holiday:
             result['is_holiday'] = True
             result['holiday_name'] = holiday.name
             result['api_sources'].append('hebcal_api' if not hasattr(holiday, 'id') else 'database')
             
-            # Создание компенсационного дня
+            # Create compensatory day
             created, _ = self.create_compensatory_day(work_date, 'holiday', hours_worked)
             result['compensatory_day_created'] = created
             
-            # Расчёт оплаты по праздничным коэффициентам
+            # Calculate pay with holiday rates
             pay_breakdown = self.calculate_overtime_pay(
                 hours_worked, base_rate, is_special_day=True, is_night_shift=is_night
             )
             result['breakdown'] = pay_breakdown
             result['total_pay'] = pay_breakdown['total_pay']
             
-            logger.info(f"💰 Расчёт работы в праздник: {work_date} - {hours_worked}ч = ₪{result['total_pay']}")
+            logger.info(f"💰 Holiday work calculation: {work_date} - {hours_worked}h = ₪{result['total_pay']}")
             return result
         
-        # УЛУЧШЕНО: Проверка работы в шабат с SunriseSunsetService
+        # IMPROVED: Sabbath work check with SunriseSunsetService
         is_sabbath, sabbath_type, sabbath_info = self.is_sabbath_work_precise(work_log.check_in)
         if is_sabbath:
             result['is_sabbath'] = True
             result['sabbath_type'] = sabbath_type
             result['sabbath_info'] = sabbath_info
             
-            # Отслеживание источника данных о шабате
+            # Track Sabbath data source
             if 'precise' in sabbath_type:
                 result['api_sources'].append('sunrise_sunset_api')
             elif 'registered' in sabbath_type:
@@ -540,33 +539,33 @@ class EnhancedPayrollCalculationService:
             else:
                 result['api_sources'].append('fallback_calculation')
             
-            # Создание компенсационного дня
+            # Create compensatory day
             created, _ = self.create_compensatory_day(work_date, 'shabbat', hours_worked)
             result['compensatory_day_created'] = created
             
-            # Расчёт оплаты по шабатным коэффициентам
+            # Calculate pay with Sabbath rates
             pay_breakdown = self.calculate_overtime_pay(
                 hours_worked, base_rate, is_special_day=True, is_night_shift=is_night
             )
             result['breakdown'] = pay_breakdown
             result['total_pay'] = pay_breakdown['total_pay']
             
-            logger.info(f"🕯️ Расчёт работы в шабат: {work_date} ({sabbath_type}) - {hours_worked}ч = ₪{result['total_pay']}")
+            logger.info(f"🕯️ Sabbath work calculation: {work_date} ({sabbath_type}) - {hours_worked}h = ₪{result['total_pay']}")
             return result
         
-        # Расчёт обычного рабочего дня
+        # Calculate regular work day
         pay_breakdown = self.calculate_overtime_pay(
             hours_worked, base_rate, is_special_day=False, is_night_shift=is_night
         )
         result['breakdown'] = pay_breakdown
         result['total_pay'] = pay_breakdown['total_pay']
         
-        logger.debug(f"💼 Расчёт обычного дня: {work_date} - {hours_worked}ч = ₪{result['total_pay']}")
+        logger.debug(f"💼 Regular day calculation: {work_date} - {hours_worked}h = ₪{result['total_pay']}")
         return result
     
     def create_compensatory_day(self, work_date, reason, work_hours=None):
         """
-        Создание компенсационного дня за работу в праздник или шабат
+        Create compensatory day for holiday or Sabbath work
         """
         try:
             existing = CompensatoryDay.objects.filter(
@@ -576,11 +575,12 @@ class EnhancedPayrollCalculationService:
             ).first()
             
             if existing:
-                logger.debug("Компенсационный день уже существует", extra={
+                logger.debug("Compensatory day already exists", extra={
                     **safe_log_employee(self.employee, "compensatory_exists"),
-                    "date": compensatory_date.isoformat()
+                    "date": compensatory_date.isoformat(),
+                    "work_date": work_date.isoformat(),
+                    "reason": reason
                 })
-                           f"на {work_date} (причина: {reason})")
                 return False, existing
             
             comp_day = CompensatoryDay.objects.create(
@@ -589,30 +589,30 @@ class EnhancedPayrollCalculationService:
                 reason=reason
             )
             
-            logger.info("Создан компенсационный день", extra={
+            logger.info("Created compensatory day", extra={
                 **safe_log_employee(self.employee, "compensatory_created"),
                 "date": compensatory_date.isoformat(),
-                "reason": reason
+                "work_date": work_date.isoformat(),
+                "reason": reason,
+                "work_hours": work_hours
             })
-                       f"на {work_date} (причина: {reason})"
-                       + (f" - {work_hours}ч отработано" if work_hours else ""))
             
             return True, comp_day
             
         except Exception as e:
-            error_msg = f"Ошибка создания компенсационного дня для {self.employee.get_full_name()}: {e}"
+            error_msg = f"Error creating compensatory day for {self.employee.get_full_name()}: {e}"
             self.calculation_errors.append(error_msg)
             logger.error(error_msg)
             return False, None
     
     def calculate_monthly_salary_enhanced(self):
         """
-        УЛУЧШЕНО: Расчёт месячной зарплаты с полной интеграцией внешних API
+        IMPROVED: Monthly salary calculation with full external API integration
         """
-        # Синхронизируем праздники перед расчётом
+        # Synchronize holidays before calculation
         self.sync_missing_holidays_for_month()
         
-        # Получаем рабочие логи
+        # Get work logs
         work_logs = self.get_work_logs_for_month()
         
         result = {
@@ -635,7 +635,7 @@ class EnhancedPayrollCalculationService:
             'minimum_wage_applied': False,
             'work_sessions_count': work_logs.count(),
             'worked_days': 0,
-            'api_integrations': {  # НОВОЕ: отслеживание использования API
+            'api_integrations': {  # NEW: API usage tracking
                 'sunrise_sunset_used': self.api_usage['sunrise_sunset_calls'] > 0,
                 'hebcal_used': self.api_usage['hebcal_calls'] > 0,
                 'precise_sabbath_times': self.api_usage['precise_sabbath_times'],
@@ -645,20 +645,20 @@ class EnhancedPayrollCalculationService:
         }
         
         if not work_logs.exists():
-            result['note'] = 'Нет рабочих логов для этого периода'
-            logger.info(f"Нет рабочих логов для {self.employee.get_full_name()} в {self.year}-{self.month:02d}")
+            result['note'] = 'No work logs for this period'
+            logger.info(f"No work logs for {self.employee.get_full_name()} in {self.year}-{self.month:02d}")
             return result
         
-        # Расчёт оплаты для каждого рабочего дня с улучшенной интеграцией
+        # Calculate pay for each work day with improved integration
         for log in work_logs:
             daily_calc = self.calculate_daily_pay_enhanced(log)
             result['daily_calculations'].append(daily_calc)
             
-            # Накопление итогов
+            # Accumulate totals
             result['total_hours'] += daily_calc['hours_worked']
             result['total_gross_pay'] += daily_calc['total_pay']
             
-            # Накопление часов по типам
+            # Accumulate hours by type
             if daily_calc['breakdown']:
                 if not daily_calc['is_holiday'] and not daily_calc['is_sabbath']:
                     result['regular_hours'] += daily_calc['breakdown'].get('regular_hours', Decimal('0'))
@@ -675,11 +675,11 @@ class EnhancedPayrollCalculationService:
             if daily_calc['compensatory_day_created']:
                 result['compensatory_days_earned'] += 1
         
-        # Подсчёт отработанных дней
+        # Count worked days
         worked_days = len(set(log.check_in.date() for log in work_logs))
         result['worked_days'] = worked_days
         
-        # Проверка соответствия законодательству
+        # Check legal compliance
         violations = self.validate_weekly_limits(work_logs)
         result['legal_violations'] = violations
         result['warnings'] = self.warnings
@@ -708,7 +708,7 @@ class EnhancedPayrollCalculationService:
             result['minimum_wage_applied'] = True
             result['minimum_wage_supplement'] = self.MINIMUM_WAGE_ILS - result['original_gross_pay']
         
-        # Округление финальных сумм
+        # Round final amounts
         result['total_gross_pay'] = round(result['total_gross_pay'], 2)
         result['total_hours'] = round(result['total_hours'], 2)
         result['regular_hours'] = round(result['regular_hours'], 2)
@@ -716,19 +716,19 @@ class EnhancedPayrollCalculationService:
         result['holiday_hours'] = round(result['holiday_hours'], 2)
         result['sabbath_hours'] = round(result['sabbath_hours'], 2)
         
-        # Логирование использования API
+        # Log API usage
         api_info = result['api_integrations']
-        logger.info(f"✅ Улучшенный расчёт зарплаты завершён для {self.employee.get_full_name()}: "
-                   f"₪{result['total_gross_pay']} за {result['total_hours']}ч | "
-                   f"APIs использованы: SunriseSunset={api_info['sunrise_sunset_used']}, "
+        logger.info(f"✅ Enhanced salary calculation completed for {self.employee.get_full_name()}: "
+                   f"₪{result['total_gross_pay']} for {result['total_hours']}h | "
+                   f"APIs used: SunriseSunset={api_info['sunrise_sunset_used']}, "
                    f"Hebcal={api_info['hebcal_used']}, "
-                   f"Точные времена={api_info['precise_sabbath_times']}")
+                   f"Precise times={api_info['precise_sabbath_times']}")
         
         return result
     
     def validate_weekly_limits(self, work_logs):
         """
-        Проверка соблюдения недельных ограничений по израильскому трудовому праву
+        Check compliance with weekly limits according to Israeli labor law
         """
         violations = []
         
@@ -773,19 +773,19 @@ class EnhancedPayrollCalculationService:
     
     def get_detailed_breakdown(self):
         """
-        УЛУЧШЕНО: Получение детализированного разбора с API интеграциями
+        IMPROVED: Get detailed breakdown with API integrations
         """
-        # Сначала получаем стандартный месячный расчёт
+        # First get standard monthly calculation
         standard_result = self.calculate_monthly_salary_enhanced()
         
-        # Инициализируем детализированный разбор
+        # Initialize detailed breakdown
         breakdown = {
             'employee': self.employee.get_full_name(),
             'period': f"{self.year}-{self.month:02d}",
             'hourly_rate': float(self.salary.hourly_rate) if self.salary.hourly_rate else 0,
             'currency': self.salary.currency,
             
-            # Детализированные категории
+            # Detailed categories
             'regular_hours': 0.0,
             'regular_pay': 0.0,
             
@@ -819,11 +819,11 @@ class EnhancedPayrollCalculationService:
             'legal_violations': standard_result.get('legal_violations', []),
             'warnings': standard_result.get('warnings', []),
             
-            # НОВОЕ: информация об API интеграциях
+            # NEW: API integration information
             'api_integrations': standard_result.get('api_integrations', {})
         }
         
-        # Обрабатываем каждый дневной расчёт
+        # Process each daily calculation
         for daily_calc in standard_result.get('daily_calculations', []):
             hours = daily_calc['hours_worked']
             is_night = daily_calc['is_night_shift']
@@ -840,36 +840,36 @@ class EnhancedPayrollCalculationService:
                 overtime_pay = daily_calc['breakdown'].get('overtime_pay_1', 0) + daily_calc['breakdown'].get('overtime_pay_2', 0)
                 
                 if is_sabbath:
-                    # Работа в шабат
+                    # Sabbath work
                     if total_overtime > 0:
                         breakdown['sabbath_regular_hours'] += float(regular_hours)
                         breakdown['sabbath_regular_pay'] += float(regular_pay)
                         breakdown['sabbath_overtime_hours'] += float(total_overtime)
                         breakdown['sabbath_overtime_pay'] += float(overtime_pay)
                         
-                        # Разбор сверхурочных по коэффициентам для работы в шабат
-                        overtime_175_hours = float(overtime_hours_1)  # Первые 2 часа по 175%
-                        overtime_200_hours = float(overtime_hours_2)  # Дополнительные часы по 200%
+                        # Overtime breakdown by rates for Sabbath work
+                        overtime_175_hours = float(overtime_hours_1)  # First 2 hours at 175%
+                        overtime_200_hours = float(overtime_hours_2)  # Additional hours at 200%
                         overtime_175_pay = float(daily_calc['breakdown'].get('overtime_pay_1', 0))
                         overtime_200_pay = float(daily_calc['breakdown'].get('overtime_pay_2', 0))
                         
-                        breakdown['overtime_125_hours'] += overtime_175_hours  # Отображается как 175%
+                        breakdown['overtime_125_hours'] += overtime_175_hours  # Displayed as 175%
                         breakdown['overtime_125_pay'] += overtime_175_pay
-                        breakdown['overtime_150_hours'] += overtime_200_hours  # Отображается как 200%
+                        breakdown['overtime_150_hours'] += overtime_200_hours  # Displayed as 200%
                         breakdown['overtime_150_pay'] += overtime_200_pay
                     else:
                         breakdown['sabbath_regular_hours'] += float(hours)
                         breakdown['sabbath_regular_pay'] += float(daily_calc['total_pay'])
                         
                 elif is_holiday:
-                    # Работа в праздник
+                    # Holiday work
                     if total_overtime > 0:
                         breakdown['holiday_regular_hours'] += float(regular_hours)
                         breakdown['holiday_regular_pay'] += float(regular_pay)
                         breakdown['holiday_overtime_hours'] += float(total_overtime)
                         breakdown['holiday_overtime_pay'] += float(overtime_pay)
                         
-                        # Разбор сверхурочных по коэффициентам для работы в праздник
+                        # Overtime breakdown by rates for holiday work
                         overtime_175_hours = float(overtime_hours_1)
                         overtime_200_hours = float(overtime_hours_2)
                         overtime_175_pay = float(daily_calc['breakdown'].get('overtime_pay_1', 0))
@@ -884,14 +884,14 @@ class EnhancedPayrollCalculationService:
                         breakdown['holiday_regular_pay'] += float(daily_calc['total_pay'])
                         
                 else:
-                    # Обычный рабочий день
+                    # Regular work day
                     breakdown['regular_hours'] += float(regular_hours)
                     breakdown['regular_pay'] += float(regular_pay)
                     
                     if total_overtime > 0:
-                        # Разбор сверхурочных по коэффициентам для обычных дней
-                        overtime_125_hours = float(overtime_hours_1)  # Первые 2 часа по 125%
-                        overtime_150_hours = float(overtime_hours_2)  # Дополнительные часы по 150%
+                        # Overtime breakdown by rates for regular days
+                        overtime_125_hours = float(overtime_hours_1)  # First 2 hours at 125%
+                        overtime_150_hours = float(overtime_hours_2)  # Additional hours at 150%
                         overtime_125_pay = float(daily_calc['breakdown'].get('overtime_pay_1', 0))
                         overtime_150_pay = float(daily_calc['breakdown'].get('overtime_pay_2', 0))
                         
@@ -910,7 +910,7 @@ class EnhancedPayrollCalculationService:
             breakdown['total_hours'] += float(hours)
             breakdown['total_pay'] += float(daily_calc['total_pay'])
         
-        # Округляем значения для отображения
+        # Round values for display
         for key in breakdown:
             if isinstance(breakdown[key], float):
                 breakdown[key] = round(breakdown[key], 2)
@@ -920,10 +920,10 @@ class EnhancedPayrollCalculationService:
 
     def calculate_monthly_salary(self):
         """
-        ОБРАТНАЯ СОВМЕСТИМОСТЬ: Вызывает улучшенный метод расчёта
+        BACKWARD COMPATIBILITY: Calls enhanced calculation method
         """
         return self.calculate_monthly_salary_enhanced()
 
 
-# Создаём алиас для обратной совместимости, но с улучшенными возможностями
+# Create alias for backward compatibility, but with enhanced capabilities
 PayrollCalculationService = EnhancedPayrollCalculationService

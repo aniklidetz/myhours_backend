@@ -733,6 +733,14 @@ def check_work_status(request):
 
 
 @api_view(['GET'])
+def test_endpoint(request):
+    """
+    Test endpoint to verify URL loading works
+    """
+    return Response({'message': 'Test endpoint is working', 'timestamp': timezone.now()})
+
+
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def biometric_stats(request):
     """

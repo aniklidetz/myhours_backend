@@ -7,6 +7,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - .:/app
       - ./media:/app/media
       - ./logs:/app/logs
       - ./staticfiles:/app/staticfiles
@@ -48,6 +49,7 @@ services:
     container_name: myhours_celery
     restart: unless-stopped
     volumes:
+      - .:/app
       - ./media:/app/media
       - ./logs:/app/logs
       - ./backups:/app/backups
