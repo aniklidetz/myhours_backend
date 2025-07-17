@@ -3,6 +3,7 @@
 .env
 .env.local
 .env.docker
+.env.production
 *.env
 # Keep example files for documentation
 !.env.example
