@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     """Endpoints for employee management with proper security"""
-    queryset = Employee.objects.all().order_by('last_name', 'first_name')
+    queryset = Employee.objects.select_related('salary_info').all().order_by('last_name', 'first_name')
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]  # Requires authentication
     filter_backends = [SearchFilter, DjangoFilterBackend]
@@ -42,28 +42,37 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         from payroll.models import Salary
         from decimal import Decimal
         
-        # Default salary configurations based on role
-        salary_defaults = {
-            'admin': {'calculation_type': 'monthly', 'base_salary': Decimal('25000')},
-            'accountant': {'calculation_type': 'monthly', 'base_salary': Decimal('22000')},
-            'project_manager': {'calculation_type': 'monthly', 'base_salary': Decimal('28000')},
-            'employee': {'calculation_type': 'hourly', 'hourly_rate': Decimal('85')}
-        }
-        
-        role_config = salary_defaults.get(employee.role, salary_defaults['employee'])
+        # Determine calculation type based on employment_type first, then role
+        if employee.employment_type == 'full_time':
+            calculation_type = 'monthly'
+            # Default monthly salaries based on role
+            monthly_defaults = {
+                'admin': Decimal('25000'),
+                'accountant': Decimal('22000'),
+                'project_manager': Decimal('28000'),
+                'employee': Decimal('20000')
+            }
+            base_salary = monthly_defaults.get(employee.role, Decimal('20000'))
+            hourly_rate = None
+        else:  # hourly employment
+            calculation_type = 'hourly'
+            # Default hourly rates based on role
+            hourly_defaults = {
+                'admin': Decimal('120'),
+                'accountant': Decimal('100'),
+                'project_manager': Decimal('130'),
+                'employee': Decimal('85')
+            }
+            hourly_rate = hourly_defaults.get(employee.role, Decimal('85'))
+            base_salary = None
         
         salary_data = {
             'employee': employee,
-            'calculation_type': role_config['calculation_type'],
-            'currency': 'ILS'
+            'calculation_type': calculation_type,
+            'currency': 'ILS',
+            'base_salary': base_salary,
+            'hourly_rate': hourly_rate
         }
-        
-        if role_config['calculation_type'] == 'monthly':
-            salary_data['base_salary'] = role_config.get('base_salary', Decimal('20000'))
-            salary_data['hourly_rate'] = None
-        else:
-            salary_data['hourly_rate'] = role_config.get('hourly_rate', Decimal('80'))
-            salary_data['base_salary'] = None
         
         # Create salary configuration
         salary = Salary.objects.create(**salary_data)
@@ -74,20 +83,79 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         })
 
     def perform_update(self, serializer):
-        """Log employee updates"""
+        """Log employee updates and handle salary information"""
+        # Get the current data before saving
+        employee = self.get_object()
+        request_data = self.request.data
+        
+        # Save the basic employee information (excluding salary fields)
         employee = serializer.save()
+        
+        # Handle salary updates if they are provided
+        from payroll.models import Salary
+        from decimal import Decimal
+        
+        # Check if salary data was provided in the request
+        hourly_rate = request_data.get('hourly_rate')
+        monthly_salary = request_data.get('monthly_salary')
+        
+        if hourly_rate is not None or monthly_salary is not None:
+            # Get or create salary record
+            salary, created = Salary.objects.get_or_create(
+                employee=employee,
+                defaults={
+                    'calculation_type': 'monthly' if employee.employment_type == 'full_time' else 'hourly',
+                    'currency': 'ILS'
+                }
+            )
+            
+            # Update salary fields based on employment type
+            if employee.employment_type == 'full_time' and monthly_salary is not None:
+                try:
+                    salary.base_salary = Decimal(str(monthly_salary))
+                    salary.hourly_rate = None  # Clear hourly rate for full-time employees
+                    salary.calculation_type = 'monthly'
+                    salary.save()
+                    logger.info("Updated monthly salary", extra={
+                        **safe_log_employee(employee, "salary_updated"),
+                        "new_monthly_salary": str(salary.base_salary)
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.error("Invalid monthly salary value", extra={
+                        **safe_log_employee(employee, "salary_update_error"),
+                        "error": str(e),
+                        "value": monthly_salary
+                    })
+            elif employee.employment_type == 'hourly' and hourly_rate is not None:
+                try:
+                    salary.hourly_rate = Decimal(str(hourly_rate))
+                    salary.base_salary = None  # Clear monthly salary for hourly employees
+                    salary.calculation_type = 'hourly'
+                    salary.save()
+                    logger.info("Updated hourly rate", extra={
+                        **safe_log_employee(employee, "salary_updated"),
+                        "new_hourly_rate": str(salary.hourly_rate)
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.error("Invalid hourly rate value", extra={
+                        **safe_log_employee(employee, "salary_update_error"),
+                        "error": str(e),
+                        "value": hourly_rate
+                    })
+        
         logger.info("Employee updated", extra={
             **safe_log_employee(employee, "employee_updated"),
             "updated_by": safe_log_employee(self.request.user, "updater") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
         })
 
     def perform_destroy(self, instance):
-        """Soft delete instead of hard delete"""
-        instance.is_active = False
-        instance.save()
-        logger.info("Employee deactivated", extra={
-            **safe_log_employee(instance, "employee_deactivated"),
-            "deactivated_by": safe_log_employee(self.request.user, "deactivator") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
+        """Actually delete the employee from the database"""
+        employee_id = instance.id
+        instance.delete()
+        logger.info("Employee deleted", extra={
+            "action": "employee_deleted",
+            "employee_id": str(employee_id)[:8],
+            "deleted_by": safe_log_employee(self.request.user, "deleter") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
         })
 
     @action(detail=True, methods=['post'])

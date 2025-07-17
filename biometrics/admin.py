@@ -20,18 +20,18 @@ class BiometricProfileAdmin(admin.ModelAdmin):
     
     def deactivate_profiles(self, request, queryset):
         updated = queryset.update(is_active=False)
-        self.message_user(request, f'{updated} profiles deactivated.')
+        self.message_user(request, '{} profiles deactivated.'.format(updated))
     deactivate_profiles.short_description = 'Deactivate selected profiles'
     
     def activate_profiles(self, request, queryset):
         updated = queryset.update(is_active=True)
-        self.message_user(request, f'{updated} profiles activated.')
+        self.message_user(request, '{} profiles activated.'.format(updated))
     activate_profiles.short_description = 'Activate selected profiles'
 
 
 @admin.register(BiometricLog)
 class BiometricLogAdmin(admin.ModelAdmin):
-    list_display = ['created_at', 'action', 'employee_name', 'success', 'confidence_display', 
+    list_display = ['created_at', 'action', 'employee_name', 'success', 'confidence_score', 
                    'location', 'processing_time_display', 'ip_address']
     list_filter = ['action', 'success', 'created_at']
     search_fields = ['employee__first_name', 'employee__last_name', 'employee__email', 
@@ -46,7 +46,7 @@ class BiometricLogAdmin(admin.ModelAdmin):
     employee_name.short_description = 'Employee'
     
     def confidence_display(self, obj):
-        if obj.confidence_score:
+        if obj.confidence_score is not None:
             score = obj.confidence_score * 100
             if score >= 80:
                 color = 'green'
@@ -64,7 +64,7 @@ class BiometricLogAdmin(admin.ModelAdmin):
     
     def processing_time_display(self, obj):
         if obj.processing_time_ms:
-            return f'{obj.processing_time_ms} ms'
+            return '{} ms'.format(obj.processing_time_ms)
         return '-'
     processing_time_display.short_description = 'Processing Time'
     
@@ -90,7 +90,7 @@ class BiometricAttemptAdmin(admin.ModelAdmin):
     def reset_attempts(self, request, queryset):
         for attempt in queryset:
             attempt.reset_attempts()
-        self.message_user(request, f'{queryset.count()} attempts reset.')
+        self.message_user(request, '{} attempts reset.'.format(queryset.count()))
     reset_attempts.short_description = 'Reset selected attempts'
 
 

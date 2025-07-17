@@ -7,14 +7,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
       - ./media:/app/media
       - ./logs:/app/logs
       - ./staticfiles:/app/staticfiles
       - ./backups:/app/backups
     environment:
       - DEBUG=True
-      - ENABLE_BIOMETRIC_MOCK=False
+      - ENABLE_BIOMETRIC_MOCK=True
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
@@ -56,7 +55,7 @@ services:
       - ./backups:/app/backups
     environment:
       - DEBUG=True
-      - ENABLE_BIOMETRIC_MOCK=False
+      - ENABLE_BIOMETRIC_MOCK=True
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db

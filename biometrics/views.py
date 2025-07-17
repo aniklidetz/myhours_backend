@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import transaction
+from django.conf import settings
 import logging
 import numpy as np
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
@@ -167,20 +168,50 @@ def register_face(request):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # For development/testing - skip face processing and use mock data directly
-        logger.info("Using fast testing mode for biometric registration - skipping face processing")
-        
-        # Create mock encodings for testing
-        mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
-        result = {
-            'success': True,
-            'encodings': mock_encodings,
-            'successful_count': 1,
-            'processed_count': 1,
-            'results': [{'success': True, 'encodings': mock_encodings, 'processing_time_ms': 50}]
-        }
-        
-        logger.info("Using mock encodings for fast testing")
+        # Check if biometric mock is enabled (only for development/testing)
+        if settings.ENABLE_BIOMETRIC_MOCK:
+            logger.critical("🚨 USING BIOMETRIC MOCK MODE - NOT FOR PRODUCTION!")
+            
+            # Create mock encodings for testing
+            mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector
+            result = {
+                'success': True,
+                'encodings': mock_encodings,
+                'successful_count': 1,
+                'processed_count': 1,
+                'results': [{'success': True, 'encodings': mock_encodings, 'processing_time_ms': 50}]
+            }
+            
+            logger.warning("Using mock encodings for testing - SECURITY RISK!")
+        else:
+            # REAL biometric processing
+            logger.info("Processing real biometric data for registration")
+            logger.info(f"Image data length: {len(image)}")
+            logger.info(f"Employee ID: {employee_id}")
+            
+            try:
+                result = face_processor.process_images(images)
+                logger.info(f"Face processor result: {result}")
+            except Exception as e:
+                logger.exception(f"Face processor threw exception: {e}")
+                return Response({
+                    'error': f'Face processing failed: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            if not result['success']:
+                logger.error(f"Real biometric processing failed: {result}")
+                log_biometric_attempt(
+                    request, 
+                    'registration', 
+                    employee=employee,
+                    success=False,
+                    error_message='Real biometric processing failed'
+                )
+                
+                return Response({
+                    'error': 'Failed to process biometric images',
+                    'details': result.get('error', 'Unknown error')
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # If still failed (unlikely with mock data)
         if not result['success']:
@@ -353,9 +384,9 @@ def check_in(request):
         # Flag to track if we used fallback testing mode
         used_fallback = False
         
-        # For development/testing - skip face recognition and use current user directly
-        if hasattr(request.user, 'employee_profile'):
-            logger.info("Using fast testing mode - skipping face recognition")
+        # Check if biometric mock is enabled (only for development/testing)
+        if settings.ENABLE_BIOMETRIC_MOCK and hasattr(request.user, 'employee_profile'):
+            logger.critical("🚨 USING BIOMETRIC MOCK MODE FOR CHECK-IN - NOT FOR PRODUCTION!")
             test_employee = request.user.employee_profile
             match_result = {
                 'success': True,
@@ -364,24 +395,25 @@ def check_in(request):
                 'processing_time_ms': 50  # Fast mock processing
             }
             used_fallback = True
+            logger.warning("Using mock check-in - SECURITY RISK!")
         else:
-            # Try real face recognition only if no employee profile
-            logger.info("No employee profile found, attempting face recognition")
+            # REAL biometric processing
+            logger.info("Processing real biometric data for check-in")
             match_result = face_processor.find_matching_employee(image, all_embeddings)
             
             if not match_result['success']:
-                # Fallback failed
+                # Real face recognition failed
                 log_biometric_attempt(
                     request,
                     'check_in',
                     success=False,
-                    error_message='Face recognition failed and no employee profile available',
+                    error_message='Real biometric face recognition failed',
                     processing_time=match_result.get('processing_time_ms')
                 )
                 
                 return Response({
                     'success': False,
-                    'error': 'Face recognition failed and no employee profile available'
+                    'error': 'Face recognition failed - no matching employee found'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee
@@ -505,9 +537,9 @@ def check_out(request):
         # Flag to track if we used fallback testing mode
         used_fallback = False
         
-        # For development/testing - skip face recognition and use current user directly
-        if hasattr(request.user, 'employee_profile'):
-            logger.info("Using fast testing mode for check-out - skipping face recognition")
+        # Check if biometric mock is enabled (only for development/testing)
+        if settings.ENABLE_BIOMETRIC_MOCK and hasattr(request.user, 'employee_profile'):
+            logger.critical("🚨 USING BIOMETRIC MOCK MODE FOR CHECK-OUT - NOT FOR PRODUCTION!")
             test_employee = request.user.employee_profile
             match_result = {
                 'success': True,
@@ -516,24 +548,25 @@ def check_out(request):
                 'processing_time_ms': 50  # Fast mock processing
             }
             used_fallback = True
+            logger.warning("Using mock check-out - SECURITY RISK!")
         else:
-            # Try real face recognition only if no employee profile
-            logger.info("No employee profile found, attempting face recognition for check-out")
+            # REAL biometric processing
+            logger.info("Processing real biometric data for check-out")
             match_result = face_processor.find_matching_employee(image, all_embeddings)
             
             if not match_result['success']:
-                # Fallback failed
+                # Real face recognition failed
                 log_biometric_attempt(
                     request,
                     'check_out',
                     success=False,
-                    error_message='Face recognition failed and no employee profile available',
+                    error_message='Real biometric face recognition failed',
                     processing_time=match_result.get('processing_time_ms')
                 )
                 
                 return Response({
                     'success': False,
-                    'error': 'Face recognition failed and no employee profile available'
+                    'error': 'Face recognition failed - no matching employee found'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get employee

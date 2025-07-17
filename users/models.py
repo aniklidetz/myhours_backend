@@ -73,6 +73,14 @@ class Employee(models.Model):
         help_text="Hourly rate for hourly employees"
     )
     
+    monthly_salary = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monthly salary for full-time employees"
+    )
+    
     # Status
     is_active = models.BooleanField(
         default=True,

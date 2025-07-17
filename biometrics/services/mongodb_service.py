@@ -269,6 +269,7 @@ class MongoDBService:
                 "error": "Statistics retrieval failed"
             }
     
+    
     def health_check(self) -> bool:
         """
         Check if MongoDB connection is healthy

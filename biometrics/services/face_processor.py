@@ -75,7 +75,7 @@ class FaceProcessor:
             
             # Check blur using Laplacian variance
             laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-            is_blurry = laplacian_var < 100
+            is_blurry = laplacian_var < 30  # Lowered threshold for blur
             
             # Calculate overall quality score
             quality_score = 1.0
@@ -104,7 +104,7 @@ class FaceProcessor:
     
     def detect_faces(self, image: np.ndarray) -> Tuple[List, List]:
         """
-        Detect faces in the image
+        Detect faces in the image with aggressive detection methods
         
         Args:
             image: Numpy array of the image
@@ -113,21 +113,202 @@ class FaceProcessor:
             Tuple of (face_locations, face_landmarks)
         """
         try:
-            # Detect face locations
-            face_locations = face_recognition.face_locations(
-                image,
-                model='hog'  # 'hog' is faster, 'cnn' is more accurate
-            )
+            original_shape = image.shape
+            logger.info(f"Starting face detection on image: {original_shape}")
             
-            # Get face landmarks for quality checking
+            # Try on multiple image sizes for better detection
+            working_image = image.copy()
+            face_locations = []
+            scale_factor = 1.0
+            
+            # Method 1: Try original size first (if not too large)
+            if max(image.shape[:2]) <= 800:
+                logger.info("Trying original size detection...")
+                try:
+                    face_locations = face_recognition.face_locations(working_image, model='hog')
+                    logger.info(f"Original size HOG: {len(face_locations)} faces")
+                    if not face_locations:
+                        face_locations = face_recognition.face_locations(working_image, model='cnn')
+                        logger.info(f"Original size CNN: {len(face_locations)} faces")
+                except Exception as e:
+                    logger.warning(f"Original size detection failed: {e}")
+            
+            # Method 2: Resize to optimal size (800px max) 
+            if not face_locations:
+                target_size = 800
+                if max(image.shape[:2]) > target_size:
+                    scale_factor = target_size / max(image.shape[:2])
+                    new_width = int(image.shape[1] * scale_factor)
+                    new_height = int(image.shape[0] * scale_factor)
+                    working_image = cv2.resize(image, (new_width, new_height))
+                    logger.info(f"Resized to {working_image.shape} for detection")
+                
+                logger.info("Trying resized image HOG detection...")
+                try:
+                    face_locations = face_recognition.face_locations(working_image, model='hog')
+                    logger.info(f"Resized HOG: {len(face_locations)} faces")
+                except Exception as e:
+                    logger.warning(f"Resized HOG failed: {e}")
+            
+            # Method 3: Try upsampling on resized image
+            if not face_locations:
+                logger.info("Trying upsampled detection...")
+                try:
+                    face_locations = face_recognition.face_locations(working_image, number_of_times_to_upsample=1)
+                    logger.info(f"Upsampled: {len(face_locations)} faces")
+                except Exception as e:
+                    logger.warning(f"Upsampled detection failed: {e}")
+            
+            # Method 4: CNN on smaller image
+            if not face_locations:
+                logger.info("Trying CNN detection...")
+                try:
+                    # Make even smaller for CNN
+                    if max(working_image.shape[:2]) > 400:
+                        cnn_scale = 400 / max(working_image.shape[:2])
+                        cnn_width = int(working_image.shape[1] * cnn_scale)
+                        cnn_height = int(working_image.shape[0] * cnn_scale)
+                        cnn_image = cv2.resize(working_image, (cnn_width, cnn_height))
+                        scale_factor *= cnn_scale
+                    else:
+                        cnn_image = working_image
+                    
+                    face_locations = face_recognition.face_locations(cnn_image, model='cnn')
+                    logger.info(f"CNN: {len(face_locations)} faces")
+                    working_image = cnn_image  # Update working image for scaling
+                except Exception as e:
+                    logger.warning(f"CNN detection failed: {e}")
+                    
+            # Method 5: OpenCV cascade as fallback - MORE AGGRESSIVE
+            if not face_locations:
+                logger.info("Trying OpenCV Haar cascades...")
+                try:
+                    gray = cv2.cvtColor(working_image, cv2.COLOR_RGB2GRAY)
+                    
+                    # Try different cascade files
+                    cascade_files = [
+                        'haarcascade_frontalface_default.xml',
+                        'haarcascade_frontalface_alt.xml',
+                        'haarcascade_frontalface_alt2.xml'
+                    ]
+                    
+                    for cascade_file in cascade_files:
+                        try:
+                            cascade_path = cv2.data.haarcascades + cascade_file
+                            face_cascade = cv2.CascadeClassifier(cascade_path)
+                            
+                            # Try different scale factors AND minimum neighbors
+                            for scale in [1.05, 1.1, 1.15, 1.2, 1.3, 1.5]:
+                                for min_neighbors in [1, 2, 3, 4, 5]:
+                                    faces = face_cascade.detectMultiScale(gray, scale, min_neighbors)
+                                    if len(faces) > 0:
+                                        face_locations = [(y, x + w, y + h, x) for (x, y, w, h) in faces]
+                                        logger.info(f"OpenCV {cascade_file} scale {scale} neighbors {min_neighbors}: {len(face_locations)} faces")
+                                        break
+                                if face_locations:
+                                    break
+                            if face_locations:
+                                break
+                        except Exception as e:
+                            logger.warning(f"OpenCV cascade {cascade_file} failed: {e}")
+                except Exception as e:
+                    logger.warning(f"All OpenCV detection failed: {e}")
+            
+            # Method 6: Try with image enhancement - MULTIPLE ENHANCEMENTS
+            if not face_locations:
+                logger.info("Trying with enhanced image...")
+                try:
+                    # Try different enhancement techniques
+                    enhancements = [
+                        # Contrast and brightness
+                        {"alpha": 1.2, "beta": 30, "name": "contrast_bright"},
+                        {"alpha": 1.5, "beta": 20, "name": "high_contrast"},
+                        {"alpha": 0.8, "beta": 40, "name": "low_contrast_bright"},
+                        {"alpha": 1.0, "beta": 50, "name": "brightness_only"}
+                    ]
+                    
+                    for enhancement in enhancements:
+                        enhanced = cv2.convertScaleAbs(working_image, alpha=enhancement["alpha"], beta=enhancement["beta"])
+                        
+                        # Try both HOG and OpenCV on enhanced image
+                        face_locations = face_recognition.face_locations(enhanced, model='hog')
+                        if face_locations:
+                            logger.info(f"Enhanced image {enhancement['name']} HOG: {len(face_locations)} faces")
+                            working_image = enhanced
+                            break
+                        
+                        # Try OpenCV on enhanced image
+                        gray_enhanced = cv2.cvtColor(enhanced, cv2.COLOR_RGB2GRAY)
+                        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                        faces = face_cascade.detectMultiScale(gray_enhanced, 1.1, 2)
+                        if len(faces) > 0:
+                            face_locations = [(y, x + w, y + h, x) for (x, y, w, h) in faces]
+                            logger.info(f"Enhanced image {enhancement['name']} OpenCV: {len(face_locations)} faces")
+                            working_image = enhanced
+                            break
+                            
+                except Exception as e:
+                    logger.warning(f"Enhanced detection failed: {e}")
+            
+            # Method 7: Histogram equalization
+            if not face_locations:
+                logger.info("Trying histogram equalization...")
+                try:
+                    gray = cv2.cvtColor(working_image, cv2.COLOR_RGB2GRAY)
+                    equalized = cv2.equalizeHist(gray)
+                    equalized_rgb = cv2.cvtColor(equalized, cv2.COLOR_GRAY2RGB)
+                    
+                    face_locations = face_recognition.face_locations(equalized_rgb, model='hog')
+                    if face_locations:
+                        logger.info(f"Histogram equalized: {len(face_locations)} faces")
+                        working_image = equalized_rgb
+                    else:
+                        # Try OpenCV on histogram equalized
+                        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+                        faces = face_cascade.detectMultiScale(equalized, 1.1, 2)
+                        if len(faces) > 0:
+                            face_locations = [(y, x + w, y + h, x) for (x, y, w, h) in faces]
+                            logger.info(f"Histogram equalized OpenCV: {len(face_locations)} faces")
+                            working_image = equalized_rgb
+                except Exception as e:
+                    logger.warning(f"Histogram equalization failed: {e}")
+            
+            # Scale face_locations back to original size
+            if face_locations and scale_factor != 1.0:
+                scale_back = 1.0 / scale_factor
+                scaled_locations = []
+                for (top, right, bottom, left) in face_locations:
+                    scaled_locations.append((
+                        int(top * scale_back),
+                        int(right * scale_back), 
+                        int(bottom * scale_back),
+                        int(left * scale_back)
+                    ))
+                face_locations = scaled_locations
+                logger.info(f"Scaled face locations back by factor {scale_back}")
+            
+            # Get face landmarks if faces found
             face_landmarks = []
             if face_locations:
-                face_landmarks = face_recognition.face_landmarks(image, face_locations)
+                try:
+                    face_landmarks = face_recognition.face_landmarks(working_image, 
+                        [(int(top/scale_factor), int(right/scale_factor), int(bottom/scale_factor), int(left/scale_factor)) 
+                         for top, right, bottom, left in face_locations] if scale_factor != 1.0 else face_locations)
+                except Exception as e:
+                    logger.warning(f"Failed to get face landmarks: {e}")
+                    face_landmarks = []
+            
+            logger.info(f"FINAL DETECTION RESULT: {len(face_locations)} faces found")
+            if face_locations:
+                for i, (top, right, bottom, left) in enumerate(face_locations):
+                    face_width = right - left
+                    face_height = bottom - top
+                    logger.info(f"Face {i+1}: size {face_width}x{face_height}, position ({left},{top})")
             
             return face_locations, face_landmarks
             
         except Exception as e:
-            logger.error(f"Failed to detect faces: {e}")
+            logger.exception(f"Face detection completely failed: {e}")
             return [], []
     
     def extract_face_encoding(self, image: np.ndarray, face_location: Tuple) -> Optional[np.ndarray]:
@@ -168,18 +349,26 @@ class FaceProcessor:
             Dictionary with processing results
         """
         start_time = time.time()
+        logger.info("Starting biometric image processing")
         
         # Decode image
+        logger.info(f"Decoding base64 image (length: {len(base64_image)})")
         image = self.decode_base64_image(base64_image)
         if image is None:
+            logger.error("Failed to decode base64 image")
             return {
                 'success': False,
                 'error': 'Failed to decode image'
             }
         
+        logger.info(f"Image decoded successfully: shape={image.shape}")
+        
         # Check image quality
+        logger.info("Checking image quality")
         quality_check = self.check_image_quality(image)
+        logger.info(f"Quality check result: {quality_check}")
         if not quality_check['passed']:
+            logger.error(f"Image quality too low: {quality_check}")
             return {
                 'success': False,
                 'error': 'Image quality too low',
@@ -187,9 +376,12 @@ class FaceProcessor:
             }
         
         # Detect faces
+        logger.info("Detecting faces in image")
         face_locations, face_landmarks = self.detect_faces(image)
+        logger.info(f"Face detection result: {len(face_locations)} faces found")
         
         if not face_locations:
+            logger.error("No face detected in image")
             return {
                 'success': False,
                 'error': 'No face detected',
@@ -197,6 +389,7 @@ class FaceProcessor:
             }
         
         if len(face_locations) > 1:
+            logger.error(f"Multiple faces detected: {len(face_locations)}")
             return {
                 'success': False,
                 'error': 'Multiple faces detected',
@@ -205,14 +398,18 @@ class FaceProcessor:
             }
         
         # Extract face encoding
+        logger.info("Extracting face encoding")
         face_location = face_locations[0]
         encoding = self.extract_face_encoding(image, face_location)
         
         if encoding is None:
+            logger.error("Failed to extract face encoding")
             return {
                 'success': False,
                 'error': 'Failed to extract face encoding'
             }
+        
+        logger.info(f"Face encoding extracted successfully: shape={encoding.shape}")
         
         # Calculate face size ratio
         top, right, bottom, left = face_location
@@ -270,6 +467,18 @@ class FaceProcessor:
             'successful_count': len(successful_encodings),
             'results': results
         }
+    
+    def process_images(self, base64_images: List[str]) -> Dict[str, Any]:
+        """
+        Process images for registration (alias for process_multiple_images)
+        
+        Args:
+            base64_images: List of base64 encoded images
+            
+        Returns:
+            Dictionary with processing results
+        """
+        return self.process_multiple_images(base64_images)
     
     def compare_faces(self, unknown_encoding: np.ndarray, known_encodings: List[np.ndarray]) -> Tuple[bool, float]:
         """

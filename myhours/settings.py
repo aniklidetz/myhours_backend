@@ -241,9 +241,9 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '50/hour',      # Reduced for better security
-        'user': '500/hour',     # Per-user limit
-        'biometric': '20/hour', # Special limit for biometric operations
+        'anon': '1000/hour',    # Increased for development/testing
+        'user': '5000/hour',    # Increased per-user limit for testing
+        'biometric': '200/hour', # Increased biometric operations limit
     }
 }
 
@@ -261,6 +261,16 @@ BIOMETRIC_VERIFICATION_REQUIRED_FOR = [
 MAX_FAILED_AUTH_ATTEMPTS = 5
 AUTH_LOCKOUT_DURATION_MINUTES = 15
 REQUIRE_BIOMETRIC_FOR_SENSITIVE_OPS = True
+
+# Biometric Control Settings
+# CRITICAL: This should NEVER be True in production
+ENABLE_BIOMETRIC_MOCK = config('ENABLE_BIOMETRIC_MOCK', default=False, cast=bool)
+if ENABLE_BIOMETRIC_MOCK and not DEBUG:
+    raise ValueError("ENABLE_BIOMETRIC_MOCK must not be enabled in production (DEBUG=False)")
+
+# Log critical security warning if mock is enabled
+if ENABLE_BIOMETRIC_MOCK:
+    logging.getLogger(__name__).critical("🚨 BIOMETRIC MOCK MODE ENABLED - NOT FOR PRODUCTION USE!")
 
 # Feature Flags
 FEATURE_FLAGS = {
@@ -390,6 +400,71 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 (BASE_DIR / 'logs').mkdir(exist_ok=True)
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+        'json': {
+            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'maxBytes': 1024*1024*15,  # 15MB
+            'backupCount': 10,
+            'formatter': 'verbose',
+        },
+        'biometric_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'biometric.log',
+            'maxBytes': 1024*1024*5,  # 5MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'biometrics': {
+            'handlers': ['console', 'biometric_file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'payroll': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        '': {  # Root logger
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+        },
+    },
+}
 
 # Testing settings
 if 'test' in sys.argv:

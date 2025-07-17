@@ -11,17 +11,39 @@ class EmployeeSerializer(serializers.ModelSerializer):
     is_registered = serializers.ReadOnlyField()
     has_biometric = serializers.ReadOnlyField()
     has_pending_invitation = serializers.SerializerMethodField()
+    
+    # Salary information from related Salary model
+    hourly_rate = serializers.SerializerMethodField()
+    monthly_salary = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
         fields = [
             'id', 'first_name', 'last_name', 'email', 'phone',
-            'employment_type', 'hourly_rate', 'role', 'is_active', 
+            'employment_type', 'hourly_rate', 'monthly_salary', 'role', 'is_active', 
             'created_at', 'updated_at', 'full_name', 'display_name',
             'is_registered', 'has_biometric', 'has_pending_invitation'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'is_registered', 'has_biometric']
     
+    def get_hourly_rate(self, obj):
+        """Get hourly rate from related Salary model"""
+        try:
+            if hasattr(obj, 'salary_info') and obj.salary_info:
+                return float(obj.salary_info.hourly_rate) if obj.salary_info.hourly_rate else None
+            return None
+        except:
+            return None
+    
+    def get_monthly_salary(self, obj):
+        """Get monthly salary from related Salary model"""
+        try:
+            if hasattr(obj, 'salary_info') and obj.salary_info:
+                return float(obj.salary_info.base_salary) if obj.salary_info.base_salary else None
+            return None
+        except:
+            return None
+
     def get_has_pending_invitation(self, obj):
         """Check if employee has pending invitation"""
         try:
