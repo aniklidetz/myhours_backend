@@ -5,8 +5,9 @@ from users.serializers import EmployeeSerializer
 
 
 class WorkLogSerializer(serializers.ModelSerializer):
-    """WorkLog serializer with custom validation"""
+    """WorkLog serializer with custom validation and N+1 query optimization"""
     employee_name = serializers.ReadOnlyField(source='employee.get_full_name')
+    employee_data = EmployeeSerializer(source='employee', read_only=True)  # Include full employee data for frontend
     total_hours = serializers.ReadOnlyField(source='get_total_hours')
     status = serializers.ReadOnlyField(source='get_status')
     duration = serializers.SerializerMethodField()
@@ -14,7 +15,7 @@ class WorkLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkLog
         fields = [
-            'id', 'employee', 'employee_name', 'check_in', 'check_out',
+            'id', 'employee', 'employee_name', 'employee_data', 'check_in', 'check_out',
             'location_check_in', 'location_check_out', 'notes', 'is_approved',
             'total_hours', 'status', 'duration', 'created_at', 'updated_at'
         ]
@@ -73,11 +74,12 @@ class WorkLogSerializer(serializers.ModelSerializer):
                 })
 
         if employee and check_in:
+            # Optimize overlap check by only checking if any overlapping records exist
             overlapping_query = WorkLog.objects.filter(
                 employee=employee,
                 check_in__lt=check_out or timezone.now(),
                 check_out__gt=check_in
-            )
+            ).only('id')  # Only select ID field for existence check
             if self.instance:
                 overlapping_query = overlapping_query.exclude(pk=self.instance.pk)
             if overlapping_query.exists():

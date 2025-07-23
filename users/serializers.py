@@ -5,14 +5,15 @@ from .models import Employee, EmployeeInvitation
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    """Employee serializer with custom validation"""
+    """Employee serializer with custom validation and N+1 query optimization"""
     full_name = serializers.ReadOnlyField(source='get_full_name')
     display_name = serializers.ReadOnlyField(source='get_display_name')
     is_registered = serializers.ReadOnlyField()
-    has_biometric = serializers.ReadOnlyField()
-    has_pending_invitation = serializers.SerializerMethodField()
+    has_biometric = serializers.SerializerMethodField()  # Optimized with prefetch_related
+    has_pending_invitation = serializers.SerializerMethodField()  # Optimized with prefetch_related
     
-    # Salary information from related Salary model
+    # Salary information from related Salary model - optimized with prefetch_related
+    # Allow these to be written during creation but they will be ignored
     hourly_rate = serializers.SerializerMethodField()
     monthly_salary = serializers.SerializerMethodField()
 
@@ -26,9 +27,36 @@ class EmployeeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'is_registered', 'has_biometric']
     
-    def get_hourly_rate(self, obj):
-        """Get hourly rate from related Salary model"""
+    def get_has_biometric(self, obj):
+        """Check if employee has biometric profile - optimized for prefetch_related"""
         try:
+            # Check if biometric_profile is prefetched and available
+            if hasattr(obj, '_prefetched_objects_cache') and 'biometric_profile' in obj._prefetched_objects_cache:
+                # Get prefetched biometric_profile 
+                biometric_profile = getattr(obj, 'biometric_profile', None)
+                return biometric_profile is not None
+            
+            # Alternative: check if biometric_profile exists without additional query
+            if hasattr(obj, 'biometric_profile'):
+                try:
+                    # This will not trigger a query if prefetched, but will if not
+                    return obj.biometric_profile is not None
+                except obj.biometric_profile.RelatedObjectDoesNotExist:
+                    return False
+            
+            # Use the property method as fallback (this might trigger N+1)
+            return obj.has_biometric
+        except:
+            return False
+    
+    def get_hourly_rate(self, obj):
+        """Get hourly rate from related Salary model - optimized for prefetch_related"""
+        try:
+            # Use prefetched salary_info if available
+            if hasattr(obj, '_prefetched_objects_cache') and 'salary_info' in obj._prefetched_objects_cache:
+                salary_info = getattr(obj, 'salary_info', None)
+                return float(salary_info.hourly_rate) if salary_info and salary_info.hourly_rate else None
+            # Fallback to property
             if hasattr(obj, 'salary_info') and obj.salary_info:
                 return float(obj.salary_info.hourly_rate) if obj.salary_info.hourly_rate else None
             return None
@@ -36,8 +64,13 @@ class EmployeeSerializer(serializers.ModelSerializer):
             return None
     
     def get_monthly_salary(self, obj):
-        """Get monthly salary from related Salary model"""
+        """Get monthly salary from related Salary model - optimized for prefetch_related"""
         try:
+            # Use prefetched salary_info if available
+            if hasattr(obj, '_prefetched_objects_cache') and 'salary_info' in obj._prefetched_objects_cache:
+                salary_info = getattr(obj, 'salary_info', None)
+                return float(salary_info.base_salary) if salary_info and salary_info.base_salary else None
+            # Fallback to property
             if hasattr(obj, 'salary_info') and obj.salary_info:
                 return float(obj.salary_info.base_salary) if obj.salary_info.base_salary else None
             return None
@@ -45,8 +78,13 @@ class EmployeeSerializer(serializers.ModelSerializer):
             return None
 
     def get_has_pending_invitation(self, obj):
-        """Check if employee has pending invitation"""
+        """Check if employee has pending invitation - optimized for prefetch_related"""
         try:
+            # Use prefetched invitation if available
+            if hasattr(obj, '_prefetched_objects_cache') and 'invitation' in obj._prefetched_objects_cache:
+                invitation = getattr(obj, 'invitation', None)
+                return invitation is not None and invitation.is_valid
+            # Fallback to property
             return hasattr(obj, 'invitation') and obj.invitation.is_valid
         except:
             return False

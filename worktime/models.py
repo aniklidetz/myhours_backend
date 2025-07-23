@@ -1,10 +1,24 @@
-# worktime/models.py
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from users.models import Employee
 from datetime import timedelta
 import sys
+
+class WorkLogManager(models.Manager):
+    """Custom manager for WorkLog with soft delete support"""
+    
+    def get_queryset(self):
+        """Return only non-deleted records by default"""
+        return super().get_queryset().filter(is_deleted=False)
+    
+    def all_with_deleted(self):
+        """Return all records including soft deleted ones"""
+        return super().get_queryset()
+    
+    def deleted_only(self):
+        """Return only soft deleted records"""
+        return super().get_queryset().filter(is_deleted=True)
 
 class WorkLog(models.Model):
     """Work time log entry model with improved validation"""
@@ -47,6 +61,29 @@ class WorkLog(models.Model):
         default=False,
         help_text="Whether this work log has been approved by manager"
     )
+    
+    # Soft delete functionality
+    is_deleted = models.BooleanField(
+        default=False,
+        help_text="Soft delete flag - records are marked as deleted instead of being removed"
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this record was soft deleted"
+    )
+    deleted_by = models.ForeignKey(
+        Employee,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deleted_work_logs',
+        help_text="Who deleted this record"
+    )
+    
+    # Managers
+    objects = WorkLogManager()  # Default manager (excludes deleted)
+    all_objects = models.Manager()  # Manager that includes deleted records
 
     class Meta:
         ordering = ['-check_in']
@@ -145,12 +182,28 @@ class WorkLog(models.Model):
 
     def get_status(self):
         """Get human-readable status"""
-        if self.check_out is None:
+        if self.is_deleted:
+            return "Deleted"
+        elif self.check_out is None:
             return "In Progress"
         elif self.is_approved:
             return "Approved"
         else:
             return "Pending Approval"
+    
+    def soft_delete(self, deleted_by=None):
+        """Soft delete this WorkLog record"""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = deleted_by
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+    
+    def restore(self):
+        """Restore a soft deleted WorkLog record"""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
 
     def save(self, *args, **kwargs):
         # Validate before saving (but skip during tests)

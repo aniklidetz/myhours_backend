@@ -1,4 +1,3 @@
-# worktime/tests.py
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -6,7 +5,7 @@ from tests.base import BaseAPITestCase, UnauthenticatedAPITestCase
 from users.models import Employee
 from worktime.models import WorkLog
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 
 class WorkLogModelTest(TestCase):

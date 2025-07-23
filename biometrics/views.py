@@ -157,9 +157,19 @@ def register_face(request):
     image = serializer.validated_data['image']
     images = [image]  # Convert single image to list for processor
     
+    # DETAILED LOGGING for registration debugging
+    logger.info(f"🔍 Face registration debug:")
+    logger.info(f"   - Request employee_id: {employee_id}")
+    logger.info(f"   - Authenticated user: {request.user.id} ({request.user.email})")
+    if hasattr(request.user, 'employee_profile'):
+        logger.info(f"   - Authenticated user employee_id: {request.user.employee_profile.id}")
+    else:
+        logger.warning(f"   - No employee_profile found for user {request.user.id}")
+    
     try:
         # Check if employee exists and user has permission
         employee = Employee.objects.get(id=employee_id)
+        logger.info(f"   - Target employee: {employee.id} ({employee.get_full_name()})")
         
         # Check permission (admin or self)
         if not (request.user.is_staff or request.user == employee.user):
@@ -419,11 +429,25 @@ def check_in(request):
         # Get employee
         employee = Employee.objects.get(id=match_result['employee_id'])
         
+        # DETAILED LOGGING for mismatch debugging
+        logger.info(f"🔍 Check-in matching debug:")
+        logger.info(f"   - Recognized employee ID: {match_result['employee_id']}")
+        logger.info(f"   - Recognized employee name: {employee.get_full_name()}")
+        logger.info(f"   - Confidence: {match_result['confidence']}")
+        logger.info(f"   - Used fallback: {used_fallback}")
+        if hasattr(request.user, 'employee_profile'):
+            logger.info(f"   - Authenticated user employee ID: {request.user.employee_profile.id}")
+            logger.info(f"   - Authenticated user name: {request.user.employee_profile.get_full_name()}")
+        else:
+            logger.warning("   - No employee_profile found for authenticated user")
+        
         # IMPORTANT: Verify that the recognized face belongs to the authenticated user
         # This ensures multiple employees can check-in simultaneously
         # Skip this check if we used fallback mode (already authenticated user)
         if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
-            logger.warning("Face recognition mismatch detected")
+            logger.warning("❌ Face recognition mismatch detected")
+            logger.warning(f"   - Expected employee: {request.user.employee_profile.id} ({request.user.employee_profile.get_full_name()})")
+            logger.warning(f"   - Recognized employee: {employee.id} ({employee.get_full_name()})")
             return Response({
                 'success': False,
                 'error': 'Face does not match authenticated user',
@@ -572,11 +596,25 @@ def check_out(request):
         # Get employee
         employee = Employee.objects.get(id=match_result['employee_id'])
         
+        # DETAILED LOGGING for mismatch debugging
+        logger.info(f"🔍 Check-out matching debug:")
+        logger.info(f"   - Recognized employee ID: {match_result['employee_id']}")
+        logger.info(f"   - Recognized employee name: {employee.get_full_name()}")
+        logger.info(f"   - Confidence: {match_result['confidence']}")
+        logger.info(f"   - Used fallback: {used_fallback}")
+        if hasattr(request.user, 'employee_profile'):
+            logger.info(f"   - Authenticated user employee ID: {request.user.employee_profile.id}")
+            logger.info(f"   - Authenticated user name: {request.user.employee_profile.get_full_name()}")
+        else:
+            logger.warning("   - No employee_profile found for authenticated user")
+        
         # IMPORTANT: Verify that the recognized face belongs to the authenticated user
         # This ensures multiple employees can check-out simultaneously
         # Skip this check if we used fallback mode (already authenticated user)
         if not used_fallback and hasattr(request.user, 'employee_profile') and request.user.employee_profile != employee:
-            logger.warning("Face recognition mismatch detected")
+            logger.warning("❌ Face recognition mismatch detected")
+            logger.warning(f"   - Expected employee: {request.user.employee_profile.id} ({request.user.employee_profile.get_full_name()})")
+            logger.warning(f"   - Recognized employee: {employee.id} ({employee.get_full_name()})")
             return Response({
                 'success': False,
                 'error': 'Face does not match authenticated user',

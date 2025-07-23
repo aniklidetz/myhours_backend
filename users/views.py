@@ -29,9 +29,23 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     filter_backends = [SearchFilter, DjangoFilterBackend]
     search_fields = ['first_name', 'last_name', 'email']
     filterset_fields = ['employment_type', 'is_active']
+    
+    def create(self, request, *args, **kwargs):
+        """Override to catch and log validation errors"""
+        logger.info(f"Employee creation POST data: {request.data}")
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception as e:
+            logger.error(f"Employee creation validation error: {str(e)}")
+            logger.error(f"Serializer errors: {serializer.errors}")
+            raise
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         """Log employee creation and create default salary configuration"""
+        # Debug log the incoming data
+        logger.info(f"Employee creation request data: {self.request.data}")
         employee = serializer.save()
         logger.info("New employee created", extra={
             **safe_log_employee(employee, "employee_created"),
@@ -43,7 +57,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         from decimal import Decimal
         
         # Determine calculation type based on employment_type first, then role
-        if employee.employment_type == 'full_time':
+        if employee.employment_type in ['full_time', 'part_time']:
             calculation_type = 'monthly'
             # Default monthly salaries based on role
             monthly_defaults = {
@@ -54,7 +68,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             }
             base_salary = monthly_defaults.get(employee.role, Decimal('20000'))
             hourly_rate = None
-        else:  # hourly employment
+        elif employee.employment_type == 'hourly':
             calculation_type = 'hourly'
             # Default hourly rates based on role
             hourly_defaults = {
@@ -64,6 +78,23 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 'employee': Decimal('85')
             }
             hourly_rate = hourly_defaults.get(employee.role, Decimal('85'))
+            base_salary = None
+        elif employee.employment_type == 'contract':
+            # For contract employees, use monthly calculation instead of project to avoid date requirements
+            calculation_type = 'monthly' 
+            # Default monthly salary for contract employees
+            contract_defaults = {
+                'admin': Decimal('30000'),
+                'accountant': Decimal('25000'),
+                'project_manager': Decimal('35000'),
+                'employee': Decimal('20000')
+            }
+            base_salary = contract_defaults.get(employee.role, Decimal('20000'))
+            hourly_rate = None
+        else:
+            # Fallback to hourly for unknown employment types
+            calculation_type = 'hourly'
+            hourly_rate = Decimal('85')
             base_salary = None
         
         salary_data = {
@@ -101,19 +132,28 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         
         if hourly_rate is not None or monthly_salary is not None:
             # Get or create salary record
+            if employee.employment_type in ['full_time', 'part_time']:
+                default_calculation_type = 'monthly'
+            elif employee.employment_type == 'hourly':
+                default_calculation_type = 'hourly'
+            elif employee.employment_type == 'contract':
+                default_calculation_type = 'monthly'  # Use monthly for contracts to avoid project date requirements
+            else:
+                default_calculation_type = 'hourly'  # fallback
+                
             salary, created = Salary.objects.get_or_create(
                 employee=employee,
                 defaults={
-                    'calculation_type': 'monthly' if employee.employment_type == 'full_time' else 'hourly',
+                    'calculation_type': default_calculation_type,
                     'currency': 'ILS'
                 }
             )
             
             # Update salary fields based on employment type
-            if employee.employment_type == 'full_time' and monthly_salary is not None:
+            if employee.employment_type in ['full_time', 'part_time'] and monthly_salary is not None:
                 try:
                     salary.base_salary = Decimal(str(monthly_salary))
-                    salary.hourly_rate = None  # Clear hourly rate for full-time employees
+                    salary.hourly_rate = None  # Clear hourly rate for monthly employees
                     salary.calculation_type = 'monthly'
                     salary.save()
                     logger.info("Updated monthly salary", extra={
@@ -141,6 +181,22 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                         **safe_log_employee(employee, "salary_update_error"),
                         "error": str(e),
                         "value": hourly_rate
+                    })
+            elif employee.employment_type == 'contract' and monthly_salary is not None:
+                try:
+                    salary.base_salary = Decimal(str(monthly_salary))
+                    salary.hourly_rate = None  # Clear hourly rate for contract employees
+                    salary.calculation_type = 'project'
+                    salary.save()
+                    logger.info("Updated contract project salary", extra={
+                        **safe_log_employee(employee, "salary_updated"),
+                        "new_project_salary": str(salary.base_salary)
+                    })
+                except (ValueError, TypeError) as e:
+                    logger.error("Invalid contract project salary value", extra={
+                        **safe_log_employee(employee, "salary_update_error"),
+                        "error": str(e),
+                        "value": monthly_salary
                     })
         
         logger.info("Employee updated", extra={

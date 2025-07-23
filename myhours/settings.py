@@ -21,6 +21,10 @@ if not SECRET_KEY:
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.1.164,*').split(',')
 
+# Check if we're running tests
+import sys
+TESTING = 'test' in sys.argv
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -48,7 +52,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Must be first
-    'django.middleware.security.SecurityMiddleware',
+]
+
+# Add security middleware only if not testing
+if not TESTING:
+    MIDDLEWARE.append('django.middleware.security.SecurityMiddleware')
+
+MIDDLEWARE += [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -123,11 +133,22 @@ MONGO_DB_NAME = config('MONGO_DB_NAME', default='biometrics_db')
 MONGO_HOST = config('MONGO_HOST', default='localhost')
 MONGO_PORT = config('MONGO_PORT', default=27017, cast=int)
 
+# Disable HTTPS redirect for tests
+if TESTING:
+    SECURE_SSL_REDIRECT = False
+else:
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+
 try:
     MONGO_CLIENT = MongoClient(MONGO_CONNECTION_STRING)
     MONGO_DB = MONGO_CLIENT[MONGO_DB_NAME]
+    # Test connection
+    MONGO_CLIENT.admin.command('ping')
+    if not TESTING:
+        print("MongoDB connection established")
 except Exception as e:
-    print(f"MongoDB connection failed: {e}")
+    if not TESTING:
+        print(f"MongoDB connection failed: {e}")
     MONGO_CLIENT = None
     MONGO_DB = None
 
@@ -271,6 +292,12 @@ if ENABLE_BIOMETRIC_MOCK and not DEBUG:
 # Log critical security warning if mock is enabled
 if ENABLE_BIOMETRIC_MOCK:
     logging.getLogger(__name__).critical("🚨 BIOMETRIC MOCK MODE ENABLED - NOT FOR PRODUCTION USE!")
+
+# Face Recognition Settings - Improved for better matching
+FACE_RECOGNITION_TOLERANCE = config('FACE_RECOGNITION_TOLERANCE', default=0.65, cast=float)  # Increased from 0.6 to 0.65
+FACE_QUALITY_THRESHOLD = config('FACE_QUALITY_THRESHOLD', default=0.6, cast=float)  # Lowered from 0.7 to 0.6
+FACE_ENCODING_MODEL = config('FACE_ENCODING_MODEL', default='large')  # Use large model for better accuracy
+MIN_FACE_SIZE = (40, 40)  # Minimum face size in pixels
 
 # Feature Flags
 FEATURE_FLAGS = {

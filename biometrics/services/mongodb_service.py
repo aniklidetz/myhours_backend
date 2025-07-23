@@ -27,14 +27,27 @@ class MongoDBService:
             self.db = settings.MONGO_DB
             
             if self.db is not None:
-                self.collection = self.db['face_embeddings']
+                # Try to use existing collection with data first
+                if 'faces' in self.db.list_collection_names() and self.db['faces'].count_documents({}) > 0:
+                    self.collection = self.db['faces']
+                    logger.info("Using existing 'faces' collection with data")
+                else:
+                    self.collection = self.db['face_embeddings']
+                    logger.info("Using 'face_embeddings' collection")
+                
                 # Create indexes for better performance
                 self._create_indexes()
                 logger.info("MongoDB connection established for biometrics")
             else:
-                logger.error("MongoDB database not available")
+                # Only log error if not testing
+                import sys
+                if 'test' not in sys.argv:
+                    logger.error("MongoDB database not available")
         except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            # Only log error if not testing
+            import sys
+            if 'test' not in sys.argv:
+                logger.error(f"Failed to connect to MongoDB: {e}")
             self.client = None
             self.db = None
             self.collection = None
@@ -69,6 +82,12 @@ class MongoDBService:
         if self.collection is None:
             logger.error("MongoDB collection not available")
             return None
+        
+        # DETAILED LOGGING for registration debugging  
+        logger.info(f"🔍 MongoDB save_face_embeddings:")
+        logger.info(f"   - Employee ID to save: {employee_id}")
+        logger.info(f"   - Embeddings count: {len(embeddings)}")
+        logger.info(f"   - Collection name: {self.collection.name}")
         
         try:
             # Check if employee already has embeddings
@@ -125,13 +144,31 @@ class MongoDBService:
             return None
         
         try:
-            document = self.collection.find_one({
-                "employee_id": employee_id,
-                "is_active": True
-            })
+            # Check if using 'faces' collection (legacy format)
+            if self.collection.name == 'faces':
+                document = self.collection.find_one({"employee_id": employee_id})
+                if document:
+                    encodings = document.get('encodings', [])
+                    if encodings:
+                        # Convert legacy format to new format
+                        embeddings = []
+                        for i, encoding in enumerate(encodings):
+                            embeddings.append({
+                                'vector': encoding,
+                                'quality_score': 0.8,  # Default quality
+                                'created_at': document.get('created_at'),
+                                'angle': f'angle_{i}'
+                            })
+                        return embeddings
+            else:
+                # New format
+                document = self.collection.find_one({
+                    "employee_id": employee_id,
+                    "is_active": True
+                })
+                if document:
+                    return document.get('embeddings', [])
             
-            if document:
-                return document.get('embeddings', [])
             return None
             
         except Exception as e:
@@ -150,15 +187,35 @@ class MongoDBService:
         
         try:
             results = []
-            cursor = self.collection.find({"is_active": True})
             
-            for document in cursor:
-                employee_id = document.get('employee_id')
-                embeddings = document.get('embeddings', [])
-                if employee_id and embeddings:
-                    results.append((employee_id, embeddings))
+            # Check if using 'faces' collection (legacy format)
+            if self.collection.name == 'faces':
+                # Legacy format: look for all documents (no is_active field)
+                cursor = self.collection.find({})
+                for document in cursor:
+                    employee_id = document.get('employee_id')
+                    encodings = document.get('encodings', [])
+                    if employee_id and encodings:
+                        # Convert legacy format to new format
+                        embeddings = []
+                        for i, encoding in enumerate(encodings):
+                            embeddings.append({
+                                'vector': encoding,
+                                'quality_score': 0.8,  # Default quality
+                                'created_at': document.get('created_at'),
+                                'angle': f'angle_{i}'
+                            })
+                        results.append((employee_id, embeddings))
+            else:
+                # New format: use is_active field
+                cursor = self.collection.find({"is_active": True})
+                for document in cursor:
+                    employee_id = document.get('employee_id')
+                    embeddings = document.get('embeddings', [])
+                    if employee_id and embeddings:
+                        results.append((employee_id, embeddings))
             
-            logger.info(f"Retrieved {len(results)} active embedding sets")
+            logger.info(f"Retrieved {len(results)} active embedding sets from {self.collection.name}")
             return results
             
         except Exception as e:

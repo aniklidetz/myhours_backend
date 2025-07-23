@@ -883,8 +883,9 @@ class Salary(models.Model):
             # Set calculation type based on employee's employment type
             employment_type_mapping = {
                 'hourly': 'hourly',
-                'monthly': 'monthly',
-                'contract': 'project'
+                'full_time': 'monthly',
+                'part_time': 'monthly', 
+                'contract': 'monthly'  # Use monthly for contracts to avoid project date requirements
             }
             self.calculation_type = employment_type_mapping.get(
                 self.employee.employment_type, 'hourly')

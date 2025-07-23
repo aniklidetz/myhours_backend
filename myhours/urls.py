@@ -57,11 +57,17 @@ api_root.permission_classes = [AllowAny]
 api_root.authentication_classes = []
 
 urlpatterns = [
+    # Root redirect to API
+    path('', RedirectView.as_view(url='/api/', permanent=False)),
+    
     path('admin/', admin.site.urls),
     
     # Health check endpoints (public)
     path('api/health/', health_check, name='health-check'),
     path('health/', detailed_health_check, name='detailed-health-check'),
+    
+    # Debug endpoints (temporary for authentication troubleshooting)
+    path('api/debug/auth/', include('core.debug_urls')),
     
     # API root
     path('api/', api_root, name='api-root'),
@@ -79,12 +85,7 @@ urlpatterns = [
     path('api/v1/biometrics/', include('biometrics.urls')),
     path('api/v1/integrations/', include('integrations.urls')),
     
-    # Legacy API endpoints (redirect to v1 for backward compatibility)
-    re_path(r'^api/users/', RedirectView.as_view(url='/api/v1/users/', permanent=False)),
-    re_path(r'^api/worktime/', RedirectView.as_view(url='/api/v1/worktime/', permanent=False)),
-    re_path(r'^api/payroll/', RedirectView.as_view(url='/api/v1/payroll/', permanent=False)),
-    re_path(r'^api/biometrics/', RedirectView.as_view(url='/api/v1/biometrics/', permanent=False)),
-    re_path(r'^api/integrations/', RedirectView.as_view(url='/api/v1/integrations/', permanent=False)),
+    # Legacy API endpoints removed - all traffic goes to v1 directly
 ]
 
 # Serve media files in development

@@ -79,6 +79,15 @@ local_settings.py
 # Logs directory
 logs/
 
+# Archive directory with cleaned files
+archive/
+
+# Backups directory
+backups/
+
+# Utilities (development tools)
+utilities/
+
 # Test and setup scripts (development only)
 create_*.py
 setup_*.py
@@ -90,3 +99,4 @@ test_*.py
 *_check.py
 *_validation.py
 
+debug_scripts_archive/

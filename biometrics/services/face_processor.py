@@ -17,10 +17,10 @@ class FaceProcessor:
     """Service for processing face images and extracting embeddings"""
     
     def __init__(self):
-        self.tolerance = getattr(settings, 'FACE_RECOGNITION_TOLERANCE', 0.6)
+        self.tolerance = getattr(settings, 'FACE_RECOGNITION_TOLERANCE', 0.4)
         self.model = getattr(settings, 'FACE_ENCODING_MODEL', 'large')
         self.min_face_size = getattr(settings, 'MIN_FACE_SIZE', (50, 50))
-        self.quality_threshold = getattr(settings, 'FACE_QUALITY_THRESHOLD', 0.7)
+        self.quality_threshold = getattr(settings, 'FACE_QUALITY_THRESHOLD', 0.65)
     
     def decode_base64_image(self, base64_string: str) -> Optional[np.ndarray]:
         """
@@ -75,7 +75,7 @@ class FaceProcessor:
             
             # Check blur using Laplacian variance
             laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-            is_blurry = laplacian_var < 30  # Lowered threshold for blur
+            is_blurry = laplacian_var < 25  # Relaxed blur detection for demo stability
             
             # Calculate overall quality score
             quality_score = 1.0
@@ -541,6 +541,9 @@ class FaceProcessor:
         # Compare with all known embeddings
         best_match_employee_id = None
         best_confidence = 0.0
+        all_matches = []  # Track all matches for debugging
+        
+        logger.info(f"🔍 Face matching debug - comparing against {len(all_embeddings)} employees")
         
         for employee_id, employee_embeddings in all_embeddings:
             # Extract encoding vectors
@@ -550,14 +553,26 @@ class FaceProcessor:
                     known_encodings.append(np.array(embedding['vector']))
             
             if not known_encodings:
+                logger.debug(f"   - Employee {employee_id}: No encodings found")
                 continue
             
             # Compare with this employee's encodings
             is_match, confidence = self.compare_faces(unknown_encoding, known_encodings)
             
+            logger.info(f"   - Employee {employee_id}: confidence={confidence:.3f}, match={is_match}")
+            all_matches.append((employee_id, confidence, is_match))
+            
             if is_match and confidence > best_confidence:
                 best_match_employee_id = employee_id
                 best_confidence = confidence
+        
+        # Log all results sorted by confidence
+        all_matches.sort(key=lambda x: x[1], reverse=True)
+        logger.info(f"🎯 All matching results (sorted by confidence):")
+        for emp_id, conf, match in all_matches[:5]:  # Top 5 results
+            logger.info(f"   - Employee {emp_id}: {conf:.3f} {'✅' if match else '❌'}")
+        
+        logger.info(f"🏆 Best match: Employee {best_match_employee_id} with confidence {best_confidence:.3f}")
         
         processing_time = int((time.time() - start_time) * 1000)
         

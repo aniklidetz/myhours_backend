@@ -19,11 +19,12 @@ class BaseTestCase(TestCase):
             password='testpass123'
         )
         
-        # Create test employee
+        # Create test employee linked to user
         self.employee = Employee.objects.create(
+            user=self.user,  # Link employee to user
             first_name='John',
             last_name='Doe',
-            email='john.doe@example.com',
+            email='test@example.com',  # Same email as user
             phone='+972501234567',
             employment_type='hourly'
         )
@@ -48,11 +49,12 @@ class BaseAPITestCase(APITestCase):
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.token.key)
         
-        # Create test employee
+        # Create test employee linked to user
         self.employee = Employee.objects.create(
+            user=self.user,  # Link employee to user
             first_name='John',
             last_name='Doe',
-            email='john.doe@example.com',
+            email='test@example.com',  # Same email as user
             phone='+972501234567',
             employment_type='hourly'
         )
@@ -98,11 +100,12 @@ class UnauthenticatedAPITestCase(APITestCase):
             password='testpass123'
         )
         
-        # Create test employee
+        # Create test employee linked to user
         self.employee = Employee.objects.create(
+            user=self.user,  # Link employee to user
             first_name='John',
             last_name='Doe',
-            email='john.doe@example.com',
+            email='test@example.com',  # Same email as user
             phone='+972501234567',
             employment_type='hourly'
         )

@@ -5,8 +5,48 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 import re
 
+
+class EmployeeQuerySet(models.QuerySet):
+    """Custom QuerySet for Employee model with N+1 optimization annotations"""
+    
+    def with_optimized_annotations(self):
+        """Add annotations to avoid N+1 queries for computed properties"""
+        from django.db.models import Exists, OuterRef
+        
+        # Import here to avoid circular imports
+        from biometrics.models import BiometricProfile
+        
+        return self.annotate(
+            # Annotate has_biometric to avoid N+1 queries
+            has_biometric_annotation=Exists(
+                BiometricProfile.objects.filter(employee=OuterRef('pk'))
+            ),
+            # Annotate has_pending_invitation to avoid N+1 queries  
+            has_pending_invitation_annotation=Exists(
+                EmployeeInvitation.objects.filter(
+                    employee=OuterRef('pk'),
+                    accepted_at__isnull=True,
+                    expires_at__gt=models.functions.Now()
+                )
+            )
+        )
+
+
+class EmployeeManager(models.Manager):
+    """Custom manager for Employee model"""
+    
+    def get_queryset(self):
+        return EmployeeQuerySet(self.model, using=self._db)
+    
+    def with_optimized_annotations(self):
+        """Get employees with optimized annotations"""
+        return self.get_queryset().with_optimized_annotations()
+
 class Employee(models.Model):
     """Employee model with improved validation and role support"""
+    
+    # Custom manager with N+1 optimization
+    objects = EmployeeManager()
     
     # Link to Django user (null until invitation is accepted)
     user = models.OneToOneField(
@@ -167,7 +207,12 @@ class Employee(models.Model):
 
     @property
     def has_biometric(self):
-        """Check if employee has registered biometric data"""
+        """Check if employee has registered biometric data - optimized with annotations"""
+        # Use annotation if available (for bulk queries)
+        if hasattr(self, 'has_biometric_annotation'):
+            return self.has_biometric_annotation
+        
+        # Fallback to database query for individual lookups
         if not self.user:
             return False
         # Check if biometric profile exists

@@ -137,32 +137,50 @@ class HybridAuthentication(BaseAuthentication):
         # Get authorization header
         auth = self.get_authorization_header(request).split()
         
+        # Enhanced logging for debugging authentication issues
+        auth_header = request.META.get('HTTP_AUTHORIZATION', 'MISSING')
+        request_path = request.path
+        query_params = dict(request.GET)
+        
+        # Log authentication attempt with context
+        logger.debug(f"HybridAuth attempt: path={request_path}, params={query_params}, auth_header={auth_header[:50]}...")
+        
         if not auth:
+            logger.debug(f"HybridAuth: No authorization header for {request_path}")
             return None
             
         if len(auth) == 1:
+            logger.warning(f"HybridAuth: Invalid auth header format (1 part) for {request_path}")
             return None
         elif len(auth) > 2:
+            logger.warning(f"HybridAuth: Invalid auth header format (>2 parts) for {request_path}")
             return None
             
         try:
             auth_type = auth[0].decode().lower()
             token = auth[1].decode()
         except UnicodeError:
+            logger.error(f"HybridAuth: Unicode decode error for {request_path}")
             return None
         
         # Try DeviceToken authentication first
         if auth_type == 'devicetoken':
+            logger.debug(f"HybridAuth: Trying DeviceToken auth for {request_path}")
             device_auth = DeviceTokenAuthentication()
             try:
                 result = device_auth.authenticate(request)
                 if result:
+                    logger.info(f"HybridAuth: DeviceToken success for {request_path} - user: {result[0].username}")
                     return result
-            except AuthenticationFailed:
+                else:
+                    logger.warning(f"HybridAuth: DeviceToken auth returned None for {request_path}")
+            except AuthenticationFailed as e:
+                logger.error(f"HybridAuth: DeviceToken auth failed for {request_path}: {e}")
                 pass
         
         # Try legacy Token authentication
         elif auth_type == 'token':
+            logger.debug(f"HybridAuth: Trying legacy Token auth for {request_path}")
             from rest_framework.authentication import TokenAuthentication
             old_auth = TokenAuthentication()
             try:
@@ -170,11 +188,17 @@ class HybridAuthentication(BaseAuthentication):
                 if result:
                     # Mark this as legacy authentication
                     request.is_legacy_auth = True
-                    logger.warning(f"Legacy token authentication used for user: {result[0].username}")
+                    logger.warning(f"Legacy token authentication used for user: {result[0].username} on {request_path}")
                     return result
-            except AuthenticationFailed:
+                else:
+                    logger.warning(f"HybridAuth: Legacy Token auth returned None for {request_path}")
+            except AuthenticationFailed as e:
+                logger.error(f"HybridAuth: Legacy Token auth failed for {request_path}: {e}")
                 pass
+        else:
+            logger.warning(f"HybridAuth: Unknown auth type '{auth_type}' for {request_path}")
         
+        logger.warning(f"HybridAuth: All authentication methods failed for {request_path}")
         return None
 
     def get_authorization_header(self, request):
