@@ -78,23 +78,32 @@ FEATURE_FLAGS = {
 # Use the original DATABASE_URL value that was captured before deletion
 DATABASE_URL_CI = original_database_url or "sqlite:///ci_test.db"
 
-print(f"🔍 CI DEBUG: Original DATABASE_URL = {original_database_url}")
-print(f"🔍 CI DEBUG: Final DATABASE_URL_CI = {DATABASE_URL_CI}")
-print(f"🔍 CI DEBUG: Current DATABASES before override = {DATABASES}")
+# Extended environment debugging as suggested in analysis
+print("=" * 50)
+print("🔍 CI ENV CHECK: GITHUB_ACTIONS =", os.environ.get("GITHUB_ACTIONS"))
+print("🔍 CI ENV CHECK: DATABASE_URL =", os.environ.get("DATABASE_URL"))
+print("🔍 CI ENV CHECK: DJANGO_SETTINGS_MODULE =", os.environ.get("DJANGO_SETTINGS_MODULE"))
+print("🔍 CI DEBUG: Original DATABASE_URL = {!r}".format(original_database_url))
+print("🔍 CI DEBUG: Final DATABASE_URL_CI = {!r}".format(DATABASE_URL_CI))
+print("🔍 CI DEBUG: Current DATABASES before override = {!r}".format(DATABASES))
+print("=" * 50)
 
 # FORCE PostgreSQL configuration regardless of URL parsing issues
 # This ensures we never fall back to dummy backend in CI
-if os.environ.get("GITHUB_ACTIONS") == "true":
+github_actions = os.environ.get("GITHUB_ACTIONS")
+print(f"🔍 CI DEBUG: GITHUB_ACTIONS check: {github_actions!r} == 'true'? {github_actions == 'true'}")
+
+if github_actions == "true":
     # We're in GitHub Actions - force PostgreSQL
     if "myhours_test" in str(DATABASE_URL_CI):
         db_name = "myhours_test"
-    elif "myhours_perf" in str(DATABASE_URL_CI):  
+    elif "myhours_perf" in str(DATABASE_URL_CI):
         db_name = "myhours_perf"
     elif "myhours_migration" in str(DATABASE_URL_CI):
         db_name = "myhours_migration"
     else:
         db_name = "myhours_test"  # default fallback
-    
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -142,24 +151,47 @@ print(f"🔍 CI DEBUG: Final DATABASES configuration = {DATABASES}")
 print(f"🔍 CI DEBUG: Final ENGINE = {DATABASES['default'].get('ENGINE', 'NOT_SET')}")
 
 # Final validation - ensure ENGINE is NEVER dummy
-if DATABASES['default'].get('ENGINE') == 'django.db.backends.dummy':
-    print("❌ CI ERROR: Django is using dummy backend! Forcing PostgreSQL...")
+current_engine = DATABASES.get("default", {}).get("ENGINE", "NOT_SET")
+print(f"🔍 CI DEBUG: Current ENGINE before validation: {current_engine!r}")
+
+if current_engine == "django.db.backends.dummy" or current_engine == "NOT_SET" or not current_engine:
+    print("❌ CI ERROR: Django is using dummy backend or ENGINE not set! Forcing PostgreSQL...")
+    
+    # Determine database name from environment or use sensible default
+    env_db_url = os.environ.get("DATABASE_URL", "")
+    if "myhours_test" in env_db_url:
+        fallback_db_name = "myhours_test"
+    elif "myhours_perf" in env_db_url:
+        fallback_db_name = "myhours_perf"
+    elif "myhours_migration" in env_db_url:
+        fallback_db_name = "myhours_migration"
+    else:
+        fallback_db_name = "myhours_test"  # ultimate fallback
+    
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": "myhours_test",
-            "USER": "postgres", 
+            "NAME": fallback_db_name,
+            "USER": "postgres",
             "PASSWORD": "postgres",
             "HOST": "localhost",
             "PORT": "5432",
         }
     }
-    print("🔧 CI FIX: Forced PostgreSQL configuration to prevent dummy backend")
+    print(f"🔧 CI FIX: Forced PostgreSQL configuration with DB name: {fallback_db_name}")
 
-# Final check
-final_engine = DATABASES['default'].get('ENGINE', 'NOT_SET')
+# Final check with comprehensive validation
+final_engine = DATABASES.get("default", {}).get("ENGINE", "NOT_SET")
+final_db_name = DATABASES.get("default", {}).get("NAME", "NOT_SET")
 print(f"🎯 CI FINAL: Using database engine: {final_engine}")
-if final_engine != 'django.db.backends.postgresql':
-    print(f"⚠️ CI WARNING: Expected PostgreSQL but got {final_engine}")
+print(f"🎯 CI FINAL: Using database name: {final_db_name}")
+
+# Ensure we have a proper PostgreSQL config in CI
+if os.environ.get("GITHUB_ACTIONS") == "true":
+    if final_engine != "django.db.backends.postgresql":
+        print(f"🚨 CI CRITICAL ERROR: Expected PostgreSQL in CI but got {final_engine}")
+        raise Exception(f"CI database configuration failed - got {final_engine} instead of PostgreSQL")
+    else:
+        print("✅ CI SUCCESS: PostgreSQL engine confirmed for GitHub Actions")
 else:
-    print("✅ CI SUCCESS: PostgreSQL engine confirmed")
+    print(f"ℹ️ CI INFO: Local development mode - using {final_engine}")
