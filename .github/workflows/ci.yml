@@ -38,6 +38,19 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
+      
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
     
     steps:
     - name: Checkout code
@@ -84,6 +97,7 @@ jobs:
     
     - name: Set up environment variables
       run: |
+        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
         echo "DEBUG=True" >> $GITHUB_ENV
         echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_test" >> $GITHUB_ENV
@@ -91,6 +105,8 @@ jobs:
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
         echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
+        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
+        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Run Django system checks
       run: |
@@ -333,6 +349,7 @@ jobs:
     
     - name: Set up environment variables
       run: |
+        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-performance" >> $GITHUB_ENV
         echo "DEBUG=False" >> $GITHUB_ENV
         echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_perf" >> $GITHUB_ENV
@@ -340,6 +357,8 @@ jobs:
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
         echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
+        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
+        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Set up test environment
       run: |
@@ -393,6 +412,7 @@ jobs:
     
     - name: Set up environment variables
       run: |
+        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-migration-check" >> $GITHUB_ENV
         echo "DEBUG=True" >> $GITHUB_ENV
         echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration" >> $GITHUB_ENV
@@ -400,6 +420,8 @@ jobs:
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
         echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
+        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
+        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Check migration consistency
       run: |

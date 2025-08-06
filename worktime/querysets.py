@@ -15,6 +15,6 @@ class WorkLogQuerySet(models.QuerySet):
 class WorkLogManager(models.Manager):
     def get_queryset(self):
         return WorkLogQuerySet(self.model, using=self._db)
-    
+
     def total_hours(self):
         return self.get_queryset().total_hours()

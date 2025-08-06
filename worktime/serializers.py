@@ -6,21 +6,40 @@ from users.serializers import EmployeeSerializer
 
 class WorkLogSerializer(serializers.ModelSerializer):
     """WorkLog serializer with custom validation and N+1 query optimization"""
-    employee_name = serializers.ReadOnlyField(source='employee.get_full_name')
-    employee_data = EmployeeSerializer(source='employee', read_only=True)  # Include full employee data for frontend
-    total_hours = serializers.ReadOnlyField(source='get_total_hours')
-    status = serializers.ReadOnlyField(source='get_status')
+
+    employee_name = serializers.ReadOnlyField(source="employee.get_full_name")
+    employee_data = EmployeeSerializer(
+        source="employee", read_only=True
+    )  # Include full employee data for frontend
+    total_hours = serializers.ReadOnlyField(source="get_total_hours")
+    status = serializers.ReadOnlyField(source="get_status")
     duration = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkLog
         fields = [
-            'id', 'employee', 'employee_name', 'employee_data', 'check_in', 'check_out',
-            'location_check_in', 'location_check_out', 'latitude_check_in', 'longitude_check_in',
-            'latitude_check_out', 'longitude_check_out', 'break_minutes', 'notes', 'is_approved',
-            'total_hours', 'status', 'duration', 'created_at', 'updated_at'
+            "id",
+            "employee",
+            "employee_name",
+            "employee_data",
+            "check_in",
+            "check_out",
+            "location_check_in",
+            "location_check_out",
+            "latitude_check_in",
+            "longitude_check_in",
+            "latitude_check_out",
+            "longitude_check_out",
+            "break_minutes",
+            "notes",
+            "is_approved",
+            "total_hours",
+            "status",
+            "duration",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_duration(self, obj):
         """Get formatted duration string"""
@@ -53,9 +72,9 @@ class WorkLogSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """Cross-field validation"""
-        check_in = attrs.get('check_in')
-        check_out = attrs.get('check_out')
-        employee = attrs.get('employee')
+        check_in = attrs.get("check_in")
+        check_out = attrs.get("check_out")
+        employee = attrs.get("employee")
 
         if self.instance:
             check_in = check_in or self.instance.check_in
@@ -63,24 +82,26 @@ class WorkLogSerializer(serializers.ModelSerializer):
             employee = employee or self.instance.employee
 
         if check_out and check_in and check_out <= check_in:
-            raise serializers.ValidationError({
-                'check_out': 'Check-out time must be after check-in time'
-            })
+            raise serializers.ValidationError(
+                {"check_out": "Check-out time must be after check-in time"}
+            )
 
         if check_out and check_in:
             duration = check_out - check_in
             if duration.total_seconds() > 16 * 3600:
-                raise serializers.ValidationError({
-                    'check_out': 'Work session cannot exceed 16 hours'
-                })
+                raise serializers.ValidationError(
+                    {"check_out": "Work session cannot exceed 16 hours"}
+                )
 
         if employee and check_in:
             # Optimize overlap check by only checking if any overlapping records exist
             overlapping_query = WorkLog.objects.filter(
                 employee=employee,
                 check_in__lt=check_out or timezone.now(),
-                check_out__gt=check_in
-            ).only('id')  # Only select ID field for existence check
+                check_out__gt=check_in,
+            ).only(
+                "id"
+            )  # Only select ID field for existence check
             if self.instance:
                 overlapping_query = overlapping_query.exclude(pk=self.instance.pk)
             if overlapping_query.exists():

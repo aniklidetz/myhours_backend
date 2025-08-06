@@ -10,60 +10,53 @@ from worktime.models import WorkLog
 from integrations.services.sunrise_sunset_service import SunriseSunsetService
 from decimal import Decimal
 
+
 class Salary(models.Model):
     CURRENCY_CHOICES = [
-        ('ILS', 'Israeli Shekel'),
-        ('USD', 'US Dollar'),
-        ('EUR', 'Euro')
+        ("ILS", "Israeli Shekel"),
+        ("USD", "US Dollar"),
+        ("EUR", "Euro"),
     ]
 
     CALCULATION_TYPES = [
-        ('hourly', 'hourly'),
-        ('monthly', 'monthly'),
-        ('project', 'project')
+        ("hourly", "hourly"),
+        ("monthly", "monthly"),
+        ("project", "project"),
     ]
 
     employee = models.OneToOneField(
-        Employee, 
-        on_delete=models.CASCADE, 
-        related_name='salary_info'
+        Employee, on_delete=models.CASCADE, related_name="salary_info"
     )
-    
+
     # Basic salary information
     base_salary = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
+        max_digits=10,
+        decimal_places=2,
         validators=[MinValueValidator(0)],
         null=True,
         blank=True,
-        help_text='Monthly salary or total project cost (required for monthly/project types)'
+        help_text="Monthly salary or total project cost (required for monthly/project types)",
     )
-    
+
     hourly_rate = models.DecimalField(
-        max_digits=6, 
-        decimal_places=2, 
+        max_digits=6,
+        decimal_places=2,
         validators=[MinValueValidator(0)],
         null=True,
         blank=True,
-        help_text='Hourly rate (required for hourly type)'
+        help_text="Hourly rate (required for hourly type)",
     )
-    
+
     calculation_type = models.CharField(
-        max_length=10, 
-        choices=CALCULATION_TYPES, 
-        default='hourly'
+        max_length=10, choices=CALCULATION_TYPES, default="hourly"
     )
-    
+
     # For project-based payment
     project_start_date = models.DateField(null=True, blank=True)
     project_end_date = models.DateField(null=True, blank=True)
     project_completed = models.BooleanField(default=False)
-    
-    currency = models.CharField(
-        max_length=3, 
-        choices=CURRENCY_CHOICES, 
-        default='ILS'
-    )
+
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="ILS")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -73,11 +66,12 @@ class Salary(models.Model):
         Backward compatibility method for tests.
         """
         from django.utils import timezone
+
         now = timezone.now()
         result = self.calculate_monthly_salary(now.month, now.year)
         # For compatibility with old tests, return only total_salary
-        if isinstance(result, dict) and 'total_salary' in result:
-            return result['total_salary']
+        if isinstance(result, dict) and "total_salary" in result:
+            return result["total_salary"]
         return result
 
     def get_working_days_in_month(self, year, month):
@@ -88,21 +82,20 @@ class Salary(models.Model):
         try:
             _, num_days = calendar.monthrange(year, month)
             working_days = 0
-            
+
             for day in range(1, num_days + 1):
                 current_date = timezone.datetime(year, month, day).date()
-                
+
                 # Check if it's Shabbat (Saturday - 5 in Python) or Sunday (6)
                 if current_date.weekday() in [5, 6]:  # Saturday or Sunday
                     continue
-                    
+
                 # Check if it's a holiday
                 try:
                     holiday = Holiday.objects.filter(
-                        date=current_date, 
-                        is_holiday=True
+                        date=current_date, is_holiday=True
                     ).exists()
-                    
+
                     if not holiday:
                         working_days += 1
                 except Exception as e:
@@ -110,18 +103,18 @@ class Salary(models.Model):
                     logger = logging.getLogger(__name__)
                     logger.warning(f"Holiday check failed for {current_date}: {e}")
                     working_days += 1
-                    
+
             logger = logging.getLogger(__name__)
             logger.info(f"Working days in {year}-{month:02d}: {working_days}")
             return working_days
-            
+
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(f"Error calculating working days for {year}-{month:02d}: {e}")
             # Fallback: approximate working days for 5-day week
             _, num_days = calendar.monthrange(year, month)
             return max(1, int(num_days * 5 / 7))  # Approximate 5-day work week
-    
+
     def get_worked_days_in_month(self, year, month):
         """
         Gets the actual worked days in a given month
@@ -130,64 +123,73 @@ class Salary(models.Model):
             # Get work logs that overlap with the month
             from datetime import date, timedelta
             import calendar
-            
+
             # Calculate exact month boundaries
             start_date = date(year, month, 1)
             _, last_day = calendar.monthrange(year, month)
             end_date = date(year, month, last_day)
-            
+
             work_logs = WorkLog.objects.filter(
                 employee=self.employee,
                 check_in__date__lte=end_date,
                 check_out__date__gte=start_date,
-                check_out__isnull=False
+                check_out__isnull=False,
             )
-            
+
             logger = logging.getLogger(__name__)
-            logger.info(f"Found {work_logs.count()} work logs for {self.employee.get_full_name()} in {year}-{month:02d}")
-            
+            logger.info(
+                f"Found {work_logs.count()} work logs for {self.employee.get_full_name()} in {year}-{month:02d}"
+            )
+
             if not work_logs.exists():
-                logger.info(f"No work logs found for {self.employee.get_full_name()} in {year}-{month:02d}")
+                logger.info(
+                    f"No work logs found for {self.employee.get_full_name()} in {year}-{month:02d}"
+                )
                 return 0
-            
+
             # Get unique dates the employee worked (within the month)
             worked_days = set()
             for log in work_logs:
                 # Count days where work was performed within the month
                 work_start = max(log.check_in.date(), start_date)
                 work_end = min(log.check_out.date(), end_date)
-                
+
                 current_date = work_start
                 while current_date <= work_end:
                     worked_days.add(current_date)
                     current_date += timedelta(days=1)
-            
+
             worked_days_count = len(worked_days)
-            logger.info(f"Worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {worked_days_count}")
+            logger.info(
+                f"Worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {worked_days_count}"
+            )
             return worked_days_count
-            
+
         except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error calculating worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {e}")
+            logger.error(
+                f"Error calculating worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {e}"
+            )
             # Fallback: count unique work session dates
             try:
                 from datetime import date
+
                 start_date = date(year, month, 1)
                 _, last_day = calendar.monthrange(year, month)
                 end_date = date(year, month, last_day)
-                
+
                 work_logs = WorkLog.objects.filter(
                     employee=self.employee,
                     check_in__year=year,
                     check_in__month=month,
-                    check_out__isnull=False
+                    check_out__isnull=False,
                 )
-                
+
                 unique_dates = set()
                 for log in work_logs:
                     if start_date <= log.check_in.date() <= end_date:
                         unique_dates.add(log.check_in.date())
-                
+
                 return len(unique_dates)
             except Exception as fallback_error:
                 logger.error(f"Fallback calculation also failed: {fallback_error}")
@@ -197,11 +199,11 @@ class Salary(models.Model):
         """
         Calculates the monthly salary considering the payment type and Israeli labor laws.
         """
-        if self.calculation_type == 'monthly':
+        if self.calculation_type == "monthly":
             return self._calculate_monthly_fixed_salary(month, year)
-        elif self.calculation_type == 'hourly':
+        elif self.calculation_type == "hourly":
             return self._calculate_hourly_salary(month, year)
-        elif self.calculation_type == 'project':
+        elif self.calculation_type == "project":
             return self._calculate_project_salary(month, year)
         else:
             raise ValueError(f"Unsupported calculation type: {self.calculation_type}")
@@ -214,65 +216,81 @@ class Salary(models.Model):
         """
         # Validate inputs
         if not self.base_salary or self.base_salary <= 0:
-            raise ValueError("Base salary must be set and greater than 0 for monthly calculation")
-        
+            raise ValueError(
+                "Base salary must be set and greater than 0 for monthly calculation"
+            )
+
         try:
             # Get worked hours for overtime calculations
             from payroll.services import PayrollCalculationService
-            
+
             # Use the service to get accurate hour calculations
-            service = PayrollCalculationService(self.employee, year, month, fast_mode=True)
+            service = PayrollCalculationService(
+                self.employee, year, month, fast_mode=True
+            )
             service_result = service.calculate_monthly_salary()
-            
+
             # Extract total hours worked for reporting purposes
-            total_hours_worked = service_result.get('total_hours', Decimal('0'))
-            
+            total_hours_worked = service_result.get("total_hours", Decimal("0"))
+
             # Get worked days and working days for proportional calculation
             worked_days = self.get_worked_days_in_month(year, month)
             working_days_in_month = self.get_working_days_in_month(year, month)
-            
+
             # Calculate proportional base salary
             if working_days_in_month > 0:
-                days_proportion = Decimal(str(worked_days)) / Decimal(str(working_days_in_month))
+                days_proportion = Decimal(str(worked_days)) / Decimal(
+                    str(working_days_in_month)
+                )
                 base_pay = self.base_salary * days_proportion
             else:
-                base_pay = Decimal('0')
-            
+                base_pay = Decimal("0")
+
         except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error calculating monthly fixed salary for employee {self.employee.id}: {e}")
+            logger.error(
+                f"Error calculating monthly fixed salary for employee {self.employee.id}: {e}"
+            )
             # Fallback: use full base salary
             base_pay = self.base_salary
-            total_hours_worked = Decimal('0')
+            total_hours_worked = Decimal("0")
             worked_days = 0
             working_days_in_month = 22  # fallback
-        
+
         # For monthly employees, we still add overtime pay on top of base salary
         extra_pay = self._calculate_extras(month, year)
-        
-        total_salary = base_pay + extra_pay['total_extra']
-        
+
+        total_salary = base_pay + extra_pay["total_extra"]
+
         # Calculate work proportion for reporting
-        standard_monthly_hours = Decimal('182')
-        proportion = total_hours_worked / standard_monthly_hours if standard_monthly_hours > 0 else Decimal('0')
-        proportion = min(proportion, Decimal('1.0'))
-        
+        standard_monthly_hours = Decimal("182")
+        proportion = (
+            total_hours_worked / standard_monthly_hours
+            if standard_monthly_hours > 0
+            else Decimal("0")
+        )
+        proportion = min(proportion, Decimal("1.0"))
+
         # Ensure minimum wage (for a full month only)
-        minimum_wage = Decimal('5300')  # in NIS
-        if self.currency == 'ILS' and proportion >= Decimal('0.9') and total_salary < minimum_wage:
+        minimum_wage = Decimal("5300")  # in NIS
+        if (
+            self.currency == "ILS"
+            and proportion >= Decimal("0.9")
+            and total_salary < minimum_wage
+        ):
             total_salary = minimum_wage
-        
+
         return {
-            'total_salary': round(total_salary, 2),
-            'base_salary': round(base_pay, 2),
-            'total_hours_worked': float(total_hours_worked),
-            'standard_monthly_hours': 182,
-            'work_proportion': round(Decimal(str(proportion * 100)), 2),
-            'worked_days': worked_days,
-            'working_days_in_month': working_days_in_month,
-            **extra_pay
+            "total_salary": round(total_salary, 2),
+            "base_salary": round(base_pay, 2),
+            "total_hours_worked": float(total_hours_worked),
+            "standard_monthly_hours": 182,
+            "work_proportion": round(Decimal(str(proportion * 100)), 2),
+            "worked_days": worked_days,
+            "working_days_in_month": working_days_in_month,
+            **extra_pay,
         }
-        
+
     def _calculate_hourly_salary(self, month, year):
         """
         Calculates hourly salary using the improved PayrollCalculationService.
@@ -280,247 +298,320 @@ class Salary(models.Model):
         """
         # Validate inputs first
         if not self.hourly_rate or self.hourly_rate <= 0:
-            raise ValueError("Hourly rate must be set and greater than 0 for hourly calculation")
-        
+            raise ValueError(
+                "Hourly rate must be set and greater than 0 for hourly calculation"
+            )
+
         try:
             from payroll.services import PayrollCalculationService
-            
+
             # Use the new service for calculation
-            service = PayrollCalculationService(self.employee, year, month, fast_mode=True)
+            service = PayrollCalculationService(
+                self.employee, year, month, fast_mode=True
+            )
             result = service.calculate_monthly_salary()
-            
+
             # Validate service result
-            if not result or 'total_gross_pay' not in result:
+            if not result or "total_gross_pay" not in result:
                 logger = logging.getLogger(__name__)
-                logger.error(f"PayrollCalculationService returned invalid result for employee {self.employee.id}")
+                logger.error(
+                    f"PayrollCalculationService returned invalid result for employee {self.employee.id}"
+                )
                 raise ValueError("PayrollCalculationService returned invalid result")
-            
+
             # Convert to the expected format for backward compatibility
             return {
-                'total_salary': result['total_gross_pay'],
-                'regular_hours': float(result.get('regular_hours', 0)),
-                'overtime_hours': float(result.get('overtime_hours', 0)),
-                'holiday_hours': float(result.get('holiday_hours', 0)),
-                'shabbat_hours': float(result.get('sabbath_hours', 0)),
-                'compensatory_days': result.get('compensatory_days_earned', 0),
-                'warnings': result.get('warnings', []),
-                'legal_violations': result.get('legal_violations', []),
-                'minimum_wage_applied': result.get('minimum_wage_applied', False),
-                'work_sessions_count': result.get('work_sessions_count', 0),
-                'worked_days': result.get('worked_days', 0),
-                'total_hours': float(result.get('total_hours', 0))
+                "total_salary": result["total_gross_pay"],
+                "regular_hours": float(result.get("regular_hours", 0)),
+                "overtime_hours": float(result.get("overtime_hours", 0)),
+                "holiday_hours": float(result.get("holiday_hours", 0)),
+                "shabbat_hours": float(result.get("sabbath_hours", 0)),
+                "compensatory_days": result.get("compensatory_days_earned", 0),
+                "warnings": result.get("warnings", []),
+                "legal_violations": result.get("legal_violations", []),
+                "minimum_wage_applied": result.get("minimum_wage_applied", False),
+                "work_sessions_count": result.get("work_sessions_count", 0),
+                "worked_days": result.get("worked_days", 0),
+                "total_hours": float(result.get("total_hours", 0)),
             }
-            
+
         except ImportError as ie:
             logger = logging.getLogger(__name__)
-            logger.warning(f"PayrollCalculationService not available for employee {self.employee.id}: {ie}")
+            logger.warning(
+                f"PayrollCalculationService not available for employee {self.employee.id}: {ie}"
+            )
             # Fallback to legacy calculation if service is not available
             return self._calculate_hourly_salary_legacy(month, year)
         except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error in PayrollCalculationService for employee {self.employee.id}: {e}")
+            logger.error(
+                f"Error in PayrollCalculationService for employee {self.employee.id}: {e}"
+            )
             # Fallback to legacy calculation if service fails
             return self._calculate_hourly_salary_legacy(month, year)
-    
+
     def _calculate_hourly_salary_legacy(self, month, year):
         """
         Legacy hourly salary calculation method (original implementation)
         """
         # Validate inputs
         if not self.hourly_rate or self.hourly_rate <= 0:
-            raise ValueError("Hourly rate must be set and greater than 0 for hourly calculation")
-        
+            raise ValueError(
+                "Hourly rate must be set and greater than 0 for hourly calculation"
+            )
+
         try:
             # Retrieve all work logs for the month - include sessions that overlap
             from datetime import date
             import calendar
-            
+
             # Calculate exact month boundaries
             start_date = date(year, month, 1)
             _, last_day = calendar.monthrange(year, month)
             end_date = date(year, month, last_day)
-            
+
             # Include work logs that have any overlap with the target month
             work_logs = WorkLog.objects.filter(
                 employee=self.employee,
                 check_in__date__lte=end_date,
                 check_out__date__gte=start_date,
-                check_out__isnull=False  # Only completed sessions
-            ).order_by('check_in')
-            
+                check_out__isnull=False,  # Only completed sessions
+            ).order_by("check_in")
+
         except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error retrieving work logs for employee {self.employee.id}: {e}")
+            logger.error(
+                f"Error retrieving work logs for employee {self.employee.id}: {e}"
+            )
             # Return empty result if we can't get work logs
             return {
-                'total_salary': Decimal('0.00'),
-                'regular_hours': 0,
-                'shabbat_hours': 0,
-                'holiday_hours': 0,
-                'overtime_hours': 0,
-                'compensatory_days': 0,
-                'error': f'Failed to retrieve work logs: {str(e)}'
+                "total_salary": Decimal("0.00"),
+                "regular_hours": 0,
+                "shabbat_hours": 0,
+                "holiday_hours": 0,
+                "overtime_hours": 0,
+                "compensatory_days": 0,
+                "error": f"Failed to retrieve work logs: {str(e)}",
             }
 
-        total_salary = Decimal('0')
+        total_salary = Decimal("0")
         detailed_breakdown = {
-            'regular_hours': 0,
-            'shabbat_hours': 0,
-            'holiday_hours': 0,
-            'overtime_hours': 0,
-            'compensatory_days': 0
+            "regular_hours": 0,
+            "shabbat_hours": 0,
+            "holiday_hours": 0,
+            "overtime_hours": 0,
+            "compensatory_days": 0,
         }
 
         try:
             for log in work_logs:
                 try:
-                    holiday = Holiday.objects.filter(
-                        date=log.check_in.date()
-                    ).first()
+                    holiday = Holiday.objects.filter(date=log.check_in.date()).first()
 
                     hours_worked = log.get_total_hours()
-                    
+
                     # Validate hours_worked - skip if None or invalid
                     if hours_worked is None:
                         logger = logging.getLogger(__name__)
-                        logger.warning(f"Skipping work log {log.id} for employee {self.employee.id}: hours_worked is None")
+                        logger.warning(
+                            f"Skipping work log {log.id} for employee {self.employee.id}: hours_worked is None"
+                        )
                         continue
-                    
+
                     # Validate hourly_rate - should not be None for hourly calculations
                     if self.hourly_rate is None:
                         logger = logging.getLogger(__name__)
-                        logger.error(f"Hourly rate is None for employee {self.employee.id} (salary {self.id})")
+                        logger.error(
+                            f"Hourly rate is None for employee {self.employee.id} (salary {self.id})"
+                        )
                         continue
-                    
+
                     # Convert to Decimal for precise calculations
                     hours_worked = Decimal(str(hours_worked))
-                    
+
                     # Check for maximum workday duration
                     if hours_worked > 12:
                         # warnings
-                        detailed_breakdown['warnings'] = detailed_breakdown.get('warnings', [])
-                        detailed_breakdown['warnings'].append(f"Exceeded maximum workday duration ({log.check_in.date()}): {hours_worked} hours")
+                        detailed_breakdown["warnings"] = detailed_breakdown.get(
+                            "warnings", []
+                        )
+                        detailed_breakdown["warnings"].append(
+                            f"Exceeded maximum workday duration ({log.check_in.date()}): {hours_worked} hours"
+                        )
 
                     if holiday:
                         # Work on a holiday or Shabbat - add a compensatory day
-                        self._add_compensatory_day(log.check_in.date(), holiday.is_shabbat)
-                        detailed_breakdown['compensatory_days'] += 1
+                        self._add_compensatory_day(
+                            log.check_in.date(), holiday.is_shabbat
+                        )
+                        detailed_breakdown["compensatory_days"] += 1
 
                         # Work on a holiday
                         if holiday.is_shabbat:
                             # Shabbat - 150% for the first 8 hours
-                            if hours_worked <= Decimal('8'):
-                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['shabbat_hours'] += float(hours_worked)
+                            if hours_worked <= Decimal("8"):
+                                total_salary += hours_worked * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["shabbat_hours"] += float(
+                                    hours_worked
+                                )
                             else:
                                 # First 8 hours at 150%
-                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['shabbat_hours'] += 8
-                                
+                                total_salary += Decimal("8") * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["shabbat_hours"] += 8
+
                                 # Remaining hours at higher rates
-                                overtime_hours = hours_worked - Decimal('8')
-                                total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
-                                detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                                overtime_hours = hours_worked - Decimal("8")
+                                total_salary += overtime_hours * (
+                                    self.hourly_rate * Decimal("1.75")
+                                )
+                                detailed_breakdown["overtime_hours"] += float(
+                                    overtime_hours
+                                )
 
                         elif holiday.is_holiday:
                             # Holiday - 150% for the first 8 hours
-                            if hours_worked <= Decimal('8'):
-                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['holiday_hours'] += float(hours_worked)
+                            if hours_worked <= Decimal("8"):
+                                total_salary += hours_worked * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["holiday_hours"] += float(
+                                    hours_worked
+                                )
                             else:
                                 # 150% for the first 8 hours
-                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['holiday_hours'] += 8
-                                
+                                total_salary += Decimal("8") * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["holiday_hours"] += 8
+
                                 # Next 2 hours at 175%
-                                overtime_hours_1 = min(hours_worked - Decimal('8'), Decimal('2'))
-                                total_salary += overtime_hours_1 * (self.hourly_rate * Decimal('1.75'))
-                                detailed_breakdown['overtime_hours'] += float(overtime_hours_1)
-                                
+                                overtime_hours_1 = min(
+                                    hours_worked - Decimal("8"), Decimal("2")
+                                )
+                                total_salary += overtime_hours_1 * (
+                                    self.hourly_rate * Decimal("1.75")
+                                )
+                                detailed_breakdown["overtime_hours"] += float(
+                                    overtime_hours_1
+                                )
+
                                 # Remaining hours at 200%
-                                if hours_worked > Decimal('10'):
-                                    overtime_hours_2 = hours_worked - Decimal('10')
-                                    total_salary += overtime_hours_2 * (self.hourly_rate * Decimal('2.0'))
-                                    detailed_breakdown['overtime_hours'] += float(overtime_hours_2)
+                                if hours_worked > Decimal("10"):
+                                    overtime_hours_2 = hours_worked - Decimal("10")
+                                    total_salary += overtime_hours_2 * (
+                                        self.hourly_rate * Decimal("2.0")
+                                    )
+                                    detailed_breakdown["overtime_hours"] += float(
+                                        overtime_hours_2
+                                    )
                     else:
                         # Check for Sabbath work using precise sunset times
                         work_date = log.check_in.date()
                         work_datetime = log.check_in
-                        
+
                         is_sabbath_work = self._is_sabbath_work_precise(work_datetime)
-                        
+
                         if is_sabbath_work:
                             # Add compensatory day for Sabbath work
                             self._add_compensatory_day(work_date, True)
-                            detailed_breakdown['compensatory_days'] += 1
-                    
+                            detailed_breakdown["compensatory_days"] += 1
+
                             # Sabbath - 150% for the first 8 hours
-                            if hours_worked <= Decimal('8'):
-                                total_salary += hours_worked * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['shabbat_hours'] += float(hours_worked)
+                            if hours_worked <= Decimal("8"):
+                                total_salary += hours_worked * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["shabbat_hours"] += float(
+                                    hours_worked
+                                )
                             else:
                                 # First 8 hours at 150%
-                                total_salary += Decimal('8') * (self.hourly_rate * Decimal('1.5'))
-                                detailed_breakdown['shabbat_hours'] += 8
-                                
+                                total_salary += Decimal("8") * (
+                                    self.hourly_rate * Decimal("1.5")
+                                )
+                                detailed_breakdown["shabbat_hours"] += 8
+
                                 # Remaining hours at higher rates
-                                overtime_hours = hours_worked - Decimal('8')
-                                total_salary += overtime_hours * (self.hourly_rate * Decimal('1.75'))
-                                detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                                overtime_hours = hours_worked - Decimal("8")
+                                total_salary += overtime_hours * (
+                                    self.hourly_rate * Decimal("1.75")
+                                )
+                                detailed_breakdown["overtime_hours"] += float(
+                                    overtime_hours
+                                )
                         else:
                             # Work on a regular weekday
-                            regular_hours = min(hours_worked, Decimal('8'))
+                            regular_hours = min(hours_worked, Decimal("8"))
                             total_salary += regular_hours * self.hourly_rate
-                            detailed_breakdown['regular_hours'] += float(regular_hours)
+                            detailed_breakdown["regular_hours"] += float(regular_hours)
 
                             # Overtime hours
-                            if hours_worked > Decimal('8'):
-                                overtime_hours = hours_worked - Decimal('8')
-                                
+                            if hours_worked > Decimal("8"):
+                                overtime_hours = hours_worked - Decimal("8")
+
                                 # First 2 overtime hours
-                                if overtime_hours <= Decimal('2'):
-                                    total_salary += overtime_hours * (self.hourly_rate * Decimal('1.25'))
-                                    detailed_breakdown['overtime_hours'] += float(overtime_hours)
+                                if overtime_hours <= Decimal("2"):
+                                    total_salary += overtime_hours * (
+                                        self.hourly_rate * Decimal("1.25")
+                                    )
+                                    detailed_breakdown["overtime_hours"] += float(
+                                        overtime_hours
+                                    )
                                 else:
                                     # First 2 hours at 125%
-                                    total_salary += Decimal('2') * (self.hourly_rate * Decimal('1.25'))
-                                    detailed_breakdown['overtime_hours'] += 2
-                                    
+                                    total_salary += Decimal("2") * (
+                                        self.hourly_rate * Decimal("1.25")
+                                    )
+                                    detailed_breakdown["overtime_hours"] += 2
+
                                     # Remaining overtime at 150%
-                                    remaining_overtime = overtime_hours - Decimal('2')
-                                    total_salary += remaining_overtime * (self.hourly_rate * Decimal('1.5'))
-                                    detailed_breakdown['overtime_hours'] += float(remaining_overtime)
-                
+                                    remaining_overtime = overtime_hours - Decimal("2")
+                                    total_salary += remaining_overtime * (
+                                        self.hourly_rate * Decimal("1.5")
+                                    )
+                                    detailed_breakdown["overtime_hours"] += float(
+                                        remaining_overtime
+                                    )
+
                 except Exception as log_error:
                     logger = logging.getLogger(__name__)
-                    logger.error(f"Error processing work log {log.id} for employee {self.employee.id}: {log_error}")
+                    logger.error(
+                        f"Error processing work log {log.id} for employee {self.employee.id}: {log_error}"
+                    )
                     # Continue with next log instead of failing entire calculation
                     continue
-        
+
         except Exception as calc_error:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error in hourly salary calculation for employee {self.employee.id}: {calc_error}")
+            logger.error(
+                f"Error in hourly salary calculation for employee {self.employee.id}: {calc_error}"
+            )
             # Return fallback result
             return {
-                'total_salary': Decimal('0.00'),
-                'regular_hours': 0,
-                'shabbat_hours': 0,
-                'holiday_hours': 0,
-                'overtime_hours': 0,
-                'compensatory_days': 0,
-                'error': str(calc_error)
+                "total_salary": Decimal("0.00"),
+                "regular_hours": 0,
+                "shabbat_hours": 0,
+                "holiday_hours": 0,
+                "overtime_hours": 0,
+                "compensatory_days": 0,
+                "error": str(calc_error),
             }
 
         # Minimum wage check - updated for 5-day work week
-        minimum_wage = Decimal('5300')  # Minimum wage in Israel (NIS)
-        if self.currency == 'ILS' and total_salary < minimum_wage and detailed_breakdown['regular_hours'] >= 182:  # Standard monthly hours for 5-day week
+        minimum_wage = Decimal("5300")  # Minimum wage in Israel (NIS)
+        if (
+            self.currency == "ILS"
+            and total_salary < minimum_wage
+            and detailed_breakdown["regular_hours"] >= 182
+        ):  # Standard monthly hours for 5-day week
             total_salary = minimum_wage
-            detailed_breakdown['minimum_wage_applied'] = True
+            detailed_breakdown["minimum_wage_applied"] = True
 
-        return {
-            'total_salary': round(total_salary, 2),
-            **detailed_breakdown
-        }
+        return {"total_salary": round(total_salary, 2), **detailed_breakdown}
 
     def _calculate_project_salary(self, month, year):
         """
@@ -529,9 +620,9 @@ class Salary(models.Model):
         # If the project is completed, pay the full amount
         if self.project_completed:
             return {
-                'total_salary': self.base_salary,
-                'project_status': 'Completed',
-                'payment_type': 'Full payment'
+                "total_salary": self.base_salary,
+                "project_status": "Completed",
+                "payment_type": "Full payment",
             }
 
         # Otherwise, calculate by phases or progress
@@ -541,9 +632,9 @@ class Salary(models.Model):
         # Example: linear calculation from project start to end
         if not self.project_start_date or not self.project_end_date:
             return {
-                'total_salary': Decimal('0'),
-                'project_status': 'Not configured',
-                'error': 'Project start and end dates are not set'
+                "total_salary": Decimal("0"),
+                "project_status": "Not configured",
+                "error": "Project start and end dates are not set",
             }
 
         # Calculate project progress
@@ -554,29 +645,29 @@ class Salary(models.Model):
         # If the current date is before project start
         if current_date < start_date:
             return {
-                'total_salary': Decimal('0'),
-                'project_status': 'Not started',
-                'start_date': start_date,
-                'end_date': end_date
+                "total_salary": Decimal("0"),
+                "project_status": "Not started",
+                "start_date": start_date,
+                "end_date": end_date,
             }
 
         # If the current date is after project end
         if current_date > end_date:
             if not self.project_completed:
                 return {
-                    'total_salary': Decimal('0'),
-                    'project_status': 'Overdue',
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'message': 'Project is overdue but not marked as completed'
+                    "total_salary": Decimal("0"),
+                    "project_status": "Overdue",
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "message": "Project is overdue but not marked as completed",
                 }
             else:
                 return {
-                    'total_salary': self.base_salary,
-                    'project_status': 'Completed',
-                    'payment_type': 'Full payment'
+                    "total_salary": self.base_salary,
+                    "project_status": "Completed",
+                    "payment_type": "Full payment",
                 }
-                
+
         # Calculate the portion of the project completed in the current month
         total_days = (end_date - start_date).days
 
@@ -589,17 +680,23 @@ class Salary(models.Model):
         days_in_month = (month_end - month_start).days + 1
 
         # Portion of the overall project completed this month
-        proportion = Decimal(str(days_in_month / total_days)) if total_days > 0 else Decimal('0')
+        proportion = (
+            Decimal(str(days_in_month / total_days)) if total_days > 0 else Decimal("0")
+        )
 
         # Monthly salary
         monthly_salary = self.base_salary * proportion
 
         return {
-            'total_salary': round(monthly_salary, 2),
-            'project_status': 'In progress',
-            'start_date': start_date,
-            'end_date': end_date,
-            'progress_percent': round(Decimal(str((days_in_month / total_days) * 100)), 2) if total_days > 0 else Decimal('0')
+            "total_salary": round(monthly_salary, 2),
+            "project_status": "In progress",
+            "start_date": start_date,
+            "end_date": end_date,
+            "progress_percent": (
+                round(Decimal(str((days_in_month / total_days) * 100)), 2)
+                if total_days > 0
+                else Decimal("0")
+            ),
         }
 
     def _calculate_extras(self, month, year):
@@ -608,43 +705,41 @@ class Salary(models.Model):
         """
         # For monthly employees, derive hourly rate from base salary
         effective_hourly_rate = self.hourly_rate
-        
-        if self.calculation_type == 'monthly' and self.base_salary:
+
+        if self.calculation_type == "monthly" and self.base_salary:
             # Calculate hourly rate from monthly salary (185 hours per month standard)
-            standard_monthly_hours = Decimal('185')
+            standard_monthly_hours = Decimal("185")
             effective_hourly_rate = self.base_salary / standard_monthly_hours
         elif not self.hourly_rate or self.hourly_rate <= 0:
             logger = logging.getLogger(__name__)
-            logger.warning(f"Employee {self.employee.id} has no valid hourly_rate - skipping extras calculation")
+            logger.warning(
+                f"Employee {self.employee.id} has no valid hourly_rate - skipping extras calculation"
+            )
             return {
-                'total_extra': Decimal('0.00'),
-                'shabbat_hours': 0,
-                'holiday_hours': 0,
-                'overtime_hours': 0,
-                'compensatory_days': 0
+                "total_extra": Decimal("0.00"),
+                "shabbat_hours": 0,
+                "holiday_hours": 0,
+                "overtime_hours": 0,
+                "compensatory_days": 0,
             }
-        
+
         work_logs = WorkLog.objects.filter(
-            employee=self.employee,
-            check_in__year=year,
-            check_in__month=month
+            employee=self.employee, check_in__year=year, check_in__month=month
         )
 
-        extra_pay = Decimal('0')
+        extra_pay = Decimal("0")
         detailed = {
-            'shabbat_hours': 0,
-            'holiday_hours': 0,
-            'overtime_hours': 0,
-            'compensatory_days': 0
+            "shabbat_hours": 0,
+            "holiday_hours": 0,
+            "overtime_hours": 0,
+            "compensatory_days": 0,
         }
 
         for log in work_logs:
-            holiday = Holiday.objects.filter(
-                date=log.check_in.date()
-            ).first()
+            holiday = Holiday.objects.filter(date=log.check_in.date()).first()
 
             hours_worked = log.get_total_hours()
-            
+
             # Skip if hours_worked is None or invalid
             if hours_worked is None or hours_worked <= 0:
                 logger = logging.getLogger(__name__)
@@ -654,17 +749,17 @@ class Salary(models.Model):
             if holiday:
                 # Add compensatory day
                 self._add_compensatory_day(log.check_in.date(), holiday.is_shabbat)
-                detailed['compensatory_days'] += 1
+                detailed["compensatory_days"] += 1
 
                 # Bonuses for working on Shabbat/holiday
                 if holiday.is_shabbat:
                     # Shabbat premium - 50% bonus only (since base salary already paid)
-                    extra_pay += hours_worked * (effective_hourly_rate * Decimal('0.5'))
-                    detailed['shabbat_hours'] += float(hours_worked)
+                    extra_pay += hours_worked * (effective_hourly_rate * Decimal("0.5"))
+                    detailed["shabbat_hours"] += float(hours_worked)
                 elif holiday.is_holiday:
                     # Holiday premium - 50% bonus only (since base salary already paid)
-                    extra_pay += hours_worked * (effective_hourly_rate * Decimal('0.5'))
-                    detailed['holiday_hours'] += float(hours_worked)
+                    extra_pay += hours_worked * (effective_hourly_rate * Decimal("0.5"))
+                    detailed["holiday_hours"] += float(hours_worked)
 
             # Overtime bonuses
             if hours_worked > 8:
@@ -672,96 +767,104 @@ class Salary(models.Model):
 
                 # First 2 hours - 25% extra
                 overtime_1 = min(overtime_hours, 2)
-                extra_pay += overtime_1 * (effective_hourly_rate * Decimal('0.25'))  # bonus only
+                extra_pay += overtime_1 * (
+                    effective_hourly_rate * Decimal("0.25")
+                )  # bonus only
 
                 # Remaining hours - 50% extra
                 overtime_2 = max(0, overtime_hours - 2)
-                extra_pay += overtime_2 * (effective_hourly_rate * Decimal('0.5'))  # bonus only
+                extra_pay += overtime_2 * (
+                    effective_hourly_rate * Decimal("0.5")
+                )  # bonus only
 
-                detailed['overtime_hours'] += float(overtime_hours)
+                detailed["overtime_hours"] += float(overtime_hours)
 
-        return {
-            'total_extra': round(extra_pay, 2),
-            **detailed
-        }
-    
+        return {"total_extra": round(extra_pay, 2), **detailed}
+
     def _add_compensatory_day(self, work_date, is_shabbat):
         """
         Adds a compensatory day for working on a holiday or Shabbat
         """
-        reason = 'shabbat' if is_shabbat else 'holiday'
+        reason = "shabbat" if is_shabbat else "holiday"
 
         # Check if a compensatory day has already been added for this specific reason
         exists = CompensatoryDay.objects.filter(
-            employee=self.employee,
-            date_earned=work_date,
-            reason=reason
+            employee=self.employee, date_earned=work_date, reason=reason
         ).exists()
 
         if not exists:
             CompensatoryDay.objects.create(
-                employee=self.employee,
-                date_earned=work_date,
-                reason=reason
+                employee=self.employee, date_earned=work_date, reason=reason
             )
-            
+
             # Log the creation for audit purposes
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.info(f"Created compensatory day for {self.employee.get_full_name()} "
-                       f"on {work_date} (reason: {reason})")
+            logger.info(
+                f"Created compensatory day for {self.employee.get_full_name()} "
+                f"on {work_date} (reason: {reason})"
+            )
 
     def clean(self):
         """
         Validates salary fields based on calculation_type
         """
         super().clean()
-        
-        if self.calculation_type == 'hourly':
+
+        if self.calculation_type == "hourly":
             # For hourly type: hourly_rate required, base_salary should be null/0
             if not self.hourly_rate or self.hourly_rate <= 0:
-                raise ValidationError({
-                    'hourly_rate': 'Hourly rate is required and must be greater than 0 for hourly calculation type.'
-                })
+                raise ValidationError(
+                    {
+                        "hourly_rate": "Hourly rate is required and must be greater than 0 for hourly calculation type."
+                    }
+                )
             if self.base_salary and self.base_salary > 0:
-                raise ValidationError({
-                    'base_salary': 'Base salary should be empty (null/0) for hourly calculation type.'
-                })
-                
-        elif self.calculation_type == 'monthly':
+                raise ValidationError(
+                    {
+                        "base_salary": "Base salary should be empty (null/0) for hourly calculation type."
+                    }
+                )
+
+        elif self.calculation_type == "monthly":
             # For monthly type: base_salary required, hourly_rate should be null/0
             if not self.base_salary or self.base_salary <= 0:
-                raise ValidationError({
-                    'base_salary': 'Base salary is required and must be greater than 0 for monthly calculation type.'
-                })
+                raise ValidationError(
+                    {
+                        "base_salary": "Base salary is required and must be greater than 0 for monthly calculation type."
+                    }
+                )
             if self.hourly_rate and self.hourly_rate > 0:
-                raise ValidationError({
-                    'hourly_rate': 'Hourly rate should be empty (null/0) for monthly calculation type.'
-                })
-                
-        elif self.calculation_type == 'project':
+                raise ValidationError(
+                    {
+                        "hourly_rate": "Hourly rate should be empty (null/0) for monthly calculation type."
+                    }
+                )
+
+        elif self.calculation_type == "project":
             # For project type: exactly one field should be filled
             has_base_salary = self.base_salary and self.base_salary > 0
             has_hourly_rate = self.hourly_rate and self.hourly_rate > 0
-            
+
             if not has_base_salary and not has_hourly_rate:
                 raise ValidationError(
-                    'For project calculation type, either base_salary (for fixed-bid projects) '
-                    'or hourly_rate (for hourly projects) must be specified.'
+                    "For project calculation type, either base_salary (for fixed-bid projects) "
+                    "or hourly_rate (for hourly projects) must be specified."
                 )
             if has_base_salary and has_hourly_rate:
                 raise ValidationError(
-                    'For project calculation type, specify either base_salary OR hourly_rate, not both.'
+                    "For project calculation type, specify either base_salary OR hourly_rate, not both."
                 )
-                
+
             # Project dates validation
             if not self.project_start_date or not self.project_end_date:
                 raise ValidationError(
-                    'Project start and end dates must be specified for project-based payment.'
+                    "Project start and end dates must be specified for project-based payment."
                 )
             if self.project_start_date > self.project_end_date:
                 raise ValidationError(
-                    'Project start date cannot be later than end date.'
+                    "Project start date cannot be later than end date."
                 )
 
     def validate_constraints(self):
@@ -777,7 +880,7 @@ class Salary(models.Model):
         weekly_work_logs = WorkLog.objects.filter(
             employee=self.employee,
             check_in__date__gte=start_of_week,
-            check_in__date__lte=end_of_week
+            check_in__date__lte=end_of_week,
         )
 
         # Check for weekly overtime limit - updated for 5-day work week
@@ -789,72 +892,77 @@ class Salary(models.Model):
         # 5-day work week: max 42 regular hours + 16 overtime hours = 58 total
         max_weekly_hours = 58
         if weekly_hours > max_weekly_hours:
-            raise ValidationError(f"Exceeded maximum weekly hours ({max_weekly_hours} hours) for 5-day work week")
+            raise ValidationError(
+                f"Exceeded maximum weekly hours ({max_weekly_hours} hours) for 5-day work week"
+            )
 
         # Check for maximum daily work hours
         for log in weekly_work_logs:
             if log.get_total_hours() > 12:
-                raise ValidationError(f"Exceeded maximum daily work hours (12 hours) for date {log.check_in.date()}")
+                raise ValidationError(
+                    f"Exceeded maximum daily work hours (12 hours) for date {log.check_in.date()}"
+                )
 
     def _is_sabbath_work_precise(self, work_datetime):
         """
         Check if work occurred during Sabbath using precise sunset times
-        
+
         Args:
             work_datetime (datetime): Work start time
-            
+
         Returns:
             bool: True if work occurred during Sabbath
         """
         work_date = work_datetime.date()
         work_time = work_datetime.time()
-        
+
         # Check for registered Sabbath in Holiday model first
         sabbath_holiday = Holiday.objects.filter(
-            date=work_date,
-            is_shabbat=True
+            date=work_date, is_shabbat=True
         ).first()
-        
+
         if sabbath_holiday and sabbath_holiday.start_time and sabbath_holiday.end_time:
             # Use precise times from database if available
             import pytz
-            
+
             # Convert database times to Israel timezone
-            israel_tz = pytz.timezone('Asia/Jerusalem')
+            israel_tz = pytz.timezone("Asia/Jerusalem")
             start_datetime_israel = sabbath_holiday.start_time.astimezone(israel_tz)
             end_datetime_israel = sabbath_holiday.end_time.astimezone(israel_tz)
-            
+
             # Ensure work_datetime is timezone-aware and in Israel timezone
             if work_datetime.tzinfo is None:
                 work_datetime = timezone.make_aware(work_datetime)
             work_datetime_israel = work_datetime.astimezone(israel_tz)
-            
+
             # Handle Sabbath spanning midnight (Friday evening to Saturday evening)
             if work_date.weekday() == 4:  # Friday
                 return work_datetime_israel >= start_datetime_israel
             elif work_date.weekday() == 5:  # Saturday
                 return work_datetime_israel <= end_datetime_israel
-        
+
         # Fallback: use SunriseSunsetService for precise calculation
         try:
             if work_date.weekday() == 4:  # Friday
                 shabbat_times = SunriseSunsetService.get_shabbat_times(work_date)
-                if not shabbat_times.get('is_estimated', True):
+                if not shabbat_times.get("is_estimated", True):
                     from datetime import datetime
                     import pytz
-                    
+
                     # Parse UTC time from API
-                    shabbat_start_utc = datetime.fromisoformat(shabbat_times['start'].replace('Z', '+00:00'))
-                    
+                    shabbat_start_utc = datetime.fromisoformat(
+                        shabbat_times["start"].replace("Z", "+00:00")
+                    )
+
                     # Convert to Israel timezone (UTC+2/UTC+3)
-                    israel_tz = pytz.timezone('Asia/Jerusalem')
+                    israel_tz = pytz.timezone("Asia/Jerusalem")
                     shabbat_start_local = shabbat_start_utc.astimezone(israel_tz)
-                    
+
                     # Ensure work_datetime is timezone-aware
                     if work_datetime.tzinfo is None:
                         work_datetime = timezone.make_aware(work_datetime)
                     work_local = work_datetime.astimezone(israel_tz)
-                    
+
                     return work_local >= shabbat_start_local
                 else:
                     # Fallback to 18:00 if API fails
@@ -862,7 +970,7 @@ class Salary(models.Model):
             elif work_date.weekday() == 5:  # Saturday
                 # All Saturday work is Sabbath work
                 return True
-                
+
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.warning(f"Error checking precise Sabbath times for {work_date}: {e}")
@@ -871,7 +979,7 @@ class Salary(models.Model):
                 return True
             elif work_date.weekday() == 5:
                 return True
-                
+
         return False
 
     def __str__(self):
@@ -879,66 +987,83 @@ class Salary(models.Model):
 
     def save(self, *args, **kwargs):
         from django.conf import settings
-        
+
         # Track if this is a brand new record
         is_new_record = not self.pk
-        
+
         # Only auto-set calculation type for brand new records
         if is_new_record:
             employment_type_mapping = {
-                'hourly': 'hourly',
-                'full_time': 'monthly',
-                'part_time': 'monthly', 
-                'contract': 'monthly'
+                "hourly": "hourly",
+                "full_time": "monthly",
+                "part_time": "monthly",
+                "contract": "monthly",
             }
-            
+
             # Only auto-convert in specific scenarios
-            expected_calc_type = employment_type_mapping.get(self.employee.employment_type, 'hourly')
-            
+            expected_calc_type = employment_type_mapping.get(
+                self.employee.employment_type, "hourly"
+            )
+
             should_convert = False
             new_calculation_type = None
-            
+
             # Scenario 1: Project payroll disabled and calculation_type is 'project' -> convert to expected type
-            if (self.calculation_type == 'project' and 
-                not settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False)):
+            if self.calculation_type == "project" and not settings.FEATURE_FLAGS.get(
+                "ENABLE_PROJECT_PAYROLL", False
+            ):
                 should_convert = True
                 new_calculation_type = expected_calc_type
-            
+
             # Scenario 2: Using model default calculation_type ('hourly') but have fields for a different type
             # This handles cases where objects are created with base_salary but no explicit calculation_type
-            elif (self.calculation_type == 'hourly' and  # Using default
-                  self.base_salary and not self.hourly_rate and  # Have monthly-style fields
-                  expected_calc_type == 'monthly'):  # Employee should be monthly
+            elif (
+                self.calculation_type == "hourly"  # Using default
+                and self.base_salary
+                and not self.hourly_rate  # Have monthly-style fields
+                and expected_calc_type == "monthly"
+            ):  # Employee should be monthly
                 should_convert = True
-                new_calculation_type = 'monthly'
-            
+                new_calculation_type = "monthly"
+
             if should_convert:
                 old_calculation_type = self.calculation_type
                 self.calculation_type = new_calculation_type
-                
+
                 # Adjust fields to match the new calculation type
-                if new_calculation_type == 'hourly' and self.base_salary and not self.hourly_rate:
+                if (
+                    new_calculation_type == "hourly"
+                    and self.base_salary
+                    and not self.hourly_rate
+                ):
                     # Convert base_salary to hourly_rate (rough estimate: base_salary / 180 hours per month)
-                    self.hourly_rate = self.base_salary / Decimal('180')
+                    self.hourly_rate = self.base_salary / Decimal("180")
                     self.base_salary = None
-                elif new_calculation_type == 'monthly' and self.hourly_rate and not self.base_salary:
+                elif (
+                    new_calculation_type == "monthly"
+                    and self.hourly_rate
+                    and not self.base_salary
+                ):
                     # Convert hourly_rate to base_salary (rough estimate: hourly_rate * 180 hours per month)
-                    self.base_salary = self.hourly_rate * Decimal('180')
+                    self.base_salary = self.hourly_rate * Decimal("180")
                     self.hourly_rate = None
-                        
-            elif self.calculation_type not in ['hourly', 'monthly', 'project']:
+
+            elif self.calculation_type not in ["hourly", "monthly", "project"]:
                 # Set calculation type based on employee's employment type only if invalid
                 self.calculation_type = employment_type_mapping.get(
-                    self.employee.employment_type, 'hourly')
+                    self.employee.employment_type, "hourly"
+                )
 
         # Validate salary fields based on calculation_type
         # Skip validation if explicitly requested (for test compatibility)
-        skip_validation = kwargs.pop('skip_validation', False)
+        skip_validation = kwargs.pop("skip_validation", False)
         if not skip_validation:
             # For existing project types when feature is disabled, skip validation to allow updates
-            if (not is_new_record and 
-                self.calculation_type == 'project' and 
-                not settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False)):
+            if (
+                not is_new_record
+                and self.calculation_type == "project"
+                and not settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False)
+            ):
                 pass  # Skip validation for existing project salaries
             else:
                 self.clean()
@@ -948,12 +1073,15 @@ class Salary(models.Model):
 
 class CompensatoryDay(models.Model):
     """Compensatory days for working on Shabbat or holidays"""
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='compensatory_days')
+
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name="compensatory_days"
+    )
     date_earned = models.DateField()
-    reason = models.CharField(max_length=50, choices=[
-        ('shabbat', 'Work on Shabbat'),
-        ('holiday', 'Work on Holiday')
-    ])
+    reason = models.CharField(
+        max_length=50,
+        choices=[("shabbat", "Work on Shabbat"), ("holiday", "Work on Holiday")],
+    )
     date_used = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -964,254 +1092,220 @@ class CompensatoryDay(models.Model):
     class Meta:
         verbose_name = "Compensatory Day"
         verbose_name_plural = "Compensatory Days"
-        ordering = ['-date_earned']
+        ordering = ["-date_earned"]
 
 
 class DailyPayrollCalculation(models.Model):
     """Store daily payroll calculations for quick access"""
+
     employee = models.ForeignKey(
-        Employee, 
-        on_delete=models.CASCADE, 
-        related_name='daily_payroll_calculations'
+        Employee, on_delete=models.CASCADE, related_name="daily_payroll_calculations"
     )
     work_date = models.DateField(db_index=True)
-    
+
     # Hours worked
     regular_hours = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=5, decimal_places=2, default=Decimal("0")
     )
     overtime_hours_1 = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='First 2 overtime hours at 125%'
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="First 2 overtime hours at 125%",
     )
     overtime_hours_2 = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='Additional overtime hours at 150%'
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Additional overtime hours at 150%",
     )
     # Sabbath-specific hours
     sabbath_regular_hours = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=Decimal('0'),
-        help_text='Regular hours worked during Sabbath at 150%'
+        default=Decimal("0"),
+        help_text="Regular hours worked during Sabbath at 150%",
     )
     # Sabbath-specific overtime hours (higher rates: 175% and 200%)
     sabbath_overtime_hours_1 = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='First 2 sabbath overtime hours at 175%'
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="First 2 sabbath overtime hours at 175%",
     )
     sabbath_overtime_hours_2 = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='Additional sabbath overtime hours at 200%'
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Additional sabbath overtime hours at 200%",
     )
     night_hours = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=5, decimal_places=2, default=Decimal("0")
     )
-    
+
     # Payment amounts
     regular_pay = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=10, decimal_places=2, default=Decimal("0")
     )
     overtime_pay_1 = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=10, decimal_places=2, default=Decimal("0")
     )
     overtime_pay_2 = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=10, decimal_places=2, default=Decimal("0")
     )
     # Sabbath-specific overtime payments
     sabbath_overtime_pay_1 = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='Payment for first 2 sabbath overtime hours at 175%'
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Payment for first 2 sabbath overtime hours at 175%",
     )
     sabbath_overtime_pay_2 = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='Payment for additional sabbath overtime hours at 200%'
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Payment for additional sabbath overtime hours at 200%",
     )
     # New unified payment structure
     base_pay = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal('0'),
-        help_text='Base payment: hours × hourly_rate for all employee types'
+        default=Decimal("0"),
+        help_text="Base payment: hours × hourly_rate for all employee types",
     )
     bonus_pay = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal('0'),
-        help_text='All bonus payments: overtime, sabbath, holiday premiums'
+        default=Decimal("0"),
+        help_text="All bonus payments: overtime, sabbath, holiday premiums",
     )
-    
+
     # Legacy fields - keep for backward compatibility
     total_pay = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=10, decimal_places=2, default=Decimal("0")
     )
     total_gross_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0'),
-        help_text='Full gross payment including base salary for monthly employees'
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Full gross payment including base salary for monthly employees",
     )
-    
+
     # Special circumstances
     is_holiday = models.BooleanField(default=False)
     is_sabbath = models.BooleanField(default=False)
     is_night_shift = models.BooleanField(default=False)
     holiday_name = models.CharField(max_length=100, blank=True, null=True)
-    
+
     # Calculation details
     calculation_details = models.JSONField(
-        default=dict, 
-        blank=True,
-        help_text='Detailed breakdown of calculation'
+        default=dict, blank=True, help_text="Detailed breakdown of calculation"
     )
-    
+
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     calculated_by_service = models.CharField(
-        max_length=50, 
-        default='EnhancedPayrollCalculationService'
+        max_length=50, default="EnhancedPayrollCalculationService"
     )
-    
+
     class Meta:
         verbose_name = "Daily Payroll Calculation"
         verbose_name_plural = "Daily Payroll Calculations"
-        unique_together = ['employee', 'work_date']
-        ordering = ['-work_date']
+        unique_together = ["employee", "work_date"]
+        ordering = ["-work_date"]
         indexes = [
-            models.Index(fields=['employee', 'work_date']),
-            models.Index(fields=['work_date']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=["employee", "work_date"]),
+            models.Index(fields=["work_date"]),
+            models.Index(fields=["created_at"]),
         ]
-    
+
     def __str__(self):
         return f"{self.employee.get_full_name()} - {self.work_date} - ₪{self.total_gross_pay}"
-    
+
     @property
     def total_hours(self):
         """Calculate total hours worked"""
-        return (self.regular_hours + self.overtime_hours_1 + 
-                self.overtime_hours_2 + self.sabbath_regular_hours +
-                self.sabbath_overtime_hours_1 + self.sabbath_overtime_hours_2)
+        return (
+            self.regular_hours
+            + self.overtime_hours_1
+            + self.overtime_hours_2
+            + self.sabbath_regular_hours
+            + self.sabbath_overtime_hours_1
+            + self.sabbath_overtime_hours_2
+        )
 
 
 class MonthlyPayrollSummary(models.Model):
     """Store monthly payroll summaries for quick access"""
+
     employee = models.ForeignKey(
-        Employee, 
-        on_delete=models.CASCADE, 
-        related_name='monthly_payroll_summaries'
+        Employee, on_delete=models.CASCADE, related_name="monthly_payroll_summaries"
     )
     year = models.IntegerField()
     month = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(12)]
     )
-    
+
     # Summary data
     total_hours = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=8, decimal_places=2, default=Decimal("0")
     )
     regular_hours = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=8, decimal_places=2, default=Decimal("0")
     )
     overtime_hours = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=8, decimal_places=2, default=Decimal("0")
     )
     holiday_hours = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=8, decimal_places=2, default=Decimal("0")
     )
     sabbath_hours = models.DecimalField(
-        max_digits=8, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=8, decimal_places=2, default=Decimal("0")
     )
-    
+
     # Payment totals
     base_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
     overtime_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
     holiday_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
     sabbath_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
     total_gross_pay = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=Decimal('0')
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
-    
+
     # Additional info
     worked_days = models.IntegerField(default=0)
     compensatory_days_earned = models.IntegerField(default=0)
-    
+
     # Calculation metadata
     calculation_date = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
     calculation_details = models.JSONField(
-        default=dict, 
-        blank=True,
-        help_text='Additional calculation metadata'
+        default=dict, blank=True, help_text="Additional calculation metadata"
     )
-    
+
     class Meta:
         verbose_name = "Monthly Payroll Summary"
         verbose_name_plural = "Monthly Payroll Summaries"
-        unique_together = ['employee', 'year', 'month']
-        ordering = ['-year', '-month']
+        unique_together = ["employee", "year", "month"]
+        ordering = ["-year", "-month"]
         indexes = [
-            models.Index(fields=['employee', 'year', 'month']),
-            models.Index(fields=['year', 'month']),
-            models.Index(fields=['calculation_date']),
+            models.Index(fields=["employee", "year", "month"]),
+            models.Index(fields=["year", "month"]),
+            models.Index(fields=["calculation_date"]),
         ]
-    
+
     def __str__(self):
         return f"{self.employee.get_full_name()} - {self.year}/{self.month:02d} - ₪{self.total_gross_pay}"
-    
+
     @property
     def period_display(self):
         """Return formatted period display"""
