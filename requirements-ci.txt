@@ -1,0 +1,42 @@
+# Core Django dependencies
+asgiref==3.8.1
+Django==5.1.10
+djangorestframework==3.15.2
+django-cors-headers==4.7.0
+django-filter==25.1
+django-redis==5.4.0
+drf-spectacular==0.27.2
+gunicorn==23.0.0
+
+# Database
+dj-database-url==2.1.0
+psycopg2-binary==2.9.10
+pymongo==4.11.1
+redis==5.2.1
+
+# Core Python packages
+certifi==2025.1.31
+charset-normalizer==3.4.1
+click==8.1.8
+dnspython==2.7.0
+idna==3.10
+python-decouple==3.8
+pytz==2025.1
+requests==2.32.4
+sqlparse==0.5.3
+urllib3==2.5.0
+
+# Testing dependencies
+pytest==8.3.4
+pytest-django==4.9.0
+pytest-cov==6.0.0
+pytest-xdist==3.6.0
+pytest-mock==3.14.0
+coverage==7.6.9
+factory-boy==3.3.1
+
+# Essential only (no heavy biometric libs for CI)
+celery==5.3.4
+cryptography==44.0.1
+Pillow==11.1.0
+numpy==2.2.3
