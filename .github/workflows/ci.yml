@@ -66,7 +66,7 @@ jobs:
           libsm6 \
           libxext6 \
           libxrender-dev \
-          libgl1-mesa-glx \
+          libgl1-mesa-dev \
           libopenblas0 \
           build-essential \
           cmake
@@ -331,9 +331,18 @@ jobs:
         pip install -r requirements-ci.txt
         pip install locust
     
+    - name: Set up environment variables
+      run: |
+        echo "SECRET_KEY=test-secret-key-for-performance" >> $GITHUB_ENV
+        echo "DEBUG=False" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_perf" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
+        echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
+        echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
+    
     - name: Set up test environment
       run: |
-        export DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_perf
         python manage.py migrate
         python manage.py collectstatic --noinput
     
@@ -382,18 +391,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-ci.txt
     
+    - name: Set up environment variables
+      run: |
+        echo "SECRET_KEY=test-secret-key-for-migration-check" >> $GITHUB_ENV
+        echo "DEBUG=True" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
+        echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
+        echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
+    
     - name: Check migration consistency
       run: |
-        export DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration
         python manage.py makemigrations --check --dry-run
     
     - name: Run migrations
       run: |
-        export DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration
         python manage.py migrate
     
     - name: Validate migration rollback
       run: |
-        export DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration
         # Test migration rollback scenarios if needed
         echo "Migration validation completed"
