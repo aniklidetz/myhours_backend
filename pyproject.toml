@@ -29,6 +29,9 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 skip_glob = ["*/migrations/*"]
+known_django = ["django"]
+known_first_party = ["users", "worktime", "payroll", "biometrics", "integrations", "core", "myhours", "tests"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "DJANGO", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.flake8]
 max-line-length = 88
