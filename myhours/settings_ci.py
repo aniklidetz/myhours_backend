@@ -2,21 +2,19 @@
 Django settings for CI/CD environment
 """
 
-from .settings import *
 import os
 import sys
-import dj_database_url
+
+# Import everything from base settings first
+from .settings import *
+
+# Override for CI - don't use dj_database_url to avoid parsing issues
 
 # Override settings for CI
 DEBUG = True
 SECRET_KEY = os.environ.get("SECRET_KEY", "test-secret-key-for-ci")
 
-# Database
-DATABASES = {
-    "default": dj_database_url.parse(
-        os.environ.get("DATABASE_URL", "sqlite:///ci_test.db")
-    )
-}
+# Database configuration will be set at the end of this file
 
 # MongoDB (use default if not available)
 MONGO_CONNECTION_STRING = os.environ.get(
@@ -64,3 +62,36 @@ LOGGING = {
 FEATURE_FLAGS = {
     "ENABLE_PROJECT_PAYROLL": True,  # Test with all features enabled
 }
+
+# CRITICAL: Force database configuration at the end to override any imports
+DATABASE_URL_CI = os.environ.get("DATABASE_URL", "sqlite:///ci_test.db")
+if "postgresql://" in DATABASE_URL_CI or "postgres://" in DATABASE_URL_CI:
+    # Extract database name from URL if possible
+    if "myhours_test" in DATABASE_URL_CI:
+        db_name = "myhours_test"
+    elif "myhours_perf" in DATABASE_URL_CI:
+        db_name = "myhours_perf"  
+    elif "myhours_migration" in DATABASE_URL_CI:
+        db_name = "myhours_migration"
+    else:
+        db_name = "myhours_test"
+    
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": db_name,
+            "USER": "postgres",
+            "PASSWORD": "postgres", 
+            "HOST": "localhost",
+            "PORT": "5432",
+        }
+    }
+    print(f"CI: Using PostgreSQL database: {db_name}")
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+    print("CI: Using SQLite in-memory database")

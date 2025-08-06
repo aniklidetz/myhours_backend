@@ -100,7 +100,7 @@ jobs:
         echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
         echo "DEBUG=True" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_test" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_test" >> $GITHUB_ENV
         echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
@@ -166,7 +166,7 @@ jobs:
     - name: Run flake8 (linting)
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --statistics
     
     - name: Run mypy (type checking)
       run: |
@@ -365,7 +365,7 @@ jobs:
         echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-performance" >> $GITHUB_ENV
         echo "DEBUG=False" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_perf" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_perf" >> $GITHUB_ENV
         echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
@@ -441,7 +441,7 @@ jobs:
         echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-migration-check" >> $GITHUB_ENV
         echo "DEBUG=True" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/myhours_migration" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_migration" >> $GITHUB_ENV
         echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
         echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
         echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
