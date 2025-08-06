@@ -14,6 +14,15 @@ from .settings import *
 DEBUG = True
 SECRET_KEY = os.environ.get("SECRET_KEY", "test-secret-key-for-ci")
 
+# Clear any existing DATABASE configuration from base settings
+# This prevents the base settings DATABASE_URL logic from interfering
+DATABASES = {}
+
+# Temporarily clear DATABASE_URL to prevent base settings from using it
+original_database_url = os.environ.get("DATABASE_URL", "")
+if "DATABASE_URL" in os.environ:
+    del os.environ["DATABASE_URL"]
+
 # Database configuration will be set at the end of this file
 
 # MongoDB (use default if not available)
@@ -64,24 +73,25 @@ FEATURE_FLAGS = {
 }
 
 # CRITICAL: Force database configuration at the end to override any imports
-DATABASE_URL_CI = os.environ.get("DATABASE_URL", "sqlite:///ci_test.db")
+# Use the original DATABASE_URL value that was captured before deletion
+DATABASE_URL_CI = original_database_url or "sqlite:///ci_test.db"
 if "postgresql://" in DATABASE_URL_CI or "postgres://" in DATABASE_URL_CI:
     # Extract database name from URL if possible
     if "myhours_test" in DATABASE_URL_CI:
         db_name = "myhours_test"
     elif "myhours_perf" in DATABASE_URL_CI:
-        db_name = "myhours_perf"  
+        db_name = "myhours_perf"
     elif "myhours_migration" in DATABASE_URL_CI:
         db_name = "myhours_migration"
     else:
         db_name = "myhours_test"
-    
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": db_name,
             "USER": "postgres",
-            "PASSWORD": "postgres", 
+            "PASSWORD": "postgres",
             "HOST": "localhost",
             "PORT": "5432",
         }
