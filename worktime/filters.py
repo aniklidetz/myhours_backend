@@ -10,6 +10,7 @@ class WorkLogFilter(django_filters.FilterSet):
     date_to = django_filters.DateFilter(field_name='check_in__date', lookup_expr='lte')
     is_approved = django_filters.BooleanFilter()
     is_suspicious = django_filters.BooleanFilter()
+    check_out__isnull = django_filters.BooleanFilter(field_name='check_out', lookup_expr='isnull')
 
     def filter_by_activity_date(self, queryset, name, value):
         """
@@ -34,4 +35,4 @@ class WorkLogFilter(django_filters.FilterSet):
 
     class Meta:
         model = WorkLog
-        fields = ['employee', 'date', 'date_from', 'date_to', 'is_approved', 'is_suspicious']
+        fields = ['employee', 'date', 'date_from', 'date_to', 'is_approved', 'is_suspicious', 'check_out__isnull']

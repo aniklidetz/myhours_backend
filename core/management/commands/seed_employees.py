@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 from decimal import Decimal
 from datetime import timedelta
 import random
@@ -187,6 +188,23 @@ class Command(BaseCommand):
             }
         ]
         
+        # Check if project payroll is enabled
+        project_payroll_enabled = settings.FEATURE_FLAGS.get("ENABLE_PROJECT_PAYROLL", False)
+        
+        # Convert project employees if feature is disabled
+        project_count = 0
+        for emp_data in employees_data:
+            if emp_data.get('calculation_type') == 'project':
+                project_count += 1
+                if not project_payroll_enabled:
+                    # Convert to hourly
+                    emp_data['calculation_type'] = 'hourly'
+        
+        if project_count > 0 and not project_payroll_enabled:
+            self.stdout.write(self.style.WARNING(
+                f'Project payroll disabled - converting {project_count} project employees to hourly'
+            ))
+        
         total_employees = len(employees_data)
         self.stdout.write(f'Creating {total_employees} employees...')
 
@@ -272,6 +290,7 @@ class Command(BaseCommand):
         for employee in employees:
             pattern = employee._work_pattern
             logs_created = 0
+            last_work_end = None  # Track last work end time for 36-hour validation
             
             # Clear existing work logs for the period to avoid duplicates
             WorkLog.objects.filter(
@@ -283,11 +302,6 @@ class Command(BaseCommand):
             # Generate logs for each day in the period
             current_day = start_date
             while current_day <= current_date:
-                # Skip weekends for most patterns (except sabbath_worker and flexible_hours)
-                if current_day.weekday() >= 5 and pattern not in ['sabbath_worker', 'flexible_hours']:
-                    current_day += timedelta(days=1)
-                    continue
-                
                 # Pattern-specific logic
                 should_work, hours, start_hour = self.get_work_schedule(pattern, current_day)
                 
@@ -301,6 +315,14 @@ class Command(BaseCommand):
                         microsecond=0
                     )
                     
+                    # Ensure 36-hour rest period
+                    if last_work_end:
+                        time_since_last_work = check_in - last_work_end
+                        if time_since_last_work < timedelta(hours=36):
+                            # Skip this day to ensure proper rest
+                            current_day += timedelta(days=1)
+                            continue
+                    
                     # Add lunch break for longer days
                     lunch_break = timedelta(minutes=30) if hours >= 7 else timedelta(0)
                     work_duration = timedelta(hours=hours) + lunch_break
@@ -308,6 +330,11 @@ class Command(BaseCommand):
                     # Add some randomness to work duration (±15 minutes)
                     duration_variance = timedelta(minutes=random.randint(-15, 15))
                     check_out = check_in + work_duration + duration_variance
+                    
+                    # Ensure shifts don't exceed 12 hours
+                    max_duration = timedelta(hours=12)
+                    if check_out - check_in > max_duration:
+                        check_out = check_in + max_duration
                     
                     # Ensure work logs are within reasonable hours
                     if check_out.hour > 23:
@@ -323,6 +350,9 @@ class Command(BaseCommand):
                         notes=f'Generated test data - {pattern} pattern',
                     )
                     logs_created += 1
+                    
+                    # Update last work end time for rest period tracking
+                    last_work_end = timezone.make_aware(check_out) if timezone.is_naive(check_out) else check_out
                 
                 current_day += timedelta(days=1)
             
@@ -348,11 +378,15 @@ class Command(BaseCommand):
         weekday = work_date.weekday()
         
         if pattern == 'overtime_lover':
-            # Works most days with frequent overtime, especially mid-week
-            if weekday in [1, 2, 3]:  # Tuesday-Thursday
-                return True, random.choice([10, 11, 12]), 8
-            else:
-                return True, random.choice([8, 9, 10]), 8
+            # Works most days but respects 36-hour rest period (Friday evening to Sunday morning)
+            if weekday == 4:  # Friday - shorter day
+                return True, random.choice([6, 7, 8]), 8
+            elif weekday in [5, 6]:  # Saturday-Sunday - mandatory rest
+                return False, 0, 0
+            elif weekday in [1, 2, 3]:  # Tuesday-Thursday - longer days but max 12 hours
+                return True, random.choice([10, 11, 11.5]), 8
+            else:  # Monday
+                return True, random.choice([9, 10]), 8
                 
         elif pattern == 'part_time':
             # Works 4 days a week (Monday-Thursday)
@@ -362,24 +396,30 @@ class Command(BaseCommand):
                 return False, 0, 0
                 
         elif pattern == 'night_shifts':
-            # Night shifts with varying schedules
-            night_start = random.choice([22, 23])
-            if night_start >= 22:
-                # Late night shift
-                return True, 8, night_start
+            # Night shifts with varying schedules, respecting 36-hour weekend rest
+            if weekday in [5, 6]:  # Weekend rest
+                return False, 0, 0
+            elif weekday == 4:  # Friday - early finish for weekend rest
+                return True, 6, 22
             else:
-                # Midnight shift  
-                return True, 8, 0
+                night_start = random.choice([22, 23])
+                return True, 8, night_start
                 
         elif pattern == 'sabbath_worker':
-            # Works including weekends, especially busy on weekends
-            if weekday >= 5:  # Weekend
-                return True, random.choice([6, 8, 10]), 9
-            else:
+            # Works including weekends but still needs 36-hour rest period
+            # Takes rest on Monday-Tuesday instead
+            if weekday in [0, 1]:  # Monday-Tuesday rest
+                return False, 0, 0
+            elif weekday >= 5:  # Weekend work
+                return True, random.choice([8, 9, 10]), 9
+            else:  # Wednesday-Friday
                 return True, 8, 9
                 
         elif pattern == 'flexible_hours':
-            # Very irregular schedule
+            # Very irregular schedule but respects weekend rest
+            if weekday in [5, 6]:  # Weekend rest
+                return False, 0, 0
+            
             work_probability = random.random()
             if work_probability < 0.15:  # 15% chance of not working
                 return False, 0, 0
@@ -387,22 +427,26 @@ class Command(BaseCommand):
                 return True, random.choice([4, 6]), random.choice([10, 11, 13])
             elif work_probability < 0.8:  # 40% chance of normal day
                 return True, 8, random.choice([8, 9, 10])
-            else:  # 20% chance of long day
-                return True, random.choice([10, 12]), random.choice([7, 8])
+            else:  # 20% chance of long day (max 11 hours)
+                return True, random.choice([10, 11]), random.choice([7, 8])
                 
         elif pattern == 'business_trips':
-            # Irregular due to travel, sometimes very long days
-            if random.random() < 0.3:  # 30% chance of no work (travel day)
+            # Irregular due to travel but respects legal limits
+            if weekday in [5, 6]:  # Weekend rest even on business trips
                 return False, 0, 0
-            elif random.random() < 0.4:  # 40% chance of long day (client meetings)
-                return True, random.choice([10, 12, 14]), 8
+            elif random.random() < 0.3:  # 30% chance of no work (travel day)
+                return False, 0, 0
+            elif random.random() < 0.4:  # 40% chance of long day (max 12 hours)
+                return True, random.choice([10, 11, 12]), 8
             else:  # Normal day
                 return True, 8, 9
                 
         elif pattern == 'long_sprints':
-            # 2-month sprint cycles - intense periods
+            # 2-month sprint cycles - intense periods but with weekend rest
+            if weekday in [5, 6]:  # Weekend rest
+                return False, 0, 0
             sprint_week = (work_date.day // 7) % 4  # 4-week cycle
-            if sprint_week in [0, 1]:  # First half of sprint - intense
+            if sprint_week in [0, 1]:  # First half of sprint - intense (max 11 hours)
                 return True, random.choice([9, 10, 11]), 8
             else:  # Second half - more normal
                 return True, random.choice([8, 9]), 9
@@ -415,11 +459,11 @@ class Command(BaseCommand):
                 return False, 0, 0
                 
         elif pattern == 'remote_work':
-            # Remote work - more flexible but consistent
+            # Remote work - more flexible but consistent with mandatory weekend rest
             if weekday < 5:  # Weekdays
                 return True, random.choice([7, 8, 9]), random.choice([8, 9, 10])
-            else:
-                return random.choice([True, False]), 4, 10  # Sometimes weekend work
+            else:  # Weekend rest
+                return False, 0, 0
                 
         elif pattern == 'student_hours':
             # 3 hours per day, usually afternoon
@@ -472,3 +516,10 @@ class Command(BaseCommand):
         self.stdout.write(f"Test emails: @test.com domain")
         self.stdout.write(f"Re-run with --clear to reset test data")
         self.stdout.write(f"Add --with-worklogs to generate work history")
+        
+        self.stdout.write(self.style.SUCCESS(
+            "\n✅ All shifts are limited to 12 hours maximum"
+        ))
+        self.stdout.write(self.style.SUCCESS(
+            "✅ All employees have at least 36 consecutive hours of rest per week"
+        ))

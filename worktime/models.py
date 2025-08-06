@@ -5,20 +5,23 @@ from users.models import Employee
 from datetime import timedelta
 import sys
 
+from .querysets import WorkLogQuerySet
+
+
 class WorkLogManager(models.Manager):
     """Custom manager for WorkLog with soft delete support"""
     
     def get_queryset(self):
         """Return only non-deleted records by default"""
-        return super().get_queryset().filter(is_deleted=False)
+        return WorkLogQuerySet(self.model, using=self._db).filter(is_deleted=False)
     
     def all_with_deleted(self):
         """Return all records including soft deleted ones"""
-        return super().get_queryset()
+        return WorkLogQuerySet(self.model, using=self._db)
     
     def deleted_only(self):
         """Return only soft deleted records"""
-        return super().get_queryset().filter(is_deleted=True)
+        return WorkLogQuerySet(self.model, using=self._db).filter(is_deleted=True)
 
 class WorkLog(models.Model):
     """Work time log entry model with improved validation"""
@@ -50,6 +53,42 @@ class WorkLog(models.Model):
         blank=True, 
         null=True,
         help_text="Location where check-out occurred"
+    )
+    
+    # GPS coordinates for location tracking
+    latitude_check_in = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        help_text="Latitude coordinate for check-in location"
+    )
+    longitude_check_in = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        help_text="Longitude coordinate for check-in location"
+    )
+    latitude_check_out = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        help_text="Latitude coordinate for check-out location"
+    )
+    longitude_check_out = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        help_text="Longitude coordinate for check-out location"
+    )
+    
+    # Break time tracking
+    break_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Break time taken during this work session (in minutes)"
     )
     
     # Additional fields for better tracking
@@ -145,11 +184,29 @@ class WorkLog(models.Model):
         return timezone.now() - self.check_in
 
     def get_total_hours(self):
-        """Calculate the total number of hours worked in a shift"""
+        """Calculate the total number of hours worked in a shift, minus break time"""
         from decimal import Decimal
         duration = self.get_duration()
         hours = duration.total_seconds() / 3600
-        return round(Decimal(str(hours)), 2)
+        
+        # Subtract break time
+        break_hours = self.break_minutes / 60.0
+        net_hours = hours - break_hours
+        
+        return round(Decimal(str(net_hours)), 2)
+    
+    def get_overtime_hours(self):
+        """Calculate overtime hours using Israeli labor law"""
+        from .utils import calc_overtime
+        total_hours = self.get_total_hours()
+        return calc_overtime(total_hours)
+    
+    def get_night_hours(self):
+        """Calculate night shift hours (22:00 to 06:00)"""
+        if not self.check_out:
+            return 0.0
+        from .night_shift import night_hours
+        return night_hours(self.check_in, self.check_out)
 
     def is_current_session(self):
         """Check if this is an ongoing work session"""

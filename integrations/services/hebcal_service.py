@@ -4,15 +4,34 @@ from datetime import date, datetime, timedelta
 from django.core.cache import cache
 from integrations.models import Holiday
 from .sunrise_sunset_service import SunriseSunsetService
+from integrations.config.israeli_holidays import is_official_holiday
+from .israeli_holidays_service import IsraeliHolidaysService
 
 logger = logging.getLogger(__name__)
 
 class HebcalService:
-    """Service for working with Hebcal API to retrieve information about Jewish holidays"""
+    """
+    Service for working with Hebcal API to retrieve information about Jewish holidays.
+    
+    Features automatic synchronization on app startup with 7-day caching to prevent
+    excessive API calls. Manual sync can be forced using: python manage.py sync_holidays --force
+    """
     
     BASE_URL = "https://www.hebcal.com/hebcal"
     CACHE_KEY_PREFIX = "hebcal_holidays_"
-    CACHE_TIMEOUT = 60 * 60 * 24 * 30  # 30 days - holidays rarely change
+    CACHE_TIMEOUT = 60 * 60 * 24 * 7  # 7 days as suggested by user
+    
+    @classmethod
+    def _parse_items(cls, raw, year):
+        """Parse and filter holiday items by year and category"""
+        items = [
+            item for item in raw.get("items", [])
+            if item.get("category") == "holiday" and item["date"].startswith(str(year))
+        ]
+        # Debug: log filtered count
+        if len(raw.get("items", [])) != len(items):
+            logger.debug(f"Filtered {len(raw.get('items', []))} → {len(items)} items for year {year}")
+        return items
     
     @classmethod
     def fetch_holidays(cls, year=None, month=None, use_cache=True):
@@ -52,7 +71,7 @@ class HebcalService:
             "maj": "on",  # Major holidays
             "min": "on",  # Minor holidays
             "nx": "on",   # Modern holidays
-            "d": "on"     # Diaspora (galut) holidays
+            "i": "on"     # Israel holidays (not diaspora)
         }
         
         if month:
@@ -64,20 +83,14 @@ class HebcalService:
             response.raise_for_status()
             
             data = response.json()
-            items = data.get("items", [])
             
-            # Filter holidays
-            holidays = [
-                item for item in items 
-                if (item.get('category') == 'holiday' and 
-                    item.get('subcat') in ['major', 'minor'] and 
-                    'Candle' not in item.get('title', ''))
-            ]
+            # Use _parse_items for filtering
+            holidays = cls._parse_items(data, year)
             
             logger.info(f"Successfully retrieved {len(holidays)} holidays")
             
-            # Cache results if enabled
-            if use_cache and holidays:
+            # Cache results if enabled (cache even empty results to avoid repeated API calls)
+            if use_cache:
                 cache.set(cache_key, holidays, cls.CACHE_TIMEOUT)
                 
             return holidays
@@ -114,18 +127,19 @@ class HebcalService:
         return shabbats
             
     @classmethod
-    def sync_holidays_to_db(cls, year=None):
+    def sync_holidays_to_db(cls, year=None, include_weekly_shabbats=True):
         """
         Synchronizes holidays and Shabbats with the database
         
         Args:
             year (int, optional): Year to synchronize. Defaults to the current year.
+            include_weekly_shabbats (bool): Whether to include weekly Shabbats. Defaults to True.
             
         Returns:
             tuple: (created_count, updated_count)
         """
         holidays = cls.fetch_holidays(year, use_cache=True)
-        weekly_shabbats = cls.generate_weekly_shabbats(year)
+        weekly_shabbats = cls.generate_weekly_shabbats(year) if include_weekly_shabbats else []
         
         created_count = 0
         updated_count = 0
@@ -140,7 +154,7 @@ class HebcalService:
         other_holidays = [
             holiday for holiday in holidays 
             if holiday.get('category') == 'holiday' and 
-               holiday.get('subcat') in ['major', 'minor'] and 
+               holiday.get('subcat') in ['major', 'minor', 'modern'] and 
                holiday.get('subcat') != 'shabbat'
         ]
              
@@ -154,7 +168,7 @@ class HebcalService:
                 
                 defaults = {
                     "name": title,
-                    "is_holiday": True,
+                    "is_holiday": False,  # Special Shabbats are not official holidays
                     "is_shabbat": True,
                     "is_special_shabbat": True
                 }
@@ -180,9 +194,12 @@ class HebcalService:
             try:
                 holiday_date = datetime.strptime(holiday_date_str, "%Y-%m-%d").date()
                 
+                # Check if this is an official holiday requiring premium pay
+                requires_premium_pay = is_official_holiday(title)
+                
                 defaults = {
                     "name": title,
-                    "is_holiday": True,
+                    "is_holiday": requires_premium_pay,  # Only official holidays get premium pay
                     "is_shabbat": False,
                     "is_special_shabbat": False
                 }
@@ -230,4 +247,87 @@ class HebcalService:
             except Exception as e:
                 logger.error(f"Error syncing weekly Shabbat on {holiday_date_str}: {e}")
         
+        # Add Israeli national holidays (like Independence Day)
+        try:
+            nat_created, nat_updated = IsraeliHolidaysService.sync_national_holidays(year)
+            created_count += nat_created
+            updated_count += nat_updated
+        except Exception as e:
+            logger.error(f"Error syncing Israeli national holidays: {e}")
+        
         return created_count, updated_count
+    
+    @classmethod
+    def get_holiday_name(cls, holiday_date):
+        """
+        Get the name of a holiday for a specific date
+        
+        Args:
+            holiday_date (date): The date to check for holiday
+            
+        Returns:
+            str or None: Holiday name if found, None otherwise
+        """
+        try:
+            # Check database first
+            holiday = Holiday.objects.filter(date=holiday_date, is_holiday=True).first()
+            if holiday:
+                return holiday.name
+            
+            # Fallback: check API data (use year-level cache for consistency)
+            year = holiday_date.year
+            holidays = cls.fetch_holidays(year, use_cache=True)
+            
+            for holiday_data in holidays:
+                try:
+                    api_date = datetime.strptime(holiday_data.get("date"), "%Y-%m-%d").date()
+                    if api_date == holiday_date:
+                        title = holiday_data.get("title", "")
+                        # Only return the name if it's an official holiday
+                        if is_official_holiday(title):
+                            return title
+                except (ValueError, TypeError):
+                    continue
+                    
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting holiday name for {holiday_date}: {e}")
+            return None
+    
+    @classmethod  
+    def is_holiday(cls, check_date):
+        """
+        Check if a specific date is a holiday
+        
+        Args:
+            check_date (date): The date to check
+            
+        Returns:
+            bool: True if the date is a holiday, False otherwise
+        """
+        try:
+            # Check database first
+            holiday = Holiday.objects.filter(date=check_date, is_holiday=True).exists()
+            if holiday:
+                return True
+            
+            # Fallback: check API data (use year-level cache for consistency)
+            year = check_date.year
+            holidays = cls.fetch_holidays(year, use_cache=True)
+            
+            for holiday_data in holidays:
+                try:
+                    api_date = datetime.strptime(holiday_data.get("date"), "%Y-%m-%d").date()
+                    if api_date == check_date:
+                        # Check if this holiday requires premium pay
+                        title = holiday_data.get("title", "")
+                        return is_official_holiday(title)
+                except (ValueError, TypeError):
+                    continue
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking if {check_date} is holiday: {e}")
+            return False

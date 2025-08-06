@@ -161,7 +161,18 @@ def enhanced_login(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Check if user has employee profile
-        if not hasattr(user, 'employee_profile'):
+        try:
+            employee = user.employees.first()
+            if not employee:
+                return Response({
+                    'error': True,
+                    'code': 'NO_EMPLOYEE_PROFILE',
+                    'message': 'User does not have an employee profile',
+                    'details': None,
+                    'error_id': 'auth_004',
+                    'timestamp': timezone.now().isoformat()
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except AttributeError:
             return Response({
                 'error': True,
                 'code': 'NO_EMPLOYEE_PROFILE',
@@ -170,8 +181,6 @@ def enhanced_login(request):
                 'error_id': 'auth_004',
                 'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        employee = user.employee_profile
         
         # Create or update device token
         ttl_days = getattr(settings, 'AUTH_TOKEN_TTL_DAYS', 7)
@@ -287,7 +296,7 @@ def biometric_verification(request):
                 'timestamp': timezone.now().isoformat()
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        employee = request.user.employee_profile
+        employee = request.user.employees.first()
         device_token = request.device_token
         
         # Get all active embeddings for matching

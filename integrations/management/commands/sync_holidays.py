@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.core.cache import cache
 from integrations.services.hebcal_service import HebcalService
 import logging
 
@@ -21,13 +22,25 @@ class Command(BaseCommand):
             default=1,
             help='Number of future years to sync (defaults to 1)',
         )
+        
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Force sync even if automatic sync was recently done',
+        )
 
     def handle(self, *args, **options):
         year = options['year']
         future_years = options['future']
+        force = options['force']
         
         if not year:
             year = timezone.now().year
+        
+        # Handle force flag
+        if force:
+            cache.delete('holidays_auto_sync_check')
+            self.stdout.write("Force flag used - clearing automatic sync cache")
             
         total_created = 0
         total_updated = 0

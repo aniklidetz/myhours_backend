@@ -1,4 +1,3 @@
-# biometrics/services/mongodb_service.py
 import logging
 from typing import List, Dict, Optional, Tuple
 import numpy as np
@@ -35,8 +34,7 @@ class MongoDBService:
                     self.collection = self.db['face_embeddings']
                     logger.info("Using 'face_embeddings' collection")
                 
-                # Create indexes for better performance
-                self._create_indexes()
+                # Skip index creation - handled by mongodb_repository.py to avoid conflicts
                 logger.info("MongoDB connection established for biometrics")
             else:
                 # Only log error if not testing
@@ -123,7 +121,15 @@ class MongoDBService:
                 }
                 
                 result = self.collection.insert_one(document)
-                logger.info("Face embeddings document created")
+                logger.info(f"Face embeddings document created with ID: {result.inserted_id}")
+                
+                # Verify the document was saved correctly
+                saved_doc = self.collection.find_one({"_id": result.inserted_id})
+                if saved_doc:
+                    logger.info(f"✅ Verified: Document saved for employee_id {saved_doc.get('employee_id')}")
+                else:
+                    logger.error(f"❌ Verification failed: Document not found after insert")
+                
                 return str(result.inserted_id)
                 
         except Exception as e:
@@ -183,9 +189,11 @@ class MongoDBService:
             List of tuples (employee_id, embeddings)
         """
         if self.collection is None:
+            logger.warning("MongoDB collection is None")
             return []
         
         try:
+            logger.info("Fetching all active embeddings from MongoDB...")
             results = []
             
             # Check if using 'faces' collection (legacy format)
@@ -216,6 +224,8 @@ class MongoDBService:
                         results.append((employee_id, embeddings))
             
             logger.info(f"Retrieved {len(results)} active embedding sets from {self.collection.name}")
+            for employee_id, embeddings in results:
+                logger.debug(f"  Employee {employee_id}: {len(embeddings)} embeddings")
             return results
             
         except Exception as e:

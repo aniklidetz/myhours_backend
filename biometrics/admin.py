@@ -1,4 +1,3 @@
-# biometrics/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import BiometricProfile, BiometricLog, BiometricAttempt, FaceQualityCheck
@@ -113,9 +112,9 @@ class FaceQualityCheckAdmin(admin.ModelAdmin):
                 color = 'green'
                 status = 'Good'
             return format_html(
-                '<span style="color: {};">{:.1f} ({})</span>',
+                '<span style="color: {};">{} ({})</span>',
                 color,
-                obj.brightness_score,
+                f"{obj.brightness_score:.1f}",
                 status
             )
         return '-'
@@ -130,9 +129,9 @@ class FaceQualityCheckAdmin(admin.ModelAdmin):
                 color = 'green'
                 status = 'Sharp'
             return format_html(
-                '<span style="color: {};">{:.1f} ({})</span>',
+                '<span style="color: {};">{} ({})</span>',
                 color,
-                obj.blur_score,
+                f"{obj.blur_score:.1f}",
                 status
             )
         return '-'

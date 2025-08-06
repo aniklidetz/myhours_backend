@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.filters import SearchFilter
+from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
@@ -12,6 +12,7 @@ from django.utils import timezone
 from .models import Employee, EmployeeInvitation
 from .serializers import (
     EmployeeSerializer, 
+    EmployeeUpdateSerializer,
     EmployeeInvitationSerializer,
     SendInvitationSerializer,
     AcceptInvitationSerializer
@@ -26,9 +27,24 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.select_related('salary_info').all().order_by('last_name', 'first_name')
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]  # Requires authentication
-    filter_backends = [SearchFilter, DjangoFilterBackend]
+    
+    def get_permissions(self):
+        """Override permissions for specific actions"""
+        # All operations require authentication only
+        # Later we can add role-based restrictions if needed
+        self.permission_classes = [IsAuthenticated]
+        return super().get_permissions()
+    filter_backends = [SearchFilter, DjangoFilterBackend, OrderingFilter]
     search_fields = ['first_name', 'last_name', 'email']
-    filterset_fields = ['employment_type', 'is_active']
+    filterset_fields = ['employment_type', 'is_active', 'role']
+    ordering_fields = ['first_name', 'last_name', 'email', 'created_at', 'updated_at']
+    ordering = ['last_name', 'first_name']
+    
+    def get_serializer_class(self):
+        """Use different serializers for create vs update operations"""
+        if self.action in ['update', 'partial_update']:
+            return EmployeeUpdateSerializer
+        return self.serializer_class
     
     def create(self, request, *args, **kwargs):
         """Override to catch and log validation errors"""
@@ -205,12 +221,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         })
 
     def perform_destroy(self, instance):
-        """Actually delete the employee from the database"""
-        employee_id = instance.id
-        instance.delete()
+        """Soft-delete: просто деактивируем сотрудника."""
+        instance.is_active = False
+        instance.save(update_fields=["is_active"])
         logger.info("Employee deleted", extra={
             "action": "employee_deleted",
-            "employee_id": str(employee_id)[:8],
+            "employee_id": str(instance.id)[:8],
             "deleted_by": safe_log_employee(self.request.user, "deleter") if hasattr(self.request.user, 'employee') else str(self.request.user.id)[:8]
         })
 

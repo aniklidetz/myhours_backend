@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.conf import settings
-from .models import Salary, CompensatoryDay
+from .models import Salary, CompensatoryDay, DailyPayrollCalculation, MonthlyPayrollSummary
 from django import forms
 from users.models import Employee
 
@@ -82,3 +82,93 @@ class CompensatoryDayAdmin(admin.ModelAdmin):
     def status(self, obj):
         return "Used" if obj.date_used else "Not used"
     status.short_description = "Status"
+
+
+@admin.register(DailyPayrollCalculation)
+class DailyPayrollCalculationAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'work_date', 'base_pay', 'bonus_pay', 'total_gross_pay', 'regular_hours', 'overtime_hours_1', 'overtime_hours_2', 'sabbath_regular_hours', 'sabbath_overtime_hours_1', 'sabbath_overtime_hours_2', 'is_holiday', 'is_sabbath')
+    list_filter = ('work_date', 'is_holiday', 'is_sabbath', 'is_night_shift', 'calculated_by_service')
+    search_fields = ('employee__first_name', 'employee__last_name', 'employee__email')
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'work_date'
+    
+    fieldsets = (
+        ('Employee & Date', {
+            'fields': ('employee', 'work_date')
+        }),
+        ('Hours Breakdown', {
+            'fields': (
+                ('regular_hours', 'overtime_hours_1', 'overtime_hours_2'),
+                ('sabbath_regular_hours', 'sabbath_overtime_hours_1', 'sabbath_overtime_hours_2'),
+                'night_hours'
+            )
+        }),
+        ('New Unified Payment Structure', {
+            'fields': (
+                ('base_pay', 'bonus_pay'),
+                'total_gross_pay'
+            )
+        }),
+        ('Legacy Pay Breakdown', {
+            'fields': (
+                ('regular_pay', 'overtime_pay_1', 'overtime_pay_2'),
+                ('sabbath_overtime_pay_1', 'sabbath_overtime_pay_2'),
+                'total_pay'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Special Conditions', {
+            'fields': (
+                ('is_holiday', 'is_sabbath', 'is_night_shift'),
+                'holiday_name'
+            )
+        }),
+        ('System Information', {
+            'fields': (
+                'calculated_by_service',
+                'calculation_details',
+                ('created_at', 'updated_at')
+            ),
+            'classes': ('collapse',)
+        })
+    )
+
+
+@admin.register(MonthlyPayrollSummary)
+class MonthlyPayrollSummaryAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'year', 'month', 'total_gross_pay', 'total_hours', 'worked_days', 'compensatory_days_earned')
+    list_filter = ('year', 'month', 'calculation_date')
+    search_fields = ('employee__first_name', 'employee__last_name', 'employee__email')
+    readonly_fields = ('calculation_date', 'last_updated')
+    
+    fieldsets = (
+        ('Employee & Period', {
+            'fields': ('employee', ('year', 'month'))
+        }),
+        ('Hours Summary', {
+            'fields': (
+                'total_hours',
+                ('regular_hours', 'overtime_hours'),
+                ('holiday_hours', 'sabbath_hours')
+            )
+        }),
+        ('Pay Summary', {
+            'fields': (
+                'total_gross_pay',
+                ('base_pay', 'overtime_pay'),
+                ('holiday_pay', 'sabbath_pay')
+            )
+        }),
+        ('Work Statistics', {
+            'fields': (
+                ('worked_days', 'compensatory_days_earned')
+            )
+        }),
+        ('System Information', {
+            'fields': (
+                'calculation_details',
+                ('calculation_date', 'last_updated')
+            ),
+            'classes': ('collapse',)
+        })
+    )

@@ -12,8 +12,8 @@ class IsEmployeeOrAbove(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated and
-            hasattr(request.user, 'employee_profile') and
-            request.user.employee_profile.role in ['employee', 'accountant', 'admin']
+            request.user.employees.exists() and
+            request.user.employees.first().role in ['employee', 'accountant', 'admin']
         )
 
 
@@ -26,8 +26,8 @@ class IsAccountantOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated and
-            hasattr(request.user, 'employee_profile') and
-            request.user.employee_profile.role in ['accountant', 'admin']
+            request.user.employees.exists() and
+            request.user.employees.first().role in ['accountant', 'admin']
         )
 
 
@@ -40,8 +40,8 @@ class IsAdminOnly(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated and
-            hasattr(request.user, 'employee_profile') and
-            request.user.employee_profile.role == 'admin'
+            request.user.employees.exists() and
+            request.user.employees.first().role == 'admin'
         )
 
 
@@ -56,13 +56,13 @@ class IsSelfOrAbove(BasePermission):
     
     def has_object_permission(self, request, view, obj):
         # Admin can access everything
-        if (hasattr(request.user, 'employee_profile') and 
-            request.user.employee_profile.role == 'admin'):
+        if (request.user.employees.exists() and 
+            request.user.employees.first().role == 'admin'):
             return True
         
         # Accountant can access employee data
-        if (hasattr(request.user, 'employee_profile') and 
-            request.user.employee_profile.role == 'accountant' and
+        if (request.user.employees.exists() and 
+            request.user.employees.first().role == 'accountant' and
             hasattr(obj, 'role') and obj.role == 'employee'):
             return True
         
@@ -122,8 +122,8 @@ class WorkTimeOperationPermission(BasePermission):
         
         # If time_tracking IS required, check biometric verification
         # Admin users can bypass biometric for emergency operations
-        if (hasattr(request.user, 'employee_profile') and 
-            request.user.employee_profile.role == 'admin' and
+        if (request.user.employees.exists() and 
+            request.user.employees.first().role == 'admin' and
             request.META.get('HTTP_X_ADMIN_OVERRIDE') == 'true'):
             return True
         
@@ -169,8 +169,8 @@ class PayrollAccessPermission(BasePermission):
     def has_permission(self, request, view):
         # Must be accountant or admin
         if not (request.user.is_authenticated and
-                hasattr(request.user, 'employee_profile') and
-                request.user.employee_profile.role in ['accountant', 'admin']):
+                request.user.employees.exists() and
+                request.user.employees.first().role in ['accountant', 'admin']):
             return False
         
         # Must have recent biometric verification (within 30 minutes for payroll)

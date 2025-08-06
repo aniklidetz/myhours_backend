@@ -152,6 +152,19 @@ class FaceRecognitionService:
             return None
     
     @classmethod
+    def extract_face_embedding(cls, base64_image):
+        """Extract face embedding - alias for extract_face_features for test compatibility"""
+        return cls.extract_face_features(base64_image)
+    
+    @classmethod 
+    def verify_face(cls, base64_image, employee_id, threshold=0.8):
+        """Verify face against stored employee face - for test compatibility"""
+        result = cls.recognize_employee(base64_image, threshold)
+        if result and result[0] == employee_id:
+            return (True, employee_id, result[1])  # (success, employee_id, confidence)
+        return (False, None, 0.0)
+
+    @classmethod
     def recognize_employee(cls, base64_image, threshold=0.8):
         """
         Recognize employee from face image

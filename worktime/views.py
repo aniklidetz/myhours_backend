@@ -42,17 +42,21 @@ class WorkLogViewSet(viewsets.ModelViewSet):
             return queryset
         
         # Regular users can only see their own logs
-        if hasattr(self.request.user, 'employee_profile'):
-            employee_profile = self.request.user.employee_profile
-            logger.info(f"  Employee access: {employee_profile.get_full_name()} (ID: {employee_profile.id}, Role: {employee_profile.role})")
-            
-            # Check if user has accountant or admin role - they can see all data
-            if employee_profile.role in ['accountant', 'admin']:
-                logger.info("  Accountant/Admin role - can see all work logs")
-                return queryset
-            else:
-                logger.info(f"  Regular employee - can only see own logs (Employee ID: {employee_profile.id})")
-                return queryset.filter(employee=self.request.user.employee_profile)
+        # Since Employee is now ForeignKey, get first employee record for this user
+        try:
+            employee_profile = self.request.user.employees.first()
+            if employee_profile:
+                logger.info(f"  Employee access: {employee_profile.get_full_name()} (ID: {employee_profile.id}, Role: {employee_profile.role})")
+                
+                # Check if user has accountant or admin role - they can see all data
+                if employee_profile.role in ['accountant', 'admin']:
+                    logger.info("  Accountant/Admin role - can see all work logs")
+                    return queryset
+                else:
+                    logger.info(f"  Regular employee - can only see own logs (Employee ID: {employee_profile.id})")
+                    return queryset.filter(employee=employee_profile)
+        except AttributeError:
+            pass
         
         # Users without employee profile see no logs
         logger.info("  No employee_profile - access denied")

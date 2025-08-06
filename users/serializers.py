@@ -159,6 +159,80 @@ class SendInvitationSerializer(serializers.Serializer):
         return value
 
 
+class EmployeeUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating employees - excludes read-only fields"""
+    # Field aliases for backward compatibility
+    phone_number = serializers.CharField(source='phone', required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True, write_only=True)  # Placeholder field
+    
+    class Meta:
+        model = Employee
+        fields = [
+            'first_name', 'last_name', 'phone', 'phone_number', 'address',
+            'employment_type', 'role', 'is_active'
+        ]
+        # Exclude email to prevent conflicts during updates
+        extra_kwargs = {
+            'email': {'read_only': True},
+            'phone': {'required': False, 'allow_blank': True},
+            'first_name': {'required': False},
+            'last_name': {'required': False},
+            'employment_type': {'required': False},
+            'role': {'required': False},
+            'is_active': {'required': False}
+        }
+
+    def validate_phone(self, value):
+        """Custom phone validation"""
+        if value:
+            import re
+            clean_phone = value.replace(' ', '').replace('-', '')
+            phone_pattern = r'^\+\d{1,3}\d{8,15}$'
+            if not re.match(phone_pattern, clean_phone):
+                raise serializers.ValidationError(
+                    "Phone number must be in international format (e.g., +972501234567)"
+                )
+        return value
+
+    def validate_employment_type(self, value):
+        """Validate employment_type choice"""
+        if value:
+            valid_choices = [choice[0] for choice in Employee.EMPLOYMENT_TYPES]
+            if value not in valid_choices:
+                raise serializers.ValidationError(
+                    f"Invalid employment type. Must be one of: {', '.join(valid_choices)}"
+                )
+        return value
+
+    def validate_role(self, value):
+        """Validate role choice"""
+        if value:
+            valid_choices = [choice[0] for choice in Employee.ROLE_CHOICES]
+            if value not in valid_choices:
+                raise serializers.ValidationError(
+                    f"Invalid role. Must be one of: {', '.join(valid_choices)}"
+                )
+        return value
+
+    def validate(self, attrs):
+        """Cross-field validation"""
+        # Only check if both names are provided and not None/empty
+        first_name = attrs.get('first_name')
+        last_name = attrs.get('last_name')
+        if (first_name and last_name and 
+            first_name.strip() and last_name.strip() and 
+            first_name == last_name):
+            raise serializers.ValidationError(
+                "First name and last name cannot be identical"
+            )
+        
+        # Remove address field since it doesn't exist in the model
+        if 'address' in attrs:
+            del attrs['address']
+        
+        return attrs
+
+
 class AcceptInvitationSerializer(serializers.Serializer):
     """Serializer for accepting invitation and creating user account"""
     token = serializers.CharField(max_length=64)

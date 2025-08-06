@@ -82,7 +82,7 @@ urlpatterns = [
     path('api/v1/users/', include('users.urls')),
     path('api/v1/worktime/', include('worktime.urls')),
     path('api/v1/payroll/', include('payroll.urls')),
-    path('api/v1/biometrics/', include('biometrics.urls')),
+    path('api/v1/biometrics/', include(('biometrics.urls', 'biometrics'), namespace='biometrics')),
     path('api/v1/integrations/', include('integrations.urls')),
     
     # Legacy API endpoints removed - all traffic goes to v1 directly

@@ -16,7 +16,8 @@ class WorkLogSerializer(serializers.ModelSerializer):
         model = WorkLog
         fields = [
             'id', 'employee', 'employee_name', 'employee_data', 'check_in', 'check_out',
-            'location_check_in', 'location_check_out', 'notes', 'is_approved',
+            'location_check_in', 'location_check_out', 'latitude_check_in', 'longitude_check_in',
+            'latitude_check_out', 'longitude_check_out', 'break_minutes', 'notes', 'is_approved',
             'total_hours', 'status', 'duration', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

@@ -289,6 +289,9 @@ ENABLE_BIOMETRIC_MOCK = config('ENABLE_BIOMETRIC_MOCK', default=False, cast=bool
 if ENABLE_BIOMETRIC_MOCK and not DEBUG:
     raise ValueError("ENABLE_BIOMETRIC_MOCK must not be enabled in production (DEBUG=False)")
 
+# Test mode for bypassing quality checks in tests
+BIOMETRY_TEST_MODE = TESTING or config('BIOMETRY_TEST_MODE', default=False, cast=bool)
+
 # Log critical security warning if mock is enabled
 if ENABLE_BIOMETRIC_MOCK:
     logging.getLogger(__name__).critical("🚨 BIOMETRIC MOCK MODE ENABLED - NOT FOR PRODUCTION USE!")
@@ -303,6 +306,52 @@ MIN_FACE_SIZE = (40, 40)  # Minimum face size in pixels
 FEATURE_FLAGS = {
     "ENABLE_PROJECT_PAYROLL": config('ENABLE_PROJECT_PAYROLL', default=False, cast=bool),
 }
+
+# ✅ НОВОЕ: Redis Configuration for Payroll Performance Optimization
+REDIS_CONFIG = {
+    'host': config('REDIS_HOST', default='localhost'),
+    'port': config('REDIS_PORT', default=6379, cast=int),
+    'db': config('REDIS_DB', default=0, cast=int),
+    'decode_responses': True,
+    'socket_connect_timeout': 5,
+    'socket_timeout': 5,
+    'retry_on_timeout': True,
+    'health_check_interval': 30
+}
+
+# Cache configuration using Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': f"redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}/{REDIS_CONFIG['db']}",
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'decode_responses': True,
+                'health_check_interval': 30,
+            },
+            'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+        },
+        'TIMEOUT': 300,  # 5 minutes default timeout
+        'KEY_PREFIX': 'myhours',
+        'VERSION': 1,
+    }
+}
+
+# Session configuration to use Redis
+if not TESTING:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
+
+# Celery Configuration
+REDIS_URL = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
 
 # DRF Spectacular settings for OpenAPI
 SPECTACULAR_SETTINGS = {
@@ -493,8 +542,20 @@ LOGGING = {
     },
 }
 
+
 # Testing settings
 if 'test' in sys.argv:
+    import logging
+    import warnings
+    
+    # Disable most logging during tests
+    logging.disable(logging.CRITICAL)
+    
+    # Suppress Django warnings during tests
+    warnings.filterwarnings("ignore", category=RuntimeWarning, module="django.db.models.fields")
+    
+    DEBUG = False  # Turn off DEBUG for cleaner test output
+    
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ':memory:'
@@ -502,3 +563,11 @@ if 'test' in sys.argv:
     # Disable external connections for tests
     MONGO_CLIENT = None
     MONGO_DB = None
+    
+    # Use in-memory cache for tests instead of Redis
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test-cache',
+        }
+    }

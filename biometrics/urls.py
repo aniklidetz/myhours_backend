@@ -1,4 +1,3 @@
-# biometrics/urls.py
 from django.urls import path
 from . import views
 
@@ -7,6 +6,9 @@ urlpatterns = [
     path('register/', views.register_face, name='face-register'),
     path('check-in/', views.check_in, name='face-check-in'),
     path('check-out/', views.check_out, name='face-check-out'),
+    
+    # Generic endpoints for authentication tests
+    path('register/', views.register_face, name='register'),  # Alias for tests
     
     # Test endpoint
     path('test/', views.test_endpoint, name='test-endpoint'),
@@ -19,4 +21,7 @@ urlpatterns = [
     
     # Statistics endpoint
     path('management/stats/', views.biometric_stats, name='biometric-stats'),
+    
+    # Verification endpoint for tests
+    path('verify/', views.verify_face, name='verify'),
 ]

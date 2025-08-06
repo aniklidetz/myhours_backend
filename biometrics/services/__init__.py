@@ -1,0 +1,1 @@
+from .face_recognition_service import FaceRecognitionService  # noqa: F401
