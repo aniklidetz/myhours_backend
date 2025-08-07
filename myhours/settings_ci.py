@@ -5,8 +5,61 @@ Django settings for CI/CD environment
 import os
 import sys
 
-# Import everything from base settings first
+print("🚀 CI SETTINGS: Starting configuration...")
+
+# CRITICAL: Configure DATABASE before importing base settings
+# This prevents base settings from using broken dj_database_url parsing
+
+# Get DATABASE_URL before any imports
+database_url = os.environ.get("DATABASE_URL", "")
+github_actions = os.environ.get("GITHUB_ACTIONS", "")
+
+print("=" * 60)
+print("🔍 CI PRE-IMPORT DEBUG:")
+print(f"  GITHUB_ACTIONS = {github_actions!r}")
+print(f"  DATABASE_URL = {database_url!r}")
+print(f"  DJANGO_SETTINGS_MODULE = {os.environ.get('DJANGO_SETTINGS_MODULE')!r}")
+print("=" * 60)
+
+# FORCE PostgreSQL configuration BEFORE importing base settings
+if github_actions == "true" or database_url:
+    # Determine database name from URL
+    if "myhours_test" in database_url:
+        db_name = "myhours_test"
+    elif "myhours_perf" in database_url:
+        db_name = "myhours_perf"
+    elif "myhours_migration" in database_url:
+        db_name = "myhours_migration"
+    else:
+        db_name = "myhours_test"  # default fallback
+    
+    # Set PostgreSQL configuration BEFORE base settings import
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": db_name,
+            "USER": "postgres",
+            "PASSWORD": "postgres",
+            "HOST": "localhost",
+            "PORT": "5432",
+        }
+    }
+    print(f"✅ CI PRE-IMPORT: Set PostgreSQL with DB name: {db_name}")
+    print(f"✅ CI PRE-IMPORT: ENGINE = {DATABASES['default']['ENGINE']}")
+else:
+    # Local development fallback
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+    print("✅ CI PRE-IMPORT: Set SQLite fallback")
+
+# Now import base settings - they WON'T override our DATABASES
+print("🔄 CI: Importing base settings...")
 from .settings import *
+print("✅ CI: Base settings imported")
 
 # Override for CI - don't use dj_database_url to avoid parsing issues
 
