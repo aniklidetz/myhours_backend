@@ -374,5 +374,13 @@ class MongoDBService:
             return False
 
 
-# Global instance
-mongodb_service = MongoDBService()
+# Global instance - lazy initialization to avoid early django.setup() issues
+mongodb_service = None
+
+
+def get_mongodb_service():
+    """Get or create MongoDB service instance"""
+    global mongodb_service
+    if mongodb_service is None:
+        mongodb_service = MongoDBService()
+    return mongodb_service

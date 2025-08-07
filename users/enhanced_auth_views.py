@@ -17,7 +17,7 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 
 from biometrics.services.face_processor import face_processor
-from biometrics.services.mongodb_service import mongodb_service
+from biometrics.services.mongodb_service import get_mongodb_service
 
 from .authentication import DeviceTokenAuthentication
 from .permissions import BiometricVerificationRequired, IsEmployeeOrAbove
@@ -215,7 +215,7 @@ def enhanced_login(request):
         )
 
         # Check if biometric registration exists
-        biometric_registered = bool(mongodb_service.get_face_embeddings(employee.id))
+        biometric_registered = bool(get_mongodb_service().get_face_embeddings(employee.id))
 
         # Determine if biometric verification is required
         requires_biometric = (
@@ -336,7 +336,7 @@ def biometric_verification(request):
         device_token = request.device_token
 
         # Get all active embeddings for matching
-        all_embeddings = mongodb_service.get_all_active_embeddings()
+        all_embeddings = get_mongodb_service().get_all_active_embeddings()
         if not all_embeddings:
             return Response(
                 {

@@ -36,7 +36,7 @@ from .services.enhanced_biometric_service import (
 )
 from .services.face_processor import face_processor
 from .services.face_recognition_service import FaceRecognitionService
-from .services.mongodb_service import mongodb_service
+from .services.mongodb_service import get_mongodb_service
 
 logger = logging.getLogger(__name__)
 
@@ -469,7 +469,7 @@ def check_in(request):
         location = serializer.validated_data.get("location", "")
 
         # Get all active embeddings
-        all_embeddings = mongodb_service.get_all_active_embeddings()
+        all_embeddings = get_mongodb_service().get_all_active_embeddings()
 
         if not all_embeddings:
             return Response(
@@ -1046,7 +1046,7 @@ def biometric_stats(request):
 
     try:
         # Get MongoDB stats
-        mongo_stats = mongodb_service.get_statistics()
+        mongo_stats = get_mongodb_service().get_statistics()
 
         # Get PostgreSQL stats
         total_profiles = BiometricProfile.objects.count()
