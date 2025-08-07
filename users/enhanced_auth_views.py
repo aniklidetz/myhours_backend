@@ -16,7 +16,10 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.utils import timezone
 
-from biometrics.services.face_processor import face_processor
+try:
+    from biometrics.services.face_processor import face_processor
+except ImportError:
+    face_processor = None
 from biometrics.services.mongodb_service import get_mongodb_service
 
 from .authentication import DeviceTokenAuthentication
@@ -351,6 +354,19 @@ def biometric_verification(request):
             )
 
         # Find matching employee
+        if face_processor is None:
+            return Response(
+                {
+                    "error": True,
+                    "code": "BIOMETRIC_SERVICE_UNAVAILABLE",
+                    "message": "Biometric processing service is not available",
+                    "details": None,
+                    "error_id": "bio_006",
+                    "timestamp": timezone.now().isoformat(),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        
         match_result = face_processor.find_matching_employee(image, all_embeddings)
 
         if not match_result["success"]:
