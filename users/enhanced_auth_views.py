@@ -218,7 +218,9 @@ def enhanced_login(request):
         )
 
         # Check if biometric registration exists
-        biometric_registered = bool(get_mongodb_service().get_face_embeddings(employee.id))
+        biometric_registered = bool(
+            get_mongodb_service().get_face_embeddings(employee.id)
+        )
 
         # Determine if biometric verification is required
         requires_biometric = (
@@ -366,7 +368,7 @@ def biometric_verification(request):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        
+
         match_result = face_processor.find_matching_employee(image, all_embeddings)
 
         if not match_result["success"]:

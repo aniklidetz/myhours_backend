@@ -34,8 +34,14 @@ from .services.enhanced_biometric_service import (
     CriticalBiometricError,
     enhanced_biometric_service,
 )
-from .services.face_processor import face_processor
-from .services.face_recognition_service import FaceRecognitionService
+try:
+    from .services.face_processor import face_processor
+except ImportError:
+    face_processor = None
+try:
+    from .services.face_recognition_service import FaceRecognitionService
+except ImportError:
+    FaceRecognitionService = None
 from .services.mongodb_service import get_mongodb_service
 
 logger = logging.getLogger(__name__)
@@ -248,6 +254,11 @@ def register_face(request):
             logger.info(f"Employee ID: {employee_id}")
 
             try:
+                if face_processor is None:
+                    return Response(
+                        {"error": "Biometric processing service not available"},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
                 result = face_processor.process_images(images)
                 logger.info(f"Face processor result: {result}")
             except Exception as e:
@@ -506,6 +517,11 @@ def check_in(request):
         else:
             # REAL biometric processing
             logger.info("Processing real biometric data for check-in")
+            if face_processor is None:
+                return Response(
+                    {"error": "Biometric processing service not available"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             match_result = face_processor.find_matching_employee(image, all_embeddings)
 
             if not match_result["success"]:
@@ -701,6 +717,11 @@ def check_out(request):
             logger.info("Processing real biometric data for check-out")
             try:
                 # Process image to get face encoding
+                if face_processor is None:
+                    return Response(
+                        {"error": "Biometric processing service not available"},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
                 result = face_processor.process_registration_image(image)
                 if not result["success"]:
                     return Response(
