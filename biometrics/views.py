@@ -34,6 +34,7 @@ from .services.enhanced_biometric_service import (
     CriticalBiometricError,
     enhanced_biometric_service,
 )
+
 try:
     from .services.face_processor import face_processor
 except ImportError:

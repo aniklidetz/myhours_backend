@@ -22,16 +22,18 @@ class FaceRecognitionService:
     """
 
     # Initialize face cascade classifier
-    try:
-        FACE_CASCADE = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        )
-        if FACE_CASCADE.empty():
-            logger.error("Failed to load face cascade classifier")
+    FACE_CASCADE = None
+    if cv2 is not None:
+        try:
+            FACE_CASCADE = cv2.CascadeClassifier(
+                cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            )
+            if FACE_CASCADE.empty():
+                logger.error("Failed to load face cascade classifier")
+                FACE_CASCADE = None
+        except Exception as e:
+            logger.error(f"Error initializing face cascade: {e}")
             FACE_CASCADE = None
-    except Exception as e:
-        logger.error(f"Error initializing face cascade: {e}")
-        FACE_CASCADE = None
 
     @staticmethod
     def decode_image(base64_image):
