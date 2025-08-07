@@ -1220,7 +1220,7 @@ def backward_compatible_earnings(request):
                 # Получаем детализированный разбор для большей прозрачности
                 detailed_breakdown = service.get_detailed_breakdown()
 
-            except Exception:
+            except Exception as calc_error:
                 logger.exception(
                     "Error in backward_compatible_earnings calculation",
                     extra=safe_log_employee(target_employee, "backward_calc_error"),
@@ -1362,7 +1362,7 @@ def backward_compatible_earnings(request):
                     fast_mode=True,
                 )
                 service_result = service.calculate_monthly_salary()
-            except Exception:
+            except Exception as calc_error:
                 logger.exception(
                     "Error in backward_compatible_earnings for monthly employee",
                     extra=safe_log_employee(target_employee, "monthly_calc_error"),

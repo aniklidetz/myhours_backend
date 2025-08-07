@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from rest_framework import status, viewsets
@@ -9,6 +10,8 @@ from .models import Holiday
 from .serializers import HolidaySerializer
 from .services.hebcal_service import HebcalService
 from .services.sunrise_sunset_service import SunriseSunsetService
+
+logger = logging.getLogger(__name__)
 
 
 class HolidayViewSet(viewsets.ReadOnlyModelViewSet):
