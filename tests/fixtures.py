@@ -1,8 +1,10 @@
+from decimal import Decimal
+
+from django.utils import timezone
+
+from payroll.models import Salary
 from users.models import Employee
 from worktime.models import WorkLog
-from payroll.models import Salary
-from django.utils import timezone
-from decimal import Decimal
 
 
 class TestFixtures:

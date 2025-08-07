@@ -2,12 +2,14 @@
 Management command for biometric data consistency audit and repair
 """
 
+import json
+
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from biometrics.services.enhanced_biometric_service import enhanced_biometric_service
+
 from biometrics.models import BiometricProfile
+from biometrics.services.enhanced_biometric_service import enhanced_biometric_service
 from biometrics.services.mongodb_repository import mongo_biometric_repository
-import json
 
 
 class Command(BaseCommand):

@@ -2,9 +2,9 @@
 Utilities for safe logging with automatic PII data masking
 """
 
-import re
 import hashlib
 import logging
+import re
 from typing import Any, Dict, Optional, Union
 
 

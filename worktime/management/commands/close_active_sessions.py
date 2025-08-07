@@ -1,8 +1,9 @@
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from worktime.models import WorkLog
+
 from users.models import Employee
-from django.contrib.auth.models import User
+from worktime.models import WorkLog
 
 
 class Command(BaseCommand):

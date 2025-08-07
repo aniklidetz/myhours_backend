@@ -8,15 +8,16 @@ Usage:
     python manage.py check_long_shifts --export
 """
 
-from django.core.management.base import BaseCommand
-from django.db.models import F, ExpressionWrapper, DurationField, Count, Q
-from django.utils import timezone
-from datetime import timedelta, datetime
 import csv
 import logging
+from datetime import datetime, timedelta
 
-from worktime.models import WorkLog
+from django.core.management.base import BaseCommand
+from django.db.models import Count, DurationField, ExpressionWrapper, F, Q
+from django.utils import timezone
+
 from users.models import Employee
+from worktime.models import WorkLog
 
 logger = logging.getLogger(__name__)
 

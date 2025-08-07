@@ -2,14 +2,16 @@
 MongoDB Repository - Isolated layer for biometric data operations
 """
 
+import datetime
 import logging
 from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 from bson import ObjectId
+from pymongo import ASCENDING, MongoClient
+from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
+
 from django.conf import settings
-from pymongo import MongoClient, ASCENDING
-from pymongo.errors import ConnectionFailure, OperationFailure, DuplicateKeyError
-import datetime
 
 logger = logging.getLogger("biometrics")
 

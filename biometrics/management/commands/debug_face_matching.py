@@ -1,8 +1,11 @@
-from django.core.management.base import BaseCommand
-from biometrics.services.mongodb_service import mongodb_service
-from biometrics.services.face_processor import face_processor
 import logging
+
 import numpy as np
+
+from django.core.management.base import BaseCommand
+
+from biometrics.services.face_processor import face_processor
+from biometrics.services.mongodb_service import mongodb_service
 
 logger = logging.getLogger(__name__)
 

@@ -1,22 +1,25 @@
 # myhours/urls.py
-from django.contrib import admin
-from django.urls import path, include, re_path
-from django.conf import settings
-from django.conf.urls.static import static
-from django.views.generic import RedirectView
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
-
-from rest_framework.permissions import AllowAny
 from rest_framework.authentication import TokenAuthentication
-from django.utils import timezone
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+)
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
-from rest_framework.decorators import permission_classes, authentication_classes
+from django.conf import settings
+from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import include, path, re_path
+from django.utils import timezone
+from django.views.generic import RedirectView
+
 from .health import health_check as detailed_health_check
 
 

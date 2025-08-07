@@ -2,9 +2,11 @@
 Management command to reset authentication tokens for users
 """
 
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
+
+from django.contrib.auth.models import User
+from django.core.management.base import BaseCommand
+
 from users.token_models import DeviceToken
 
 

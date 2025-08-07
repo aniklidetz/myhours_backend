@@ -1,6 +1,7 @@
+import logging
+
 from django.apps import AppConfig
 from django.core.cache import cache
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class IntegrationsConfig(AppConfig):
         """
         # Import here to avoid circular imports
         import threading
+
         from django.db import connections
 
         def delayed_holiday_sync():
@@ -26,6 +28,7 @@ class IntegrationsConfig(AppConfig):
                 time.sleep(2)
 
                 from datetime import date
+
                 from .services.hebcal_service import HebcalService
 
                 # Check if holidays need synchronization

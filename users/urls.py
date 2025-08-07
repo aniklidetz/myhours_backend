@@ -1,14 +1,16 @@
 # users/urls.py
-from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import EmployeeViewSet, ValidateInvitationView, AcceptInvitationView
+
+from django.urls import include, path
+
 from .auth_views import login_view, logout_view, test_connection
 from .enhanced_auth_views import (
-    enhanced_login,
     biometric_verification,
-    refresh_token,
+    enhanced_login,
     logout_device,
+    refresh_token,
 )
+from .views import AcceptInvitationView, EmployeeViewSet, ValidateInvitationView
 
 router = DefaultRouter()
 router.register(r"employees", EmployeeViewSet)

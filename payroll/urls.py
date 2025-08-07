@@ -1,13 +1,15 @@
-from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+
+from django.urls import include, path
+
 from .views import (
     backward_compatible_earnings,
-    payroll_list,
-    enhanced_earnings,
     daily_payroll_calculations,
+    enhanced_earnings,
     monthly_payroll_summary,
-    recalculate_payroll,
     payroll_analytics,
+    payroll_list,
+    recalculate_payroll,
 )
 
 # Временно отключаем router до восстановления SalaryViewSet

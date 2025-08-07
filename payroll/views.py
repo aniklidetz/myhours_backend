@@ -1,30 +1,33 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
-from django.db.models import Q, Sum
-from decimal import Decimal
-import logging
-from datetime import datetime, date, timedelta
 import calendar
+import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+
+from django.db.models import Q, Sum
+from django.utils import timezone
+
+from core.logging_utils import safe_log_employee
 from users.models import Employee
 from users.permissions import IsEmployeeOrAbove
+from worktime.models import WorkLog
+
+from .enhanced_serializers import (
+    CompensatoryDayDetailSerializer,
+    EnhancedEarningsSerializer,
+)
 from .models import (
-    Salary,
     CompensatoryDay,
     DailyPayrollCalculation,
     MonthlyPayrollSummary,
+    Salary,
 )
 from .serializers import SalarySerializer
-from .enhanced_serializers import (
-    EnhancedEarningsSerializer,
-    CompensatoryDayDetailSerializer,
-)
-from worktime.models import WorkLog
-from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +117,9 @@ def payroll_list(request):
         payroll_data = []
 
         # Получаем все рабочие логи за месяц одним запросом
-        from django.db.models import Count, Sum, Q
         import calendar
+
+        from django.db.models import Count, Q, Sum
 
         start_date = date(current_date.year, current_date.month, 1)
         _, last_day = calendar.monthrange(current_date.year, current_date.month)
@@ -418,8 +422,9 @@ def enhanced_earnings(request):
             salary = target_employee.salary_info
         except Salary.DoesNotExist:
             # No salary configuration - return data with zero salary but show hours
-            from worktime.models import WorkLog
             import calendar
+
+            from worktime.models import WorkLog
 
             start_date = date(current_date.year, current_date.month, 1)
             _, last_day = calendar.monthrange(current_date.year, current_date.month)
@@ -888,7 +893,7 @@ def payroll_analytics(request):
             )
 
         # Get aggregated data
-        from django.db.models import Sum, Count, Avg
+        from django.db.models import Avg, Count, Sum
 
         monthly_stats = (
             MonthlyPayrollSummary.objects.filter(year=year)
@@ -1064,8 +1069,9 @@ def backward_compatible_earnings(request):
             salary = target_employee.salary_info
         except Salary.DoesNotExist:
             # Нет конфигурации зарплаты - возвращаем данные с нулевой зарплатой, но показываем часы
-            from worktime.models import WorkLog
             import calendar
+
+            from worktime.models import WorkLog
 
             start_date = date(current_date.year, current_date.month, 1)
             _, last_day = calendar.monthrange(current_date.year, current_date.month)
@@ -1388,8 +1394,9 @@ def backward_compatible_earnings(request):
                 )
 
             # ИСПРАВЛЕНО: Вычисляем реальные отработанные часы для месячных сотрудников
-            from worktime.models import WorkLog
             import calendar
+
+            from worktime.models import WorkLog
 
             # Вычисляем точные границы месяца
             start_date = date(current_date.year, current_date.month, 1)
@@ -2045,7 +2052,7 @@ def payroll_analytics(request):
             )
 
         # Calculate analytics
-        from django.db.models import Sum, Avg, Count
+        from django.db.models import Avg, Count, Sum
 
         analytics = {
             "total_employees": summaries.count(),

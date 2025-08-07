@@ -1,8 +1,10 @@
-from django.db import models
-from django.contrib.postgres.fields import JSONField
-from users.models import Employee
-from django.utils import timezone
 import uuid
+
+from django.contrib.postgres.fields import JSONField
+from django.db import models
+from django.utils import timezone
+
+from users.models import Employee
 
 
 class BiometricProfile(models.Model):

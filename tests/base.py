@@ -1,11 +1,14 @@
 # tests/base.py
 import uuid
-from django.test import TestCase
-from django.contrib.auth.models import User
-from rest_framework.test import APITestCase, APIClient
+
 from rest_framework.authtoken.models import Token
-from users.models import Employee
+from rest_framework.test import APIClient, APITestCase
+
+from django.contrib.auth.models import User
+from django.test import TestCase
 from django.utils import timezone
+
+from users.models import Employee
 
 
 class BaseTestCase(TestCase):

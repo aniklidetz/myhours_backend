@@ -1,39 +1,42 @@
+import logging
+
+import numpy as np
+from drf_spectacular.openapi import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.utils import timezone
-from django.db import transaction
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
-import logging
-import numpy as np
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from drf_spectacular.openapi import OpenApiTypes
+from django.db import transaction
+from django.utils import timezone
 
+from core.exceptions import APIError, BiometricError
+from users.authentication import DeviceTokenAuthentication
 from users.models import Employee
-from worktime.models import WorkLog
-from .models import BiometricProfile, BiometricLog, BiometricAttempt, FaceQualityCheck
-from .serializers import (
-    FaceRegistrationSerializer,
-    FaceRecognitionSerializer,
-    BiometricResponseSerializer,
-    BiometricStatsSerializer,
-)
-from .services.mongodb_service import mongodb_service
-from .services.face_processor import face_processor
-from .services.face_recognition_service import FaceRecognitionService
-from .services.enhanced_biometric_service import (
-    enhanced_biometric_service,
-    CriticalBiometricError,
-)
-from core.exceptions import BiometricError, APIError
 from users.permissions import (
+    BiometricVerificationRequired,
     IsEmployeeOrAbove,
     WorkTimeOperationPermission,
-    BiometricVerificationRequired,
 )
-from users.authentication import DeviceTokenAuthentication
+from worktime.models import WorkLog
+
+from .models import BiometricAttempt, BiometricLog, BiometricProfile, FaceQualityCheck
+from .serializers import (
+    BiometricResponseSerializer,
+    BiometricStatsSerializer,
+    FaceRecognitionSerializer,
+    FaceRegistrationSerializer,
+)
+from .services.enhanced_biometric_service import (
+    CriticalBiometricError,
+    enhanced_biometric_service,
+)
+from .services.face_processor import face_processor
+from .services.face_recognition_service import FaceRecognitionService
+from .services.mongodb_service import mongodb_service
 
 logger = logging.getLogger(__name__)
 

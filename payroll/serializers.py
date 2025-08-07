@@ -1,8 +1,12 @@
-from rest_framework import serializers
-from django.conf import settings
 from decimal import Decimal
-from .models import Salary, CompensatoryDay
+
+from rest_framework import serializers
+
+from django.conf import settings
+
 from users.serializers import EmployeeSerializer
+
+from .models import CompensatoryDay, Salary
 
 
 class SalarySerializer(serializers.ModelSerializer):

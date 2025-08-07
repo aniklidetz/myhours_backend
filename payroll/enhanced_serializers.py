@@ -2,9 +2,11 @@
 Enhanced serializers for detailed payroll information display
 """
 
-from rest_framework import serializers
 from decimal import Decimal
-from .models import Salary, CompensatoryDay
+
+from rest_framework import serializers
+
+from .models import CompensatoryDay, Salary
 from .services import PayrollCalculationService
 
 

@@ -3,12 +3,14 @@ Management command to clean up biometric data for employees
 Handles both MongoDB and PostgreSQL cleanup with proper error handling
 """
 
+import logging
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from biometrics.services.enhanced_biometric_service import enhanced_biometric_service
+
 from biometrics.models import BiometricProfile
+from biometrics.services.enhanced_biometric_service import enhanced_biometric_service
 from users.models import Employee
-import logging
 
 logger = logging.getLogger("biometrics")
 
@@ -170,8 +172,8 @@ class Command(BaseCommand):
             )
 
         # Force cleanup with both methods
-        from biometrics.services.mongodb_repository import MongoBiometricRepository
         from biometrics.models import BiometricProfile
+        from biometrics.services.mongodb_repository import MongoBiometricRepository
 
         mongo_repo = MongoBiometricRepository()
 

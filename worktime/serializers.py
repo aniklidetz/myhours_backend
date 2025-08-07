@@ -1,7 +1,10 @@
 from rest_framework import serializers
+
 from django.utils import timezone
-from .models import WorkLog
+
 from users.serializers import EmployeeSerializer
+
+from .models import WorkLog
 
 
 class WorkLogSerializer(serializers.ModelSerializer):

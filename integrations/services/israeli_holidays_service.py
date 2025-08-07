@@ -4,8 +4,10 @@ Service for handling Israeli national holidays that may not be in Hebcal API
 
 import logging
 from datetime import date, datetime, timedelta
-from integrations.models import Holiday
+
 from django.utils import timezone
+
+from integrations.models import Holiday
 
 logger = logging.getLogger(__name__)
 

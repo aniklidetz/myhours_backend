@@ -7,12 +7,12 @@ Combines holiday data with precise Shabbat times from sunrise-sunset API
 import json
 import logging
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from payroll.redis_cache_service import PayrollRedisCache
 from integrations.services.enhanced_sunrise_sunset_service import (
     enhanced_sunrise_sunset_service,
 )
+from payroll.redis_cache_service import PayrollRedisCache
 
 logger = logging.getLogger(__name__)
 

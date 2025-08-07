@@ -2,8 +2,9 @@
 
 import os
 import sys
-from django.test.utils import get_runner
+
 from django.conf import settings
+from django.test.utils import get_runner
 
 
 def run_tests_with_coverage():

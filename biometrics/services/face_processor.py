@@ -2,11 +2,13 @@ import base64
 import io
 import logging
 import time
-from typing import List, Dict, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
+
+import cv2
+import face_recognition
 import numpy as np
 from PIL import Image
-import face_recognition
-import cv2
+
 from django.conf import settings
 
 logger = logging.getLogger(__name__)

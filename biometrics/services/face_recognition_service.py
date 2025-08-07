@@ -1,11 +1,14 @@
+import base64
 import logging
+from io import BytesIO
+
 import cv2
 import numpy as np
-import base64
-from io import BytesIO
 from PIL import Image
-from .biometrics import BiometricService
+
 from django.core.cache import cache
+
+from .biometrics import BiometricService
 
 logger = logging.getLogger("biometrics")
 

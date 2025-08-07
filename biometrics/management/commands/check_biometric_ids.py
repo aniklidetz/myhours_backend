@@ -1,9 +1,11 @@
-from django.core.management.base import BaseCommand
+import logging
+
 from django.conf import settings
-from users.models import Employee
+from django.core.management.base import BaseCommand
+
 from biometrics.models import BiometricProfile
 from biometrics.services.mongodb_service import MongoDBService
-import logging
+from users.models import Employee
 
 logger = logging.getLogger(__name__)
 

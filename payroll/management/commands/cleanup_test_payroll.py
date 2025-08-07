@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import models
-from payroll.models import Salary, CompensatoryDay
+
+from payroll.models import CompensatoryDay, Salary
 from users.models import Employee
 
 

@@ -2,11 +2,13 @@
 Shift splitting logic for handling work periods that span across Sabbath or holidays
 """
 
-from decimal import Decimal
-from datetime import datetime, time, timedelta
-from django.utils import timezone
-import pytz
 import logging
+from datetime import datetime, time, timedelta
+from decimal import Decimal
+
+import pytz
+
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 

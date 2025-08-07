@@ -1,6 +1,8 @@
-from django.core.management.base import BaseCommand
-from payroll.models import DailyPayrollCalculation
 from decimal import Decimal
+
+from django.core.management.base import BaseCommand
+
+from payroll.models import DailyPayrollCalculation
 
 
 class Command(BaseCommand):

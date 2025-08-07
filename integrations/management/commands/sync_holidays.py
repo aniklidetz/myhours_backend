@@ -1,8 +1,10 @@
+import logging
+
+from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.core.cache import cache
+
 from integrations.services.hebcal_service import HebcalService
-import logging
 
 logger = logging.getLogger(__name__)
 

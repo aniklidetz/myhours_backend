@@ -1,12 +1,14 @@
-import logging
-import pymongo
-from pymongo import MongoClient
-from pymongo.errors import PyMongoError, ConnectionFailure
-from bson.objectid import ObjectId
-from django.conf import settings
-import numpy as np
-import json
 import datetime
+import json
+import logging
+
+import numpy as np
+import pymongo
+from bson.objectid import ObjectId
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, PyMongoError
+
+from django.conf import settings
 
 logger = logging.getLogger("biometrics")
 

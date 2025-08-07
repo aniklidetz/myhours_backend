@@ -1,24 +1,27 @@
 # users/enhanced_auth_views.py
-from rest_framework import status
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-    authentication_classes,
-)
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from django.contrib.auth import authenticate
-from django.utils import timezone
-from django.conf import settings
-from drf_spectacular.utils import extend_schema, OpenApiExample
 import logging
 import uuid
 
-from .token_models import DeviceToken, BiometricSession
-from .permissions import IsEmployeeOrAbove, BiometricVerificationRequired
-from .authentication import DeviceTokenAuthentication
-from biometrics.services.mongodb_service import mongodb_service
+from drf_spectacular.utils import OpenApiExample, extend_schema
+from rest_framework import status
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+)
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+from django.conf import settings
+from django.contrib.auth import authenticate
+from django.utils import timezone
+
 from biometrics.services.face_processor import face_processor
+from biometrics.services.mongodb_service import mongodb_service
+
+from .authentication import DeviceTokenAuthentication
+from .permissions import BiometricVerificationRequired, IsEmployeeOrAbove
+from .token_models import BiometricSession, DeviceToken
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,11 @@
+import logging
+
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.test.utils import override_settings
+
 from worktime.models import WorkLog
 from worktime.serializers import WorkLogSerializer
-import logging
 
 logger = logging.getLogger(__name__)
 

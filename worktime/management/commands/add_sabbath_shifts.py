@@ -3,17 +3,18 @@ Django management command to add Sabbath work shifts for testing payroll calcula
 Adds shifts that overlap with Sabbath times (Friday evening to Saturday evening).
 """
 
+import calendar
+import random
+from datetime import date, datetime, timedelta
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import datetime, date, timedelta
-import random
-import calendar
 
-from users.models import Employee
-from worktime.models import WorkLog
 from integrations.services.enhanced_sunrise_sunset_service import (
     EnhancedSunriseSunsetService,
 )
+from users.models import Employee
+from worktime.models import WorkLog
 
 
 class Command(BaseCommand):

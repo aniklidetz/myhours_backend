@@ -9,27 +9,30 @@ Combines:
 5. FIXED: Proper calculation logic for monthly vs hourly employees
 """
 
-from django.utils import timezone
-from django.db import models
-from datetime import datetime, date, timedelta
-from decimal import Decimal
-import logging
 import calendar
+import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+
 import pytz
 
-from worktime.models import WorkLog
-from .shift_splitter import ShiftSplitter
+from django.db import models
+from django.utils import timezone
+
+from core.logging_utils import safe_log_employee
+from integrations.models import Holiday
+from integrations.services.hebcal_service import HebcalService
+from integrations.services.sunrise_sunset_service import SunriseSunsetService
 from payroll.models import (
-    Salary,
     CompensatoryDay,
     DailyPayrollCalculation,
     MonthlyPayrollSummary,
+    Salary,
 )
-from integrations.models import Holiday
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
-from integrations.services.hebcal_service import HebcalService
-from core.logging_utils import safe_log_employee
+from worktime.models import WorkLog
+
 from .redis_cache_service import payroll_cache
+from .shift_splitter import ShiftSplitter
 
 logger = logging.getLogger(__name__)
 

@@ -5,19 +5,20 @@ Fast payroll calculation service with Redis caching and optimized database queri
 Specifically designed to eliminate N+1 queries and accelerate API responses.
 """
 
-from django.utils import timezone
-from django.db import models
-from datetime import datetime, date, timedelta
-from decimal import Decimal
-import logging
 import calendar
-from typing import Dict, List, Optional, Any
+import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
-from worktime.models import WorkLog
-from payroll.models import Salary, DailyPayrollCalculation, MonthlyPayrollSummary
-from payroll.enhanced_redis_cache import enhanced_payroll_cache
-from integrations.models import Holiday
+from django.db import models
+from django.utils import timezone
+
 from core.logging_utils import safe_log_employee
+from integrations.models import Holiday
+from payroll.enhanced_redis_cache import enhanced_payroll_cache
+from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary, Salary
+from worktime.models import WorkLog
 
 logger = logging.getLogger(__name__)
 

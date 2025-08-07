@@ -11,11 +11,12 @@ Provides caching for:
 import json
 import logging
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Any
 from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 try:
     import redis
+
     from django.conf import settings
 
     REDIS_AVAILABLE = True

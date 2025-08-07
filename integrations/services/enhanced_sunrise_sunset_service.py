@@ -4,12 +4,14 @@ Enhanced Sunrise-Sunset Service with proper timezone handling for Israel
 Fixes timezone issues and integrates with Redis cache for better performance
 """
 
-import requests
 import logging
-import pytz
 from datetime import date, datetime, timedelta
-from django.core.cache import cache
+
+import pytz
+import requests
+
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 

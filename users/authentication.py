@@ -1,10 +1,13 @@
 # users/authentication.py
+import logging
+
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+
 from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
-from .token_models import DeviceToken, BiometricSession
-import logging
+
+from .token_models import BiometricSession, DeviceToken
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,10 @@
 # users/models.py
-from django.db import models
-from django.core.validators import validate_email
-from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
 import re
+
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db import models
 
 
 class EmployeeQuerySet(models.QuerySet):
@@ -264,13 +265,12 @@ class Employee(models.Model):
         return True
 
 
-# Import enhanced token models
-from .token_models import DeviceToken, TokenRefreshLog, BiometricSession
-
-
 # Invitation model
 import secrets
 from datetime import timedelta
+
+# Import enhanced token models
+from .token_models import BiometricSession, DeviceToken, TokenRefreshLog
 
 
 class EmployeeInvitation(models.Model):

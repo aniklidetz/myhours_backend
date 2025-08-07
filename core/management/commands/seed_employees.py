@@ -3,17 +3,18 @@ Django management command to seed the database with test employee data.
 Creates employees with hourly and monthly salary types, including admin and accountant roles.
 """
 
-from django.core.management.base import BaseCommand
+import random
+from datetime import timedelta
+from decimal import Decimal
+
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from django.conf import settings
-from decimal import Decimal
-from datetime import timedelta
-import random
 
-from users.models import Employee
 from payroll.models import Salary
+from users.models import Employee
 from worktime.models import WorkLog
 
 

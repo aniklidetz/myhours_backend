@@ -1,7 +1,9 @@
 # users/permissions.py
-from rest_framework.permissions import BasePermission
-from django.utils import timezone
 from datetime import timedelta
+
+from rest_framework.permissions import BasePermission
+
+from django.utils import timezone
 
 
 class IsEmployeeOrAbove(BasePermission):

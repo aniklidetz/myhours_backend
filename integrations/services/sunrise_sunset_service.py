@@ -1,6 +1,8 @@
-import requests
 import logging
 from datetime import date, datetime, timedelta
+
+import requests
+
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)

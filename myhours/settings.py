@@ -2,13 +2,14 @@
 Django settings for myhours project.
 """
 
-from pathlib import Path
-from pymongo import MongoClient
 import logging
-import sys
 import os
-from decouple import config  # pip install python-decouple
+import sys
+from pathlib import Path
+
 import dj_database_url  # pip install dj-database-url
+from decouple import config  # pip install python-decouple
+from pymongo import MongoClient
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

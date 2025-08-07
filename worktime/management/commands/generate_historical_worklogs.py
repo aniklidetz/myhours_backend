@@ -3,11 +3,12 @@ Django management command to generate historical work logs for existing employee
 Generates work logs for specified months while respecting legal limits.
 """
 
+import calendar
+import random
+from datetime import date, datetime, timedelta
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import datetime, date, timedelta
-import random
-import calendar
 
 from users.models import Employee
 from worktime.models import WorkLog

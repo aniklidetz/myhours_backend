@@ -1,15 +1,19 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+import logging
+
 from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
 from django.core.cache import cache
+from django.utils import timezone
+
+from core.logging_utils import safe_log_employee
+
+from .filters import WorkLogFilter
 from .models import WorkLog
 from .serializers import WorkLogSerializer
-from .filters import WorkLogFilter
-import logging
-from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,9 @@ Handles migrations, initial data, and test users
 """
 import os
 import sys
-import django
 from pathlib import Path
+
+import django
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -15,11 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings")
 django.setup()
 
-from django.core.management import call_command
-from django.contrib.auth.models import User
-from users.models import Employee
 from datetime import datetime, timedelta
+
+from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.utils import timezone
+
+from users.models import Employee
 
 
 def run_migrations():

@@ -1,11 +1,13 @@
 # core/middleware.py
-import time
 import json
 import logging
+import time
+
+from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
-from django.http import JsonResponse
-from core.logging_utils import safe_log_user, hash_user_id
+
+from core.logging_utils import hash_user_id, safe_log_user
 
 logger = logging.getLogger(__name__)
 

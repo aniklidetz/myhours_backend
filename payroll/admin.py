@@ -1,13 +1,15 @@
-from django.contrib import admin
+from django import forms
 from django.conf import settings
+from django.contrib import admin
+
+from users.models import Employee
+
 from .models import (
-    Salary,
     CompensatoryDay,
     DailyPayrollCalculation,
     MonthlyPayrollSummary,
+    Salary,
 )
-from django import forms
-from users.models import Employee
 
 
 class SalaryAdminForm(forms.ModelForm):

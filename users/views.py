@@ -1,24 +1,28 @@
-from rest_framework import viewsets, status, generics
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.filters import SearchFilter, OrderingFilter
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+import logging
+
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import generics, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
-from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils import timezone
+
+from core.logging_utils import get_safe_logger, safe_log_employee
+
 from .models import Employee, EmployeeInvitation
 from .serializers import (
+    AcceptInvitationSerializer,
+    EmployeeInvitationSerializer,
     EmployeeSerializer,
     EmployeeUpdateSerializer,
-    EmployeeInvitationSerializer,
     SendInvitationSerializer,
-    AcceptInvitationSerializer,
 )
-import logging
-from core.logging_utils import safe_log_employee, get_safe_logger
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +87,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         # Create default salary configuration based on role
-        from payroll.models import Salary
         from decimal import Decimal
+
+        from payroll.models import Salary
 
         # Determine calculation type based on employment_type first, then role
         if employee.employment_type in ["full_time", "part_time"]:
@@ -156,8 +161,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee = serializer.save()
 
         # Handle salary updates if they are provided
-        from payroll.models import Salary
         from decimal import Decimal
+
+        from payroll.models import Salary
 
         # Check if salary data was provided in the request
         hourly_rate = request_data.get("hourly_rate")

@@ -4,12 +4,14 @@ Enhanced Biometric Service with MongoDB First pattern and fail-safe logic
 
 import logging
 from typing import Dict, List, Optional, Tuple
+
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from django.core.exceptions import ValidationError
-from users.models import Employee
+
 from biometrics.models import BiometricProfile
 from biometrics.services.mongodb_repository import MongoBiometricRepository
+from users.models import Employee
 
 logger = logging.getLogger("biometrics")
 

@@ -1,14 +1,16 @@
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
-from django.utils import timezone
 import calendar
 import logging
-from users.models import Employee
-from integrations.models import Holiday
-from worktime.models import WorkLog
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
 from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.utils import timezone
+
+from integrations.models import Holiday
+from integrations.services.sunrise_sunset_service import SunriseSunsetService
+from users.models import Employee
+from worktime.models import WorkLog
 
 
 class Salary(models.Model):
@@ -121,8 +123,8 @@ class Salary(models.Model):
         """
         try:
             # Get work logs that overlap with the month
-            from datetime import date, timedelta
             import calendar
+            from datetime import date, timedelta
 
             # Calculate exact month boundaries
             start_date = date(year, month, 1)
@@ -362,8 +364,8 @@ class Salary(models.Model):
 
         try:
             # Retrieve all work logs for the month - include sessions that overlap
-            from datetime import date
             import calendar
+            from datetime import date
 
             # Calculate exact month boundaries
             start_date = date(year, month, 1)
@@ -947,6 +949,7 @@ class Salary(models.Model):
                 shabbat_times = SunriseSunsetService.get_shabbat_times(work_date)
                 if not shabbat_times.get("is_estimated", True):
                     from datetime import datetime
+
                     import pytz
 
                     # Parse UTC time from API
