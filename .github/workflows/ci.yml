@@ -161,9 +161,7 @@ jobs:
     
     - name: Run isort (import sorting)  
       run: |
-        echo "⚠️ Temporarily allowing isort failures while fixing imports"
-        isort --check-only --diff . || echo "isort check failed - will be fixed in next commit"
-      continue-on-error: true
+        isort --check-only --diff .
     
     - name: Run flake8 (linting)
       run: |
