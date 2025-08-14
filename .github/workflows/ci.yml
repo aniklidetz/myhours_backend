@@ -161,21 +161,12 @@ jobs:
       run: |
         echo "Testing PostgreSQL connectivity..."
         echo "DATABASE_URL: $DATABASE_URL"
-        python -c "
-import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myhours.settings_ci')
-import django
-django.setup()
-from django.db import connection
-try:
-    with connection.cursor() as cursor:
-        cursor.execute('SELECT version();')
-        result = cursor.fetchone()
-        print('✅ Database connected successfully!')
-        print(f'PostgreSQL version: {result[0]}')
-except Exception as e:
-    print(f'❌ Database connection failed: {e}')
-    raise
+        python manage.py shell --command="
+from django.db import connection;
+cursor = connection.cursor();
+cursor.execute('SELECT version()');
+result = cursor.fetchone();
+print('✅ Database connected:', result[0][:50]);
 "
     
     - name: Run Django system checks
@@ -208,7 +199,7 @@ except Exception as e:
           fi
         done
         echo "Python can import Django:"
-        python -c "import django; print(f'Django version: {django.VERSION}')"
+        python -c "import django; print('Django version: ' + str(django.VERSION))"
     
     - name: Run pytest tests
       working-directory: ${{ steps.detect.outputs.projdir }}
