@@ -14,6 +14,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    defaults:
+      run:
+        working-directory: backend/myhours-backend
+    
     services:
       postgres:
         image: postgres:15
@@ -98,11 +102,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install wheel
-        # Find the requirements file in the correct directory
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         # Use CI requirements to avoid heavy biometric dependencies
         if [ -f requirements-ci.txt ]; then
           pip install -r requirements-ci.txt
@@ -125,112 +124,22 @@ jobs:
     
     - name: Run Django system checks
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         python manage.py check --deploy
     
     - name: Run database migrations
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         python manage.py migrate
     
     - name: Run Django tests
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         python manage.py test --verbosity=2 --keepdb
     
     - name: Run pytest tests
       run: |
-        cd ${{ github.workspace }}
-        # Check project structure and create appropriate pytest.ini
-        if [ -d "backend/myhours-backend" ]; then
-          echo "Creating pytest.ini for repository with backend subdirectory..."
-          cat > pytest.ini << 'EOF'
-[pytest]
-DJANGO_SETTINGS_MODULE = myhours.settings_ci
-python_files = tests.py test_*.py *_tests.py
-python_classes = Test* *Tests
-python_functions = test_*
-addopts = 
-    --strict-markers
-    --strict-config
-    --verbose
-    --tb=short
-    --cov=backend/myhours-backend
-    --cov-report=term-missing
-    --cov-report=html
-    --cov-report=xml
-    --cov-fail-under=50
-    --durations=10
-    --maxfail=5
-testpaths = 
-    backend/myhours-backend/core/tests
-    backend/myhours-backend/payroll/tests
-    backend/myhours-backend/worktime/tests
-    backend/myhours-backend/users/tests
-    backend/myhours-backend/integrations/tests
-    backend/myhours-backend/biometrics/tests
-    backend/myhours-backend/tests
-markers =
-    slow: marks tests as slow (deselect with '-m "not slow"')
-    integration: marks tests as integration tests
-    unit: marks tests as unit tests
-    api: marks tests as API tests
-    payroll: marks tests related to payroll functionality
-    worktime: marks tests related to worktime functionality
-    users: marks tests related to user management
-    integrations: marks tests related to external integrations
-    biometrics: marks tests related to biometric functionality
-    smoke: marks tests as smoke tests for basic functionality
-    regression: marks tests as regression tests
-    performance: marks tests as performance tests
-    security: marks tests as security tests
-filterwarnings =
-    ignore::UserWarning
-    ignore::DeprecationWarning
-    ignore::PendingDeprecationWarning
-    ignore:pkg_resources is deprecated:DeprecationWarning
-norecursedirs = 
-    .git
-    .tox
-    .env
-    venv
-    .venv
-    node_modules
-    __pycache__
-    .pytest_cache
-    htmlcov
-    staticfiles
-    media
-    logs
-    archive
-    backups
-EOF
-          # Set PYTHONPATH to include the Django project
-          export PYTHONPATH="${{ github.workspace }}/backend/myhours-backend:$PYTHONPATH"
-          pytest --verbose --tb=short
-        elif [ -f "manage.py" ]; then
-          pytest --verbose --tb=short  
-        else
-          echo "Error: Cannot find Django project directory"
-          find . -name "manage.py" -type f | head -3
-          exit 1
-        fi
+        pytest --verbose --tb=short
     
     - name: Generate test coverage report
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         coverage run --source='.' manage.py test
         coverage report --show-missing
         coverage xml
@@ -245,6 +154,10 @@ EOF
 
   lint:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: backend/myhours-backend
     
     steps:
     - name: Checkout code
@@ -262,40 +175,28 @@ EOF
     
     - name: Run Black (code formatting)
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         black --check --diff .
     
     - name: Run isort (import sorting)  
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         isort --check-only --diff .
     
     - name: Run flake8 (linting)
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --statistics
     
     - name: Run mypy (type checking)
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         mypy . --ignore-missing-imports
       continue-on-error: true
 
   security:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: backend/myhours-backend
     
     steps:
     - name: Checkout code
@@ -318,10 +219,6 @@ EOF
     
     - name: Run bandit (security linting)
       run: |
-        cd ${{ github.workspace }}
-        if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
-        fi
         bandit -r . -f json
       continue-on-error: true
 
