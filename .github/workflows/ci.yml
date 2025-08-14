@@ -95,10 +95,14 @@ jobs:
           cmake
     
     - name: Install Python dependencies
-      working-directory: .
       run: |
         python -m pip install --upgrade pip
         pip install wheel
+        # Find the requirements file in the correct directory
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         # Use CI requirements to avoid heavy biometric dependencies
         if [ -f requirements-ci.txt ]; then
           pip install -r requirements-ci.txt
@@ -120,28 +124,49 @@ jobs:
         echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Run Django system checks
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         python manage.py check --deploy
     
     - name: Run database migrations
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         python manage.py migrate
     
     - name: Run Django tests
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         python manage.py test --verbosity=2 --keepdb
     
     - name: Run pytest tests
-      working-directory: .
       run: |
-        pytest --verbose --tb=short
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+          pytest --verbose --tb=short
+        elif [ -f "manage.py" ]; then
+          pytest --verbose --tb=short  
+        else
+          echo "Error: Cannot find Django project directory"
+          find . -name "manage.py" -type f | head -3
+          exit 1
+        fi
     
     - name: Generate test coverage report
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         coverage run --source='.' manage.py test
         coverage report --show-missing
         coverage xml
@@ -149,7 +174,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: ./coverage.xml
+        file: backend/myhours-backend/coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
@@ -172,24 +197,36 @@ jobs:
         pip install flake8 black isort mypy
     
     - name: Run Black (code formatting)
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         black --check --diff .
     
     - name: Run isort (import sorting)  
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         isort --check-only --diff .
     
     - name: Run flake8 (linting)
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --statistics
     
     - name: Run mypy (type checking)
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         mypy . --ignore-missing-imports
       continue-on-error: true
 
@@ -216,8 +253,11 @@ jobs:
       continue-on-error: true
     
     - name: Run bandit (security linting)
-      working-directory: .
       run: |
+        cd ${{ github.workspace }}
+        if [ -d "backend/myhours-backend" ]; then
+          cd backend/myhours-backend
+        fi
         bandit -r . -f json
       continue-on-error: true
 
