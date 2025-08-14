@@ -56,13 +56,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Debug workspace structure
+      run: |
+        echo "Current working directory:"
+        pwd
+        echo "Directory contents:"
+        ls -la
+        echo "Looking for Python project files:"
+        find . -name "manage.py" -type f 2>/dev/null || echo "No manage.py found"
+        find . -name "requirements*.txt" -type f 2>/dev/null || echo "No requirements files found"
+    
     - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
@@ -85,7 +95,6 @@ jobs:
           cmake
     
     - name: Install Python dependencies
-      working-directory: ./backend/myhours-backend
       run: |
         python -m pip install --upgrade pip
         pip install wheel
@@ -110,27 +119,22 @@ jobs:
         echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Run Django system checks
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py check --deploy
     
     - name: Run database migrations
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py migrate
     
     - name: Run Django tests
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py test --verbosity=2 --keepdb
     
     - name: Run pytest tests
-      working-directory: ./backend/myhours-backend
       run: |
         pytest --verbose --tb=short
     
     - name: Generate test coverage report
-      working-directory: ./backend/myhours-backend
       run: |
         coverage run --source='.' manage.py test
         coverage report --show-missing
@@ -139,7 +143,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: ./backend/myhours-backend/coverage.xml
+        file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
@@ -152,7 +156,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
@@ -162,23 +166,19 @@ jobs:
         pip install flake8 black isort mypy
     
     - name: Run Black (code formatting)
-      working-directory: ./backend/myhours-backend
       run: |
         black --check --diff .
     
     - name: Run isort (import sorting)  
-      working-directory: ./backend/myhours-backend
       run: |
         isort --check-only --diff .
     
     - name: Run flake8 (linting)
-      working-directory: ./backend/myhours-backend
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --statistics
     
     - name: Run mypy (type checking)
-      working-directory: ./backend/myhours-backend
       run: |
         mypy . --ignore-missing-imports
       continue-on-error: true
@@ -191,7 +191,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
@@ -206,7 +206,6 @@ jobs:
       continue-on-error: true
     
     - name: Run bandit (security linting)
-      working-directory: ./backend/myhours-backend
       run: |
         bandit -r . -f json
       continue-on-error: true
@@ -243,8 +242,8 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./backend/myhours-backend
-        file: ./backend/myhours-backend/Dockerfile.optimized
+        context: .
+        file: ./scripts/deployment/Dockerfile.optimized
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
@@ -361,12 +360,11 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Install dependencies
-      working-directory: ./backend/myhours-backend
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-ci.txt
@@ -386,7 +384,6 @@ jobs:
         echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Set up test environment
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py migrate
         python manage.py collectstatic --noinput
@@ -440,12 +437,11 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Install dependencies
-      working-directory: ./backend/myhours-backend
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-ci.txt
@@ -464,12 +460,10 @@ jobs:
         echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
     
     - name: Check migration consistency
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py makemigrations --check --dry-run
     
     - name: Run migrations
-      working-directory: ./backend/myhours-backend
       run: |
         python manage.py migrate
     
