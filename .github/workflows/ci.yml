@@ -143,6 +143,7 @@ jobs:
         echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
         echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
         echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
+        echo "ENABLE_BIOMETRIC_MOCK=True" >> $GITHUB_ENV
     
     - name: Wait for PostgreSQL
       run: |
@@ -157,17 +158,25 @@ jobs:
         done
     
     - name: Test database connectivity
+      shell: bash
       working-directory: ${{ steps.detect.outputs.projdir }}
+      env:
+        DJANGO_SETTINGS_MODULE: myhours.settings_ci
       run: |
         echo "Testing PostgreSQL connectivity..."
         echo "DATABASE_URL: $DATABASE_URL"
-        python manage.py shell --command="
-from django.db import connection;
-cursor = connection.cursor();
-cursor.execute('SELECT version()');
-result = cursor.fetchone();
-print('✅ Database connected:', result[0][:50]);
-"
+
+        # Use a heredoc so YAML sees a single, well-indented bash block
+        python - <<'PY'
+import os, django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings_ci")
+django.setup()
+
+from django.db import connection
+with connection.cursor() as cur:
+    cur.execute("SELECT version()")
+    print("✅ Database connected:", cur.fetchone()[0][:50])
+PY
     
     - name: Run Django system checks
       working-directory: ${{ steps.detect.outputs.projdir }}
