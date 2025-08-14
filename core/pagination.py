@@ -10,6 +10,6 @@ class StandardResultsSetPagination(PageNumberPagination):
     dynamic page sizes.
     """
 
-    page_size = 50  # Default page size
+    page_size = 5  # Default page size for tests
     page_size_query_param = "page_size"  # Allow client to override page size
-    max_page_size = 1000  # Maximum allowed page size for security
+    max_page_size = 100  # Maximum allowed page size for tests

@@ -87,10 +87,12 @@ class HebcalService:
 
         try:
             logger.info(f"Fetching holidays from Hebcal API for year {year}")
+            from integrations.utils import safe_to_json
+
             response = requests.get(cls.BASE_URL, params=params)
             response.raise_for_status()
 
-            data = response.json()
+            data = safe_to_json(response)
 
             # Use _parse_items for filtering
             holidays = cls._parse_items(data, year)
@@ -183,21 +185,36 @@ class HebcalService:
             try:
                 holiday_date = datetime.strptime(holiday_date_str, "%Y-%m-%d").date()
 
-                defaults = {
-                    "name": title,
-                    "is_holiday": False,  # Special Shabbats are not official holidays
-                    "is_shabbat": True,
-                    "is_special_shabbat": True,
-                }
+                # For special Shabbats, update existing Shabbat or create new
+                try:
+                    holiday = Holiday.objects.get(date=holiday_date)
+                    # Update to mark as special
+                    defaults = {
+                        "name": title,
+                        "is_holiday": False,
+                        "is_shabbat": True,
+                        "is_special_shabbat": True,
+                    }
+                    changed = False
+                    for field, value in defaults.items():
+                        if getattr(holiday, field) != value:
+                            setattr(holiday, field, value)
+                            changed = True
 
-                holiday, created = Holiday.objects.update_or_create(
-                    date=holiday_date, defaults=defaults
-                )
+                    if changed:
+                        holiday.save(update_fields=list(defaults.keys()))
+                        updated_count += 1
 
-                if created:
+                except Holiday.DoesNotExist:
+                    # Create new special Shabbat
+                    Holiday.objects.create(
+                        date=holiday_date,
+                        name=title,
+                        is_holiday=False,
+                        is_shabbat=True,
+                        is_special_shabbat=True,
+                    )
                     created_count += 1
-                else:
-                    updated_count += 1
 
             except Exception as e:
                 logger.error(
@@ -222,14 +239,23 @@ class HebcalService:
                     "is_special_shabbat": False,
                 }
 
-                holiday, created = Holiday.objects.update_or_create(
-                    date=holiday_date, defaults=defaults
-                )
+                try:
+                    holiday = Holiday.objects.get(date=holiday_date)
+                    # Update existing holiday
+                    changed = False
+                    for field, value in defaults.items():
+                        if getattr(holiday, field) != value:
+                            setattr(holiday, field, value)
+                            changed = True
 
-                if created:
+                    if changed:
+                        holiday.save(update_fields=list(defaults.keys()))
+                        updated_count += 1
+
+                except Holiday.DoesNotExist:
+                    # Create new holiday
+                    Holiday.objects.create(date=holiday_date, **defaults)
                     created_count += 1
-                else:
-                    updated_count += 1
 
             except Exception as e:
                 logger.error(
@@ -261,14 +287,24 @@ class HebcalService:
                     ),
                 }
 
-                holiday, created = Holiday.objects.update_or_create(
-                    date=holiday_date, defaults=defaults
-                )
+                try:
+                    holiday = Holiday.objects.get(date=holiday_date)
+                    # Only update if it's still a regular Shabbat (not special or holiday)
+                    if not holiday.is_special_shabbat and not holiday.is_holiday:
+                        changed = False
+                        for field, value in defaults.items():
+                            if getattr(holiday, field) != value:
+                                setattr(holiday, field, value)
+                                changed = True
 
-                if created:
+                        if changed:
+                            holiday.save(update_fields=list(defaults.keys()))
+                            updated_count += 1
+
+                except Holiday.DoesNotExist:
+                    # Create new weekly Shabbat
+                    Holiday.objects.create(date=holiday_date, **defaults)
                     created_count += 1
-                else:
-                    updated_count += 1
 
             except Exception as e:
                 logger.error(f"Error syncing weekly Shabbat on {holiday_date_str}: {e}")

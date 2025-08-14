@@ -4,11 +4,11 @@ from . import views
 
 urlpatterns = [
     # Face recognition endpoints
-    path("register/", views.register_face, name="face-register"),
+    path(
+        "register/", views.register_face, name="register"
+    ),  # Main registration endpoint
     path("check-in/", views.check_in, name="face-check-in"),
     path("check-out/", views.check_out, name="face-check-out"),
-    # Generic endpoints for authentication tests
-    path("register/", views.register_face, name="register"),  # Alias for tests
     # Test endpoint
     path("test/", views.test_endpoint, name="test-endpoint"),
     # Work status endpoint - placed before status to test pattern matching

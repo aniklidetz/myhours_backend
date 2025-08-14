@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import models
 
-from payroll.models import CompensatoryDay, Salary
+from payroll.models import CompensatoryDay, DailyPayrollCalculation, Salary
 from users.models import Employee
 
 
@@ -66,18 +66,42 @@ class Command(BaseCommand):
             | models.Q(base_salary__lt=1000)  # Monthly salary < 1k ILS
         )
 
+        # Delete daily payroll calculations that look like test data
+        # (e.g., very small amounts, round numbers, test employees)
+        test_calculations = DailyPayrollCalculation.objects.filter(
+            models.Q(total_gross_pay__lt=10)  # Very small payments
+            | models.Q(employee__email__icontains="test")  # Test employees
+            | models.Q(employee__email__icontains="example.com")  # Example emails
+        )
+
         self.stdout.write(f"📊 Found {test_salaries.count()} test salary records")
+        self.stdout.write(
+            f"📊 Found {test_calculations.count()} test payroll calculation records"
+        )
 
         if dry_run:
             for salary in test_salaries:
                 self.stdout.write(
                     f"  - Would delete: {salary.employee.get_full_name()} (Base: {salary.base_salary}, Hourly: {salary.hourly_rate})"
                 )
+            for calc in test_calculations:
+                self.stdout.write(
+                    f"  - Would delete calculation: {calc.employee.get_full_name()} - {calc.work_date}"
+                )
         else:
-            deleted_count = test_salaries.count()
+            salary_deleted_count = test_salaries.count()
+            calc_deleted_count = test_calculations.count()
             test_salaries.delete()
+            test_calculations.delete()
             self.stdout.write(
-                self.style.SUCCESS(f"✅ Deleted {deleted_count} test salary records")
+                self.style.SUCCESS(
+                    f"✅ Deleted {salary_deleted_count} test salary records"
+                )
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"✅ Deleted {calc_deleted_count} test payroll calculation records"
+                )
             )
 
     def cleanup_unrealistic_data(self, dry_run):

@@ -1,266 +1,126 @@
 """
-Django settings for CI/CD environment
+Django settings for CI/CD environment (clean version without emojis)
 """
 
 import os
 import sys
+from urllib.parse import unquote, urlparse
 
-print("🚀 CI SETTINGS: Starting configuration...")
+# ========= CI flags & environment variables =========
+GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", "").lower() == "true"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    # default for docker-compose: the DB service is named 'postgres'
+    "postgresql://postgres:postgres@postgres:5432/myhours_db",
+)
 
-# CRITICAL: Configure DATABASE before importing base settings
-# This prevents base settings from using broken dj_database_url parsing
-
-# Get DATABASE_URL before any imports
-database_url = os.environ.get("DATABASE_URL", "")
-github_actions = os.environ.get("GITHUB_ACTIONS", "")
-
-print("=" * 60)
-print("🔍 CI PRE-IMPORT DEBUG:")
-print(f"  GITHUB_ACTIONS = {github_actions!r}")
-print(f"  DATABASE_URL = {database_url!r}")
-print(f"  DJANGO_SETTINGS_MODULE = {os.environ.get('DJANGO_SETTINGS_MODULE')!r}")
-print("=" * 60)
-
-# FORCE PostgreSQL configuration BEFORE importing base settings
-if github_actions == "true" or database_url:
-    # Determine database name from URL
-    if "myhours_test" in database_url:
-        db_name = "myhours_test"
-    elif "myhours_perf" in database_url:
-        db_name = "myhours_perf"
-    elif "myhours_migration" in database_url:
-        db_name = "myhours_migration"
-    else:
-        db_name = "myhours_test"  # default fallback
-
-    # Set PostgreSQL configuration BEFORE base settings import
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": db_name,
-            "USER": "postgres",
-            "PASSWORD": "postgres",
-            "HOST": "localhost",
-            "PORT": "5432",
-        }
-    }
-    print(f"✅ CI PRE-IMPORT: Set PostgreSQL with DB name: {db_name}")
-    print(f"✅ CI PRE-IMPORT: ENGINE = {DATABASES['default']['ENGINE']}")
+# Decide target DB name (can be overridden via CI_DB_NAME)
+if "myhours_perf" in DATABASE_URL:
+    CI_DB_NAME = "myhours_perf"
+elif "myhours_migration" in DATABASE_URL:
+    CI_DB_NAME = "myhours_migration"
 else:
-    # Local development fallback
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
-    }
-    print("✅ CI PRE-IMPORT: Set SQLite fallback")
+    CI_DB_NAME = os.getenv("CI_DB_NAME", "myhours_test")
 
-# Now import base settings - they WON'T override our DATABASES
-print("🔄 CI: Importing base settings...")
-from .settings import *
+# ========= Parse DATABASE_URL =========
+u = urlparse(DATABASE_URL)
+if u.scheme not in ("postgresql", "postgres"):
+    raise RuntimeError(
+        f"Invalid DATABASE_URL scheme: {u.scheme!r}. Expected 'postgresql' or 'postgres'."
+    )
 
-print("✅ CI: Base settings imported")
+DB_CONFIG_FROM_URL = {
+    "ENGINE": "django.db.backends.postgresql",
+    "NAME": CI_DB_NAME,  # force CI DB name
+    "USER": unquote(u.username or ""),
+    "PASSWORD": unquote(u.password or ""),
+    "HOST": u.hostname or "localhost",  # will be 'postgres' if defined in URL
+    "PORT": str(u.port or 5432),
+}
 
-# Override for CI - don't use dj_database_url to avoid parsing issues
+# ========= Make DATABASES available BEFORE importing base settings =========
+DATABASES = {"default": DB_CONFIG_FROM_URL}
 
-# Override settings for CI
+# ========= Import base settings =========
+from .settings import *  # noqa
+
+# ========= Apply CI-specific overrides on top of base settings =========
 DEBUG = True
 SECRET_KEY = os.environ.get("SECRET_KEY", "test-secret-key-for-ci")
 
-# Clear any existing DATABASE configuration from base settings
-# This prevents the base settings DATABASE_URL logic from interfering
-DATABASES = {}
+# Keep Celery and drf-spectacular out of CI test runs (lighter/faster + prevent schema generation crashes)
+INSTALLED_APPS = [
+    app for app in INSTALLED_APPS if app not in ("celery", "drf_spectacular")
+]
 
-# Temporarily clear DATABASE_URL to prevent base settings from using it
-original_database_url = os.environ.get("DATABASE_URL", "")
-if "DATABASE_URL" in os.environ:
-    del os.environ["DATABASE_URL"]
+# DRF and basic test adjustments
+APPEND_SLASH = False
+SECURE_SSL_REDIRECT = False
 
-# Database configuration will be set at the end of this file
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.TokenAuthentication",
+        "users.authentication.DeviceTokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 5,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.OrderingFilter",
+        "rest_framework.filters.SearchFilter",
+    ],
+}
 
-# MongoDB (use default if not available)
-MONGO_CONNECTION_STRING = os.environ.get(
+# Cache/sessions — no Redis in CI
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "ci-tests",
+    }
+}
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+
+# MongoDB — safe defaults
+MONGO_CONNECTION_STRING = os.getenv(
     "MONGO_CONNECTION_STRING", "mongodb://localhost:27017/"
 )
-MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "myhours_ci_test")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "myhours_ci_test")
+ENABLE_BIOMETRIC_MOCK = os.getenv("ENABLE_BIOMETRIC_MOCK", "False").lower() == "true"
 
-# Disable biometric processing in CI
-ENABLE_BIOMETRIC_MOCK = True
+# Lightweight Mongo mock during tests/CI
+if "test" in sys.argv or GITHUB_ACTIONS:
 
-# Disable some heavy apps for CI
-INSTALLED_APPS = [app for app in INSTALLED_APPS if app not in ["celery"]]
-
-print(f"🔍 CI DEBUG: INSTALLED_APPS = {INSTALLED_APPS}")
-
-# Disable MongoDB connections during tests
-if "test" in sys.argv or "GITHUB_ACTIONS" in os.environ:
-    # Override MongoDB service to avoid connection errors during Django setup
-    class MockMongoService:
+    class _MockMongoService:
         def get_all_active_embeddings(self):
             return []
 
         def get_employee_embeddings(self, employee_id):
             return []
 
-    # Monkey patch for CI
     import biometrics.services.mongodb_service
 
-    biometrics.services.mongodb_service.mongodb_service = MockMongoService()
+    biometrics.services.mongodb_service.mongodb_service = _MockMongoService()
 
-# Simpler logging for CI
+# Feature flags
+FEATURE_FLAGS = {
+    "ENABLE_PROJECT_PAYROLL": True,
+}
+
+# Simplified logging for CI
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "WARNING",
-    },
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "WARNING"},
 }
 
-# Feature flags for CI
-FEATURE_FLAGS = {
-    "ENABLE_PROJECT_PAYROLL": True,  # Test with all features enabled
-}
-
-# CRITICAL: Force database configuration at the end to override any imports
-# Use the original DATABASE_URL value that was captured before deletion
-DATABASE_URL_CI = original_database_url or "sqlite:///ci_test.db"
-
-# Extended environment debugging as suggested in analysis
-print("=" * 50)
-print("🔍 CI ENV CHECK: GITHUB_ACTIONS =", os.environ.get("GITHUB_ACTIONS"))
-print("🔍 CI ENV CHECK: DATABASE_URL =", os.environ.get("DATABASE_URL"))
-print(
-    "🔍 CI ENV CHECK: DJANGO_SETTINGS_MODULE =",
-    os.environ.get("DJANGO_SETTINGS_MODULE"),
-)
-print("🔍 CI DEBUG: Original DATABASE_URL = {!r}".format(original_database_url))
-print("🔍 CI DEBUG: Final DATABASE_URL_CI = {!r}".format(DATABASE_URL_CI))
-print("🔍 CI DEBUG: Current DATABASES before override = {!r}".format(DATABASES))
-print("=" * 50)
-
-# FORCE PostgreSQL configuration regardless of URL parsing issues
-# This ensures we never fall back to dummy backend in CI
-github_actions = os.environ.get("GITHUB_ACTIONS")
-print(
-    f"🔍 CI DEBUG: GITHUB_ACTIONS check: {github_actions!r} == 'true'? {github_actions == 'true'}"
-)
-
-if github_actions == "true":
-    # We're in GitHub Actions - force PostgreSQL
-    if "myhours_test" in str(DATABASE_URL_CI):
-        db_name = "myhours_test"
-    elif "myhours_perf" in str(DATABASE_URL_CI):
-        db_name = "myhours_perf"
-    elif "myhours_migration" in str(DATABASE_URL_CI):
-        db_name = "myhours_migration"
-    else:
-        db_name = "myhours_test"  # default fallback
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": db_name,
-            "USER": "postgres",
-            "PASSWORD": "postgres",
-            "HOST": "localhost",
-            "PORT": "5432",
-        }
-    }
-    print(f"✅ CI: FORCED PostgreSQL database: {db_name}")
-elif "postgresql://" in DATABASE_URL_CI or "postgres://" in DATABASE_URL_CI:
-    # Local development with PostgreSQL URL
-    if "myhours_test" in DATABASE_URL_CI:
-        db_name = "myhours_test"
-    elif "myhours_perf" in DATABASE_URL_CI:
-        db_name = "myhours_perf"
-    elif "myhours_migration" in DATABASE_URL_CI:
-        db_name = "myhours_migration"
-    else:
-        db_name = "myhours_test"
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": db_name,
-            "USER": "postgres",
-            "PASSWORD": "postgres",
-            "HOST": "localhost",
-            "PORT": "5432",
-        }
-    }
-    print(f"✅ CI: Using PostgreSQL database: {db_name}")
-else:
-    # Local development fallback
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
-    }
-    print("✅ CI: Using SQLite in-memory database")
-
-print(f"🔍 CI DEBUG: Final DATABASES configuration = {DATABASES}")
-print(f"🔍 CI DEBUG: Final ENGINE = {DATABASES['default'].get('ENGINE', 'NOT_SET')}")
-
-# Final validation - ensure ENGINE is NEVER dummy
-current_engine = DATABASES.get("default", {}).get("ENGINE", "NOT_SET")
-print(f"🔍 CI DEBUG: Current ENGINE before validation: {current_engine!r}")
-
-if (
-    current_engine == "django.db.backends.dummy"
-    or current_engine == "NOT_SET"
-    or not current_engine
-):
-    print(
-        "❌ CI ERROR: Django is using dummy backend or ENGINE not set! Forcing PostgreSQL..."
-    )
-
-    # Determine database name from environment or use sensible default
-    env_db_url = os.environ.get("DATABASE_URL", "")
-    if "myhours_test" in env_db_url:
-        fallback_db_name = "myhours_test"
-    elif "myhours_perf" in env_db_url:
-        fallback_db_name = "myhours_perf"
-    elif "myhours_migration" in env_db_url:
-        fallback_db_name = "myhours_migration"
-    else:
-        fallback_db_name = "myhours_test"  # ultimate fallback
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": fallback_db_name,
-            "USER": "postgres",
-            "PASSWORD": "postgres",
-            "HOST": "localhost",
-            "PORT": "5432",
-        }
-    }
-    print(
-        f"🔧 CI FIX: Forced PostgreSQL configuration with DB name: {fallback_db_name}"
-    )
-
-# Final check with comprehensive validation
-final_engine = DATABASES.get("default", {}).get("ENGINE", "NOT_SET")
-final_db_name = DATABASES.get("default", {}).get("NAME", "NOT_SET")
-print(f"🎯 CI FINAL: Using database engine: {final_engine}")
-print(f"🎯 CI FINAL: Using database name: {final_db_name}")
-
-# Ensure we have a proper PostgreSQL config in CI
-if os.environ.get("GITHUB_ACTIONS") == "true":
-    if final_engine != "django.db.backends.postgresql":
-        print(f"🚨 CI CRITICAL ERROR: Expected PostgreSQL in CI but got {final_engine}")
-        raise Exception(
-            f"CI database configuration failed - got {final_engine} instead of PostgreSQL"
-        )
-    else:
-        print("✅ CI SUCCESS: PostgreSQL engine confirmed for GitHub Actions")
-else:
-    print(f"ℹ️ CI INFO: Local development mode - using {final_engine}")
+# ========= Sanity checks =========
+_engine = DATABASES["default"]["ENGINE"]
+_host = DATABASES["default"]["HOST"]
+_name = DATABASES["default"]["NAME"]
+if _engine != "django.db.backends.postgresql":
+    raise RuntimeError(f"Unexpected DB engine in CI: {_engine}")
+if GITHUB_ACTIONS and not _host:
+    raise RuntimeError("Empty DB HOST in CI.")

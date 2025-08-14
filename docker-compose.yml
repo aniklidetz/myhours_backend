@@ -16,6 +16,7 @@ services:
       - DEBUG=True
       - ENABLE_BIOMETRIC_MOCK=False
       - SECRET_KEY=${SECRET_KEY}
+      - DJANGO_SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -58,6 +59,7 @@ services:
       - DEBUG=True
       - ENABLE_BIOMETRIC_MOCK=False
       - SECRET_KEY=${SECRET_KEY}
+      - DJANGO_SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -94,10 +96,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Note: Ensure local PostgreSQL is stopped (brew services stop postgresql@14)
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro  # Includes test setup scripts
     networks:
       - myhours_network
     healthcheck:

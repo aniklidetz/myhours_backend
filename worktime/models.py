@@ -1,11 +1,24 @@
 import sys
 from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 from users.models import Employee
+
+
+def _round6(val):
+    """Round decimal to 6 decimal places for geolocation coordinates"""
+    if val is None:
+        return None
+    try:
+        # Return as Decimal for DecimalField compatibility
+        return Decimal(val).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+    except (ValueError, TypeError):
+        return val  # Let validators catch invalid data
+
 
 from .querysets import WorkLogQuerySet
 
@@ -129,6 +142,12 @@ class WorkLog(models.Model):
 
     def clean(self):
         """Custom validation"""
+        # ✅ Round geolocation coordinates before Django's field validation
+        self.latitude_check_in = _round6(self.latitude_check_in)
+        self.longitude_check_in = _round6(self.longitude_check_in)
+        self.latitude_check_out = _round6(self.latitude_check_out)
+        self.longitude_check_out = _round6(self.longitude_check_out)
+
         super().clean()
 
         # Check that check_out is after check_in
@@ -261,9 +280,14 @@ class WorkLog(models.Model):
         self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
 
     def save(self, *args, **kwargs):
-        # Validate before saving (but skip during tests)
-        if "test" not in sys.argv:
-            self.full_clean()
+        # ✅ Round geolocation coordinates to prevent validation errors
+        self.latitude_check_in = _round6(self.latitude_check_in)
+        self.longitude_check_in = _round6(self.longitude_check_in)
+        self.latitude_check_out = _round6(self.latitude_check_out)
+        self.longitude_check_out = _round6(self.longitude_check_out)
+
+        # Validate before saving
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):

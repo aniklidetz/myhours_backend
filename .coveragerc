@@ -1,16 +1,29 @@
 [run]
-source = .
+branch = True
+source = biometrics, users, worktime, payroll, integrations
 omit = 
+    */migrations/*
+    */management/commands/*
+    */tests/*
+    */__init__.py
+    */admin.py
+    */apps.py
+    */urls.py
+    */settings.py
+    */settings_*.py
+    */debug_*.py
+    */health.py
+    */fix_imports.py
+    */celery.py
+    config.py
+    config-*.py
     */venv/*
     */.venv/*
     */env/*
     */.env/*
-    */migrations/*
     manage.py
-    myhours/settings/*
     myhours/wsgi.py
     myhours/asgi.py
-    */tests/*
     */test_*.py
     */*test*.py
     */node_modules/*

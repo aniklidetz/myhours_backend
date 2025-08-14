@@ -4,6 +4,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
@@ -27,6 +28,10 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+class DefaultPagination(PageNumberPagination):
+    page_size_query_param = "page_size"
+
+
 class EmployeeViewSet(viewsets.ModelViewSet):
     """Endpoints for employee management with proper security"""
 
@@ -37,6 +42,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     )
     serializer_class = EmployeeSerializer
     permission_classes = [IsAuthenticated]  # Requires authentication
+    pagination_class = DefaultPagination
 
     def get_permissions(self):
         """Override permissions for specific actions"""

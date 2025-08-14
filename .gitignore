@@ -24,6 +24,9 @@ dist/
 db.sqlite3
 db.sqlite3-journal
 django_debug.log
+# Test databases from parallel testing
+default_*.sqlite3
+test_*.sqlite3
 
 # Media files
 media/

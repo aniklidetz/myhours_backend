@@ -1,8 +1,8 @@
 import logging
+from datetime import timedelta
 
 import numpy as np
-from drf_spectacular.openapi import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -13,20 +13,13 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from core.exceptions import APIError, BiometricError
-from users.authentication import DeviceTokenAuthentication
+from core.exceptions import BiometricError
 from users.models import Employee
-from users.permissions import (
-    BiometricVerificationRequired,
-    IsEmployeeOrAbove,
-    WorkTimeOperationPermission,
-)
+from users.permissions import IsEmployeeOrAbove
 from worktime.models import WorkLog
 
 from .models import BiometricAttempt, BiometricLog, BiometricProfile, FaceQualityCheck
 from .serializers import (
-    BiometricResponseSerializer,
-    BiometricStatsSerializer,
     FaceRecognitionSerializer,
     FaceRegistrationSerializer,
 )
@@ -39,13 +32,9 @@ try:
     from .services.face_processor import face_processor
 except ImportError:
     face_processor = None
-try:
-    from .services.face_recognition_service import FaceRecognitionService
-except ImportError:
-    FaceRecognitionService = None
 from .services.mongodb_service import get_mongodb_service
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("biometrics.views")
 
 
 def get_client_ip(request):
@@ -94,7 +83,7 @@ def log_biometric_attempt(
             processing_time_ms=processing_time,
         )
         return log
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to log biometric attempt")
         return None
 
@@ -169,6 +158,68 @@ def register_face(request):
     """
     Register face for an employee
     """
+    # Early validation of image format (before MOCK mode for test consistency)
+    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
+
+    image_file = request.FILES.get("image")
+    if not image_file:
+        # Check if it's base64 data
+        image_data = request.data.get("image")
+        if not image_data or (
+            isinstance(image_data, str) and not image_data.startswith("data:image/")
+        ):
+            return Response(
+                {"image": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    elif getattr(image_file, "size", 0) == 0:
+        # Empty file
+        return Response(
+            {"image": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST
+        )
+    elif image_file.content_type not in ALLOWED_CONTENT_TYPES:
+        return Response(
+            {
+                "image": [
+                    "Invalid image format. Please provide a valid JPEG or PNG image."
+                ]
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Check for device_token and log if missing (do this early for all paths)
+    device_token = request.headers.get("X-Device-Token") or request.data.get(
+        "device_token"
+    )
+    if not device_token:
+        logger.warning("Biometric register called without device_token")
+
+    # MOCK MODE SHORT-CIRCUIT - after basic validation
+    if getattr(settings, "ENABLE_BIOMETRIC_MOCK", False):
+        logger.critical(
+            "🚨 USING BIOMETRIC MOCK MODE FOR REGISTRATION - NOT FOR PRODUCTION!"
+        )
+
+        # Get employee from request data or default to authenticated user's employee
+        employee_id = request.data.get("employee_id")
+        if (
+            not employee_id
+            and hasattr(request.user, "employees")
+            and request.user.employees.exists()
+        ):
+            employee_id = request.user.employees.first().id
+
+        return Response(
+            {
+                "success": True,
+                "message": "Mock face registration completed",
+                "employee_id": employee_id,
+                "embedding_id": "mock-embedding-123",
+                "mode": "mock",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
     # Check rate limit
     allowed, error_msg = check_rate_limit(request)
     if not allowed:
@@ -322,7 +373,7 @@ def register_face(request):
                     )
 
             # Register using enhanced service
-            profile = enhanced_biometric_service.register_biometric(
+            enhanced_biometric_service.register_biometric(
                 employee_id=employee_id, face_encodings=embeddings
             )
 
@@ -338,6 +389,11 @@ def register_face(request):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
+        except BiometricError as e:
+            # General biometric service error
+            logger.error(f"Biometric service error during registration: {str(e)}")
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         except ValidationError as e:
             # Validation error (employee not found, etc.)
@@ -389,7 +445,7 @@ def register_face(request):
         return Response(
             {"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Face registration error")
         return Response(
             {"error": "Internal server error"},
@@ -464,6 +520,55 @@ def check_in(request):
     """
     Biometric check-in
     """
+    # Early validation of image (before MOCK mode for test consistency)
+    ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
+
+    image_file = request.FILES.get("image")
+    if not image_file:
+        # Check if it's base64 data
+        image_data = request.data.get("image")
+        if not image_data or (
+            isinstance(image_data, str) and not image_data.startswith("data:image/")
+        ):
+            return Response(
+                {"image": ["This field is required."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    elif getattr(image_file, "size", 0) == 0:
+        # Empty file
+        return Response(
+            {"image": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST
+        )
+    elif image_file.content_type not in ALLOWED_CONTENT_TYPES:
+        return Response(
+            {
+                "image": [
+                    "Invalid image format. Please provide a valid JPEG or PNG image."
+                ]
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # MOCK MODE SHORT-CIRCUIT - after basic validation
+    if getattr(settings, "ENABLE_BIOMETRIC_MOCK", False):
+        logger.critical(
+            "🚨 USING BIOMETRIC MOCK MODE FOR CHECK-IN - NOT FOR PRODUCTION!"
+        )
+
+        if hasattr(request.user, "employees") and request.user.employees.exists():
+            employee = request.user.employees.first()
+            return Response(
+                {
+                    "success": True,
+                    "message": "Mock biometric check-in completed",
+                    "employee_id": employee.id,
+                    "check_in_time": timezone.now(),
+                    "location": request.data.get("location", "Mock Office"),
+                    "mode": "mock",
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
     try:
         # Check rate limit
         allowed, error_msg = check_rate_limit(request)
@@ -496,7 +601,7 @@ def check_in(request):
         if settings.ENABLE_BIOMETRIC_MOCK:
             if request.user.employees.exists():
                 logger.critical(
-                    "🚨 USING BIOMETRIC MOCK MODE FOR CHECK-IN - NOT FOR PRODUCTION!"
+                    "USING BIOMETRIC MOCK MODE FOR CHECK-IN - NOT FOR PRODUCTION!"
                 )
                 test_employee = request.user.employees.first()
                 match_result = {
@@ -547,7 +652,7 @@ def check_in(request):
         employee = Employee.objects.get(id=match_result["employee_id"])
 
         # DETAILED LOGGING for mismatch debugging
-        logger.info(f"🔍 Check-in matching debug:")
+        logger.info(f"Check-in matching debug:")
         logger.info(f"   - Recognized employee ID: {match_result['employee_id']}")
         logger.info(f"   - Recognized employee name: {employee.get_full_name()}")
         logger.info(f"   - Confidence: {match_result['confidence']}")
@@ -569,7 +674,7 @@ def check_in(request):
             and request.user.employees.exists()
             and request.user.employees.first() != employee
         ):
-            logger.warning("❌ Face recognition mismatch detected")
+            logger.warning("Face recognition mismatch detected")
             logger.warning(
                 f"   - Expected employee: {request.user.employees.first().id} ({request.user.employees.first().get_full_name()})"
             )
@@ -667,7 +772,7 @@ def check_in(request):
         return Response(
             {"error": "Employee record not found"}, status=status.HTTP_404_NOT_FOUND
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Check-in error")
         return Response(
             {"error": "Internal server error"},
@@ -681,6 +786,24 @@ def check_out(request):
     """
     Biometric check-out
     """
+    # MOCK MODE SHORT-CIRCUIT - must be BEFORE any validation
+    if getattr(settings, "ENABLE_BIOMETRIC_MOCK", False):
+        logger.critical("USING BIOMETRIC MOCK MODE FOR CHECK-OUT - NOT FOR PRODUCTION!")
+
+        if hasattr(request.user, "employees") and request.user.employees.exists():
+            employee = request.user.employees.first()
+            return Response(
+                {
+                    "success": True,
+                    "message": "Mock biometric check-out completed",
+                    "employee_id": employee.id,
+                    "check_out_time": timezone.now(),
+                    "location": request.data.get("location", "Mock Office"),
+                    "mode": "mock",
+                },
+                status=status.HTTP_200_OK,
+            )
+
     # Check rate limit
     allowed, error_msg = check_rate_limit(request)
     if not allowed:
@@ -702,7 +825,7 @@ def check_out(request):
         # Check if biometric mock is enabled (only for development/testing)
         if settings.ENABLE_BIOMETRIC_MOCK and request.user.employees.exists():
             logger.critical(
-                "🚨 USING BIOMETRIC MOCK MODE FOR CHECK-OUT - NOT FOR PRODUCTION!"
+                "USING BIOMETRIC MOCK MODE FOR CHECK-OUT - NOT FOR PRODUCTION!"
             )
             test_employee = request.user.employees.first()
             match_result = {
@@ -795,7 +918,7 @@ def check_out(request):
             employee = Employee.objects.get(id=match_result["employee_id"])
         except Employee.DoesNotExist:
             logger.error(
-                f"❌ Employee with ID {match_result['employee_id']} not found in Django database"
+                f"Employee with ID {match_result['employee_id']} not found in Django database"
             )
             logger.error(
                 "This indicates stale data in MongoDB - face embeddings exist for non-existent employee"
@@ -828,7 +951,7 @@ def check_out(request):
             and request.user.employees.exists()
             and request.user.employees.first() != employee
         ):
-            logger.warning("❌ Face recognition mismatch detected")
+            logger.warning("Face recognition mismatch detected")
             logger.warning(
                 f"   - Expected employee: {request.user.employees.first().id} ({request.user.employees.first().get_full_name()})"
             )
@@ -927,7 +1050,7 @@ def check_out(request):
         return Response(
             {"error": "Employee record not found"}, status=status.HTTP_404_NOT_FOUND
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Check-out error")
         return Response(
             {"error": "Internal server error"},
@@ -1030,7 +1153,7 @@ def check_work_status(request):
                 }
             )
 
-    except Exception as e:
+    except Exception:
         logger.exception("Work status check error")
         return Response(
             {
@@ -1068,7 +1191,7 @@ def biometric_stats(request):
 
     try:
         # Get MongoDB stats
-        mongo_stats = get_mongodb_service().get_statistics()
+        get_mongodb_service().get_statistics()
 
         # Get PostgreSQL stats
         total_profiles = BiometricProfile.objects.count()
@@ -1076,25 +1199,24 @@ def biometric_stats(request):
 
         # Get recent logs
         recent_logs = BiometricLog.objects.filter(
-            created_at__gte=timezone.now() - timezone.timedelta(days=7)
+            created_at__gte=timezone.now() - timedelta(days=7)
         )
 
         successful_checks = recent_logs.filter(success=True).count()
         failed_checks = recent_logs.filter(success=False).count()
 
-        # Get average confidence scores
-        try:
-            confidence_scores = recent_logs.filter(
-                success=True, confidence_score__isnull=False
-            ).values_list("confidence_score", flat=True)
-
-            avg_confidence = (
-                sum(confidence_scores) / len(confidence_scores)
-                if confidence_scores
-                else 0
-            )
-        except Exception:
-            avg_confidence = 0
+        # Get average confidence scores (not currently included in response)
+        # try:
+        #     confidence_scores = recent_logs.filter(
+        #         success=True, confidence_score__isnull=False
+        #     ).values_list("confidence_score", flat=True)
+        #     avg_confidence = (
+        #         sum(confidence_scores) / len(confidence_scores)
+        #         if confidence_scores
+        #         else 0
+        #     )
+        # except Exception:
+        #     avg_confidence = 0
 
         return Response(
             {
@@ -1108,7 +1230,7 @@ def biometric_stats(request):
             }
         )
 
-    except Exception as e:
+    except Exception:
         logger.exception("Stats error")
         return Response(
             {"error": "Failed to retrieve statistics"},
@@ -1201,7 +1323,7 @@ def get_biometric_status(request):
             logger.info(f"No biometric profile found for user {request.user.id}")
             return Response(response_data)
 
-    except Exception as e:
+    except Exception:
         logger.exception(f"Error getting biometric status for user {request.user.id}")
         return Response(
             {"error": "Failed to retrieve biometric status"},
@@ -1214,8 +1336,6 @@ def get_biometric_status(request):
 def verify_face(request):
     """Simple face verification endpoint for tests"""
     try:
-        from .services.face_recognition_service import FaceRecognitionService
-
         image_data = request.data.get("image_data")
         if not image_data:
             return Response(
@@ -1257,7 +1377,7 @@ def verify_face(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    except Exception as e:
+    except Exception:
         logger.exception(f"Error in face verification")
         return Response(
             {"error": "Verification failed"},

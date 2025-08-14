@@ -91,7 +91,18 @@ class EnhancedPayrollCalculationService:
         self.warnings = []
         self.fast_mode = fast_mode
 
-        # ✅ НОВОЕ: Инициализируем кэш праздников для месяца
+        # API usage tracking - MOVED BEFORE holidays loading
+        self.api_usage = {
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 0,
+            "redis_cache_hits": 0,
+            "redis_cache_misses": 0,
+        }
+
+        # ✅ НОВОЕ: Инициализируем кэш праздников для месяца (AFTER api_usage init)
         self.holidays_cache = {}
         self._load_holidays_for_month()
 
@@ -105,17 +116,6 @@ class EnhancedPayrollCalculationService:
 
         # Timezone for Israel
         self.israel_tz = pytz.timezone("Asia/Jerusalem")
-
-        # API usage tracking
-        self.api_usage = {
-            "sunrise_sunset_calls": 0,
-            "hebcal_calls": 0,
-            "precise_sabbath_times": 0,
-            "api_holidays_found": 0,
-            "fallback_calculations": 0,
-            "redis_cache_hits": 0,
-            "redis_cache_misses": 0,
-        }
 
     def _load_holidays_for_month(self):
         """
@@ -135,11 +135,13 @@ class EnhancedPayrollCalculationService:
             )
 
             if self.holidays_cache:
+                self.api_usage.setdefault("redis_cache_hits", 0)
                 self.api_usage["redis_cache_hits"] += 1
                 logger.info(
                     f"📋 Loaded {len(self.holidays_cache)} holidays from cache for {self.year}-{self.month:02d}"
                 )
             else:
+                self.api_usage.setdefault("redis_cache_misses", 0)
                 self.api_usage["redis_cache_misses"] += 1
                 logger.info(
                     f"📋 No holidays found in cache for {self.year}-{self.month:02d}"
@@ -498,10 +500,19 @@ class EnhancedPayrollCalculationService:
         # ✅ 1. Check Redis cache first (eliminates N+1 queries)
         cached_holiday = self.get_holiday_from_cache(work_date)
         if cached_holiday:
-            logger.debug(
-                f"📅 Found cached holiday: {cached_holiday.name} on {work_date}"
-            )
-            return cached_holiday
+            # Check if this is an official Israeli holiday that requires premium pay
+            from integrations.config.israeli_holidays import is_official_holiday
+
+            if is_official_holiday(cached_holiday.name):
+                logger.debug(
+                    f"📅 Found official cached holiday: {cached_holiday.name} on {work_date}"
+                )
+                return cached_holiday
+            else:
+                logger.debug(
+                    f"📅 Skipping non-official cached holiday: {cached_holiday.name} on {work_date}"
+                )
+                # Continue to check database or API
 
         # 2. Fallback: Check database (only if not in cache)
         holiday = Holiday.objects.filter(
@@ -511,8 +522,19 @@ class EnhancedPayrollCalculationService:
         ).first()
 
         if holiday:
-            logger.info(f"📅 Found registered holiday: {holiday.name} on {work_date}")
-            return holiday
+            # Check if this is an official Israeli holiday that requires premium pay
+            from integrations.config.israeli_holidays import is_official_holiday
+
+            if is_official_holiday(holiday.name):
+                logger.info(
+                    f"📅 Found official registered holiday: {holiday.name} on {work_date}"
+                )
+                return holiday
+            else:
+                logger.debug(
+                    f"📅 Skipping non-official holiday: {holiday.name} on {work_date}"
+                )
+                # Continue to check via API or return None
 
         # 2. Check via HebcalService (not in fast mode)
         if not self.fast_mode:
@@ -535,9 +557,21 @@ class EnhancedPayrollCalculationService:
                             ).date()
                             if holiday_date == work_date:
                                 title = holiday_data.get("title", "Unknown Holiday")
+
+                                # Check if this is an official Israeli holiday that requires premium pay
+                                from integrations.config.israeli_holidays import (
+                                    is_official_holiday,
+                                )
+
+                                if not is_official_holiday(title):
+                                    logger.debug(
+                                        f"📅 Skipping non-official API holiday: {title} on {work_date}"
+                                    )
+                                    continue
+
                                 self.api_usage["api_holidays_found"] += 1
                                 logger.info(
-                                    f"📅 Found holiday via HebcalService: {title} on {work_date}"
+                                    f"📅 Found official holiday via HebcalService: {title} on {work_date}"
                                 )
 
                                 # Create temporary Holiday object
@@ -1298,10 +1332,12 @@ class EnhancedPayrollCalculationService:
             # Extract breakdown data
             breakdown = calculation_result.get("breakdown", {})
 
-            # Create or update daily calculation record
+            # Create or update shift-based calculation record
+            # Each WorkLog gets its own calculation record to handle multiple shifts per day
             daily_calc, created = DailyPayrollCalculation.objects.update_or_create(
                 employee=self.employee,
                 work_date=calculation_result["date"],
+                worklog=work_log,  # Link to specific shift
                 defaults={
                     "regular_hours": breakdown.get("regular_hours", Decimal("0")),
                     "overtime_hours_1": breakdown.get("overtime_hours_1", Decimal("0")),

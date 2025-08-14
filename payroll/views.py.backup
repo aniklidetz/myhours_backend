@@ -53,14 +53,7 @@ def payroll_list(request):
     ОПТИМИЗИРОВАННЫЙ список зарплат с минимальными данными для быстрой загрузки
     """
     try:
-        # Check if user is active
-        if not request.user.is_active:
-            return Response(
-                {"error": "User account is inactive"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # Check access rights
+        # Проверяем права доступа
         from core.logging_utils import hash_user_id
 
         logger.info(
@@ -764,14 +757,7 @@ def daily_payroll_calculations(request):
                         "email": calc.employee.email,
                     },
                     "work_date": calc.work_date.isoformat(),
-                    "total_hours": float(
-                        calc.regular_hours
-                        + calc.overtime_hours_1
-                        + calc.overtime_hours_2
-                        + calc.sabbath_regular_hours
-                        + calc.sabbath_overtime_hours_1
-                        + calc.sabbath_overtime_hours_2
-                    ),
+                    "total_hours": float(calc.get_total_hours()),
                     "base_pay": float(calc.base_pay),
                     "bonus_pay": float(calc.bonus_pay),
                     "total_gross_pay": float(calc.total_gross_pay),
@@ -829,14 +815,6 @@ def recalculate_payroll(request):
 
         if employee_id:
             # Recalculate for specific employee
-            # Validate employee_id is a valid integer
-            try:
-                employee_id = int(employee_id)
-            except (ValueError, TypeError):
-                return Response(
-                    {"error": "Invalid employee_id"}, status=status.HTTP_400_BAD_REQUEST
-                )
-
             try:
                 target_employee = Employee.objects.get(id=employee_id)
                 service = EnhancedPayrollCalculationService(
@@ -908,46 +886,22 @@ def payroll_analytics(request):
             )
 
         # Get aggregated data
-        from django.db.models import Avg, Count, DecimalField, Sum
-        from django.db.models.functions import Coalesce
+        from django.db.models import Avg, Count, Sum
 
         monthly_stats = (
             MonthlyPayrollSummary.objects.filter(year=year)
             .values("month")
             .annotate(
                 total_employees=Count("employee", distinct=True),
-                total_gross_pay_sum=Coalesce(
-                    Sum("total_gross_pay"), 0, output_field=DecimalField()
-                ),
-                avg_gross_pay=Coalesce(
-                    Avg("total_gross_pay"), 0, output_field=DecimalField()
-                ),
-                total_hours_sum=Coalesce(
-                    Sum("total_hours"), 0, output_field=DecimalField()
-                ),
-                avg_hours=Coalesce(Avg("total_hours"), 0, output_field=DecimalField()),
+                total_gross_pay=Sum("total_gross_pay"),
+                avg_gross_pay=Avg("total_gross_pay"),
+                total_hours=Sum("total_hours"),
+                avg_hours=Avg("total_hours"),
             )
             .order_by("month")
         )
 
-        # Convert queryset to list
-        stats_list = list(monthly_stats)
-
-        # If no data exists, provide default structure with required keys
-        if not stats_list:
-            return Response(
-                {
-                    "year": year,
-                    "monthly_statistics": [],
-                    "total_employees": 0,
-                    "total_gross_pay_sum": 0,
-                    "avg_gross_pay": 0,
-                    "total_hours_sum": 0,
-                    "avg_hours": 0,
-                }
-            )
-
-        return Response({"year": year, "monthly_statistics": stats_list})
+        return Response({"year": year, "monthly_statistics": list(monthly_stats)})
 
     except Exception as e:
         logger.exception("Error in payroll_analytics")
@@ -1032,12 +986,8 @@ def monthly_payroll_summary(request):
                     "holiday_hours": float(summary.holiday_hours),
                     "shabbat_hours": float(summary.sabbath_hours),
                     "worked_days": summary.worked_days,
-                    "base_salary": (
-                        float(salary_info.base_salary or 0) if salary_info else 0
-                    ),
-                    "hourly_rate": (
-                        float(salary_info.hourly_rate or 0) if salary_info else 0
-                    ),
+                    "base_salary": float(salary_info.base_salary) if salary_info else 0,
+                    "hourly_rate": float(salary_info.hourly_rate) if salary_info else 0,
                     "compensatory_days": summary.compensatory_days_earned,
                     "bonus": 0,
                     "detailed_breakdown": summary.calculation_details or {},
@@ -1681,3 +1631,493 @@ def _calculate_hourly_daily_earnings(salary, work_logs, target_date, total_hours
             "sabbath_175": salary.hourly_rate * Decimal("1.75"),
         },
     }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def daily_payroll_calculations(request):
+    """
+    Get daily payroll calculations for an employee
+    """
+    try:
+        # Check permissions and get target employee
+        employee_id = request.GET.get("employee_id")
+        if employee_id:
+            if not (
+                hasattr(request.user, "employee_profile")
+                and request.user.employee_profile.role in ["accountant", "admin"]
+            ):
+                return Response(
+                    {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
+                )
+
+            try:
+                target_employee = Employee.objects.get(id=employee_id)
+            except Employee.DoesNotExist:
+                return Response(
+                    {"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            if not hasattr(request.user, "employee_profile"):
+                return Response(
+                    {"error": "User does not have an employee profile"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            target_employee = request.user.employee_profile
+
+        # Parse date parameters
+        year = request.GET.get("year")
+        month = request.GET.get("month")
+        work_date = request.GET.get("date")  # Specific date in YYYY-MM-DD format
+
+        # Build query
+        calculations = DailyPayrollCalculation.objects.filter(
+            employee=target_employee
+        ).select_related("employee")
+
+        if work_date:
+            # Get calculations for specific date
+            try:
+                date_obj = datetime.strptime(work_date, "%Y-%m-%d").date()
+                calculations = calculations.filter(work_date=date_obj)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid date format. Use YYYY-MM-DD"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif year and month:
+            # Get calculations for specific month
+            try:
+                year = int(year)
+                month = int(month)
+                calculations = calculations.filter(
+                    work_date__year=year, work_date__month=month
+                )
+            except ValueError:
+                return Response(
+                    {"error": "Invalid year or month"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # Get current month by default
+            current_date = timezone.now().date()
+            calculations = calculations.filter(
+                work_date__year=current_date.year, work_date__month=current_date.month
+            )
+
+        # Order by date
+        calculations = calculations.order_by("-work_date")
+
+        # Serialize data
+        result_data = []
+        for calc in calculations:
+            result_data.append(
+                {
+                    "id": calc.id,
+                    "employee": {
+                        "id": calc.employee.id,
+                        "name": calc.employee.get_full_name(),
+                        "email": calc.employee.email,
+                    },
+                    "work_date": calc.work_date.isoformat(),
+                    "work_log_id": None,  # work_log field doesn't exist in model
+                    "regular_hours": float(calc.regular_hours),
+                    "overtime_hours_1": float(calc.overtime_hours_1),
+                    "overtime_hours_2": float(calc.overtime_hours_2),
+                    "night_hours": float(calc.night_hours),
+                    "total_pay": float(calc.total_pay),
+                    "regular_pay": float(calc.regular_pay),
+                    "overtime_pay_1": float(calc.overtime_pay_1),
+                    "overtime_pay_2": float(calc.overtime_pay_2),
+                    "is_holiday": calc.is_holiday,
+                    "is_sabbath": calc.is_sabbath,
+                    "is_night_shift": calc.is_night_shift,
+                    "holiday_name": calc.holiday_name,
+                    "calculated_by_service": calc.calculated_by_service,
+                    "calculation_details": calc.calculation_details,
+                    "created_at": calc.created_at.isoformat(),
+                    "updated_at": calc.updated_at.isoformat(),
+                }
+            )
+
+        return Response(
+            {
+                "count": len(result_data),
+                "employee": {
+                    "id": target_employee.id,
+                    "name": target_employee.get_full_name(),
+                    "email": target_employee.email,
+                },
+                "calculations": result_data,
+            }
+        )
+
+    except Exception as e:
+        logger.exception("Error in daily_payroll_calculations")
+        return Response(
+            {"error": "Internal server error"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def monthly_payroll_summary(request):
+    """
+    Get monthly payroll summary for an employee
+    """
+    try:
+        # Check permissions and get target employee
+        employee_id = request.GET.get("employee_id")
+        if employee_id:
+            if not (
+                hasattr(request.user, "employee_profile")
+                and request.user.employee_profile.role in ["accountant", "admin"]
+            ):
+                return Response(
+                    {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
+                )
+
+            try:
+                target_employee = Employee.objects.get(id=employee_id)
+            except Employee.DoesNotExist:
+                return Response(
+                    {"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            if not hasattr(request.user, "employee_profile"):
+                return Response(
+                    {"error": "User does not have an employee profile"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            target_employee = request.user.employee_profile
+
+        # Parse date parameters
+        year = request.GET.get("year")
+        month = request.GET.get("month")
+
+        if year and month:
+            try:
+                year = int(year)
+                month = int(month)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid year or month"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # Get current month by default
+            current_date = timezone.now().date()
+            year = current_date.year
+            month = current_date.month
+
+        # Get monthly summary
+        try:
+            summary = MonthlyPayrollSummary.objects.get(
+                employee=target_employee, year=year, month=month
+            )
+
+            result_data = {
+                "id": summary.id,
+                "employee": {
+                    "id": summary.employee.id,
+                    "name": summary.employee.get_full_name(),
+                    "email": summary.employee.email,
+                },
+                "year": summary.year,
+                "month": summary.month,
+                "period": f"{summary.year}-{summary.month:02d}",
+                "total_hours": float(summary.total_hours),
+                "regular_hours": float(summary.regular_hours),
+                "overtime_hours": float(summary.overtime_hours),
+                "holiday_hours": float(summary.holiday_hours),
+                "sabbath_hours": float(summary.sabbath_hours),
+                "total_gross_pay": float(summary.total_gross_pay),
+                "base_pay": float(summary.base_pay),
+                "overtime_pay": float(summary.overtime_pay),
+                "holiday_pay": float(summary.holiday_pay),
+                "sabbath_pay": float(summary.sabbath_pay),
+                "compensatory_days_earned": summary.compensatory_days_earned,
+                "worked_days": summary.worked_days,
+                "calculation_details": summary.calculation_details,
+                "calculation_date": summary.calculation_date.isoformat(),
+                "last_updated": summary.last_updated.isoformat(),
+            }
+
+            # Get related daily calculations
+            daily_calculations = DailyPayrollCalculation.objects.filter(
+                employee=target_employee, work_date__year=year, work_date__month=month
+            ).order_by("work_date")
+
+            daily_data = []
+            for calc in daily_calculations:
+                daily_data.append(
+                    {
+                        "work_date": calc.work_date.isoformat(),
+                        "regular_hours": float(calc.regular_hours),
+                        "overtime_hours_1": float(calc.overtime_hours_1),
+                        "overtime_hours_2": float(calc.overtime_hours_2),
+                        "night_hours": float(calc.night_hours),
+                        "total_pay": float(calc.total_pay),
+                        "is_holiday": calc.is_holiday,
+                        "is_sabbath": calc.is_sabbath,
+                        "is_night_shift": calc.is_night_shift,
+                        "holiday_name": calc.holiday_name,
+                    }
+                )
+
+            result_data["daily_calculations"] = daily_data
+            result_data["daily_calculations_count"] = len(daily_data)
+
+        except MonthlyPayrollSummary.DoesNotExist:
+            # Summary doesn't exist, return empty structure
+            result_data = {
+                "employee": {
+                    "id": target_employee.id,
+                    "name": target_employee.get_full_name(),
+                    "email": target_employee.email,
+                },
+                "year": year,
+                "month": month,
+                "period": f"{year}-{month:02d}",
+                "message": "No payroll summary found for this period",
+                "total_hours": 0,
+                "total_gross_pay": 0,
+                "daily_calculations": [],
+                "daily_calculations_count": 0,
+            }
+
+        return Response(result_data)
+
+    except Exception as e:
+        logger.exception("Error in monthly_payroll_summary")
+        return Response(
+            {"error": "Internal server error"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def recalculate_payroll(request):
+    """
+    Recalculate payroll for an employee and period
+    """
+    try:
+        # Check permissions (only admin/accountant can recalculate)
+        if not check_admin_or_accountant_role(request.user):
+            return Response(
+                {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get parameters
+        employee_id = request.data.get("employee_id")
+        year = request.data.get("year")
+        month = request.data.get("month")
+
+        if not all([employee_id, year, month]):
+            return Response(
+                {"error": "employee_id, year, and month are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            target_employee = Employee.objects.get(id=employee_id)
+            year = int(year)
+            month = int(month)
+        except (Employee.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Invalid employee_id, year, or month"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if employee has salary configuration
+        try:
+            salary = target_employee.salary_info
+        except Salary.DoesNotExist:
+            return Response(
+                {"error": "Employee has no salary configuration"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Perform recalculation
+        from .services import EnhancedPayrollCalculationService
+
+        try:
+            service = EnhancedPayrollCalculationService(
+                target_employee,
+                year,
+                month,
+                fast_mode=False,  # Use full calculation with API integrations
+            )
+
+            # This will automatically save to database
+            result = service.calculate_monthly_salary_enhanced()
+
+            logger.info(
+                f"Payroll recalculated for {target_employee.get_full_name()} {year}-{month:02d}"
+            )
+
+            return Response(
+                {
+                    "message": "Payroll recalculated successfully",
+                    "employee": {
+                        "id": target_employee.id,
+                        "name": target_employee.get_full_name(),
+                        "email": target_employee.email,
+                    },
+                    "period": f"{year}-{month:02d}",
+                    "calculation_summary": {
+                        "total_hours": float(result["total_hours"]),
+                        "total_gross_pay": float(result["total_gross_pay"]),
+                        "regular_hours": float(result["regular_hours"]),
+                        "overtime_hours": float(result["overtime_hours"]),
+                        "holiday_hours": float(result["holiday_hours"]),
+                        "sabbath_hours": float(result["sabbath_hours"]),
+                        "worked_days": result["worked_days"],
+                        "work_sessions_count": result["work_sessions_count"],
+                        "compensatory_days_earned": result["compensatory_days_earned"],
+                        "api_integrations": result.get("api_integrations", {}),
+                    },
+                }
+            )
+
+        except Exception as calc_error:
+            logger.error(f"Payroll recalculation failed: {calc_error}")
+            return Response(
+                {"error": "Payroll calculation failed", "details": str(calc_error)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    except Exception as e:
+        logger.exception("Error in recalculate_payroll")
+        return Response(
+            {"error": "Internal server error"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def payroll_analytics(request):
+    """
+    Get payroll analytics and statistics
+    """
+    try:
+        # Check permissions (only admin/accountant can view analytics)
+        if not check_admin_or_accountant_role(request.user):
+            return Response(
+                {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Parse date parameters
+        year = request.GET.get("year")
+        month = request.GET.get("month")
+
+        if year and month:
+            try:
+                year = int(year)
+                month = int(month)
+            except ValueError:
+                return Response(
+                    {"error": "Invalid year or month"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # Get current month by default
+            current_date = timezone.now().date()
+            year = current_date.year
+            month = current_date.month
+
+        # Get monthly summaries for all employees
+        summaries = MonthlyPayrollSummary.objects.filter(
+            year=year, month=month
+        ).select_related("employee")
+
+        if not summaries.exists():
+            return Response(
+                {
+                    "period": f"{year}-{month:02d}",
+                    "message": "No payroll data found for this period",
+                    "total_employees": 0,
+                    "analytics": {},
+                }
+            )
+
+        # Calculate analytics
+        from django.db.models import Avg, Count, Sum
+
+        analytics = {
+            "total_employees": summaries.count(),
+            "total_gross_payroll": float(
+                summaries.aggregate(Sum("total_gross_pay"))["total_gross_pay__sum"] or 0
+            ),
+            "average_salary": float(
+                summaries.aggregate(Avg("total_gross_pay"))["total_gross_pay__avg"] or 0
+            ),
+            "total_hours_worked": float(
+                summaries.aggregate(Sum("total_hours"))["total_hours__sum"] or 0
+            ),
+            "total_overtime_hours": float(
+                summaries.aggregate(Sum("overtime_hours"))["overtime_hours__sum"] or 0
+            ),
+            "total_holiday_hours": float(
+                summaries.aggregate(Sum("holiday_hours"))["holiday_hours__sum"] or 0
+            ),
+            "total_sabbath_hours": float(
+                summaries.aggregate(Sum("sabbath_hours"))["sabbath_hours__sum"] or 0
+            ),
+            "employees_with_overtime": summaries.filter(overtime_hours__gt=0).count(),
+            "employees_with_holiday_work": summaries.filter(
+                holiday_hours__gt=0
+            ).count(),
+            "employees_with_sabbath_work": summaries.filter(
+                sabbath_hours__gt=0
+            ).count(),
+            "total_compensatory_days": summaries.aggregate(
+                Sum("compensatory_days_earned")
+            )["compensatory_days_earned__sum"]
+            or 0,
+            "employees_with_violations": summaries.filter(
+                legal_violations_count__gt=0
+            ).count(),
+            "employees_with_warnings": summaries.filter(warnings_count__gt=0).count(),
+            "employees_with_errors": summaries.filter(errors_count__gt=0).count(),
+        }
+
+        # Employee breakdown
+        employee_data = []
+        for summary in summaries:
+            employee_data.append(
+                {
+                    "employee": {
+                        "id": summary.employee.id,
+                        "name": summary.employee.get_full_name(),
+                        "email": summary.employee.email,
+                        "role": summary.employee.role,
+                    },
+                    "total_gross_pay": float(summary.total_gross_pay),
+                    "total_hours": float(summary.total_hours),
+                    "overtime_hours": float(summary.overtime_hours),
+                    "worked_days": summary.worked_days,
+                    "calculation_type": summary.calculation_type,
+                    "has_violations": summary.legal_violations_count > 0,
+                    "has_warnings": summary.warnings_count > 0,
+                    "compensatory_days": summary.compensatory_days_earned,
+                }
+            )
+
+        return Response(
+            {
+                "period": f"{year}-{month:02d}",
+                "analytics": analytics,
+                "employees": employee_data,
+            }
+        )
+
+    except Exception as e:
+        logger.exception("Error in payroll_analytics")
+        return Response(
+            {"error": "Internal server error"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

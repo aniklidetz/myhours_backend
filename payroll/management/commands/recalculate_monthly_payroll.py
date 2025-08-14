@@ -10,9 +10,11 @@ from worktime.models import WorkLog
 
 
 class Command(BaseCommand):
-    help = "Recalculate all daily payroll calculations for monthly employees with fixed overtime logic"
+    help = "Recalculate all daily payroll calculations for monthly employees"
 
     def add_arguments(self, parser):
+        parser.add_argument("--month", type=int, help="Month number (1-12)")
+        parser.add_argument("--year", type=int, help="Year, e.g. 2025")
         parser.add_argument(
             "--employee-id", type=int, help="Recalculate only for specific employee ID"
         )
@@ -23,26 +25,30 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(
-            "Recalculating daily payroll for monthly employees with fixed overtime logic..."
-        )
+        self.stdout.write("Recalculating daily payroll for monthly employees...")
 
-        # Find all daily calculations for monthly employees with overtime
-        query = (
-            DailyPayrollCalculation.objects.filter(
-                employee__salary_info__calculation_type="monthly"
+        # Find all daily calculations for monthly employees
+        query = DailyPayrollCalculation.objects.filter(
+            employee__salary_info__calculation_type="monthly"
+        ).select_related("employee", "employee__salary_info")
+
+        # Filter by month and year if provided
+        if options.get("month") and options.get("year"):
+            query = query.filter(
+                work_date__month=options["month"], work_date__year=options["year"]
             )
-            .filter(overtime_hours_1__gt=0)
-            .select_related("employee", "employee__salary_info")
-        )
+        elif options.get("month") or options.get("year"):
+            self.stdout.write(
+                self.style.WARNING("Both --month and --year must be provided together")
+            )
 
-        if options["employee_id"]:
+        if options.get("employee_id"):
             query = query.filter(employee_id=options["employee_id"])
 
         calculations = query.order_by("employee", "work_date")
 
         self.stdout.write(
-            f"Found {calculations.count()} daily calculations with overtime for monthly employees"
+            f"Found {calculations.count()} daily calculations for monthly employees"
         )
 
         updated_count = 0
@@ -100,6 +106,13 @@ class Command(BaseCommand):
                                 "overtime_pay_2", Decimal("0")
                             )
 
+                        # Ensure updated_at is updated
+                        import time
+
+                        from django.utils import timezone
+
+                        time.sleep(0.001)  # Small delay to ensure timestamp difference
+                        calc.updated_at = timezone.now()
                         calc.save()
 
                     self.stdout.write(

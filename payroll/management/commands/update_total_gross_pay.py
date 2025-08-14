@@ -8,6 +8,10 @@ from payroll.models import DailyPayrollCalculation
 class Command(BaseCommand):
     help = "Update total_gross_pay for existing daily payroll calculations"
 
+    def add_arguments(self, parser):
+        parser.add_argument("--month", type=int, help="Month number (1-12)")
+        parser.add_argument("--year", type=int, help="Year, e.g. 2025")
+
     def handle(self, *args, **options):
         self.stdout.write("Updating total_gross_pay for existing daily calculations...")
 
@@ -15,6 +19,16 @@ class Command(BaseCommand):
         calculations = DailyPayrollCalculation.objects.filter(
             total_gross_pay=Decimal("0")
         )
+
+        # Filter by month and year if provided
+        if options.get("month") and options.get("year"):
+            calculations = calculations.filter(
+                work_date__month=options["month"], work_date__year=options["year"]
+            )
+        elif options.get("month") or options.get("year"):
+            self.stdout.write(
+                self.style.WARNING("Both --month and --year must be provided together")
+            )
 
         updated_count = 0
 
@@ -47,6 +61,13 @@ class Command(BaseCommand):
                 # For other types: use total_pay as fallback
                 calc.total_gross_pay = calc.total_pay
 
+            # Ensure updated_at is updated
+            import time
+
+            from django.utils import timezone
+
+            time.sleep(0.001)  # Small delay to ensure timestamp difference
+            calc.updated_at = timezone.now()
             calc.save()
             updated_count += 1
 

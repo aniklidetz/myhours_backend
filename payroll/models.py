@@ -34,7 +34,7 @@ class Salary(models.Model):
     base_salary = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal("0"))],
         null=True,
         blank=True,
         help_text="Monthly salary or total project cost (required for monthly/project types)",
@@ -43,7 +43,7 @@ class Salary(models.Model):
     hourly_rate = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal("0"))],
         null=True,
         blank=True,
         help_text="Hourly rate (required for hourly type)",
@@ -1099,12 +1099,22 @@ class CompensatoryDay(models.Model):
 
 
 class DailyPayrollCalculation(models.Model):
-    """Store daily payroll calculations for quick access"""
+    """Store payroll calculations for individual shifts or daily summaries"""
 
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="daily_payroll_calculations"
     )
     work_date = models.DateField(db_index=True)
+
+    # Link to specific WorkLog for shift-based calculations
+    worklog = models.ForeignKey(
+        "worktime.WorkLog",
+        on_delete=models.CASCADE,
+        related_name="payroll_calculations",
+        null=True,
+        blank=True,
+        help_text="Link to specific shift (WorkLog). Null for daily summary records.",
+    )
 
     # Hours worked
     regular_hours = models.DecimalField(
@@ -1215,12 +1225,13 @@ class DailyPayrollCalculation(models.Model):
     class Meta:
         verbose_name = "Daily Payroll Calculation"
         verbose_name_plural = "Daily Payroll Calculations"
-        unique_together = ["employee", "work_date"]
-        ordering = ["-work_date"]
+        # Removed unique_together to allow multiple shifts per day
+        ordering = ["-work_date", "worklog_id"]
         indexes = [
             models.Index(fields=["employee", "work_date"]),
             models.Index(fields=["work_date"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["worklog"]),  # Index for shift-based lookups
         ]
 
     def __str__(self):

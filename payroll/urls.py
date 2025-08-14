@@ -17,12 +17,15 @@ from .views import (
 # router.register(r'salaries', SalaryViewSet)
 
 urlpatterns = [
-    # path('', include(router.urls)),  # Временно отключено
-    path("", payroll_list, name="payroll-list"),  # Root endpoint возвращает список
+    # path('', include(router.urls)),  # Temporarily disabled
+    path("", payroll_list, name="payroll-list"),  # Root endpoint returns list
     path(
         "salaries/", payroll_list, name="payroll-salaries"
-    ),  # Фронтенд ожидает этот endpoint
+    ),  # Frontend expects this endpoint
     path("earnings/", enhanced_earnings, name="current-earnings"),
+    path(
+        "enhanced-earnings/", enhanced_earnings, name="enhanced-earnings"
+    ),  # Alias for tests
     # New database-backed payroll API endpoints
     path(
         "daily-calculations/",

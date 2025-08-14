@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # Simple one-liner biometric cleanup
-# Usage: ./cleanup_biometric_simple.sh 11
-# Or: ./cleanup_biometric_simple.sh 11 force
+# Usage: ./scripts/cleanup_biometric_simple.sh 11
+# Or: ./scripts/cleanup_biometric_simple.sh 11 force
 
 EMPLOYEE_ID=$1
 FORCE=$2
 
 if [ -z "$EMPLOYEE_ID" ]; then
     echo "Usage: $0 <employee_id> [force]"
-    echo "Example: $0 11"
-    echo "Example: $0 11 force"
+    echo "Example: ./scripts/cleanup_biometric_simple.sh 11"
+    echo "Example: ./scripts/cleanup_biometric_simple.sh 11 force"
     exit 1
 fi
 

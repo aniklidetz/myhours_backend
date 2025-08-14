@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary
 from payroll.services import EnhancedPayrollCalculationService
@@ -154,6 +155,9 @@ class Command(BaseCommand):
                                     )
 
                                 if existing_daily:
+                                    # Force update the updated_at timestamp
+                                    existing_daily.updated_at = timezone.now()
+                                    existing_daily.save(update_fields=["updated_at"])
                                     daily_updated += 1
                                     self.stdout.write(
                                         f"  🔄 Updated daily calc for {work_date}"
@@ -204,6 +208,9 @@ class Command(BaseCommand):
                             monthly_result = service.calculate_monthly_salary_enhanced()
 
                             if existing_monthly:
+                                # Force update the updated_at timestamp
+                                existing_monthly.updated_at = timezone.now()
+                                existing_monthly.save(update_fields=["updated_at"])
                                 monthly_updated += 1
                                 self.stdout.write(
                                     f"  🔄 Updated monthly summary for {summary_year}-{summary_month:02d}"

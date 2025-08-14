@@ -1,7 +1,7 @@
 # users/auth_views.py
 import logging
 
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -11,6 +11,35 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
+
+
+# Schema serializers for API documentation
+class LoginRequest(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+
+class UserInfo(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    username = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    is_staff = serializers.BooleanField()
+    is_superuser = serializers.BooleanField()
+    role = serializers.CharField()
+
+
+class TokenResponse(serializers.Serializer):
+    token = serializers.CharField()
+    user = UserInfo()
+
+
+class TestConnectionResponse(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    method = serializers.CharField()
+    headers = serializers.DictField()
 
 
 @api_view(["POST"])
@@ -113,3 +142,6 @@ def logout_view(request):
         return Response({"message": "Logged out successfully"})
     except:
         return Response({"message": "Logout completed"})
+
+
+# Note: OpenAPI decorators removed for stability - can be re-added when drf_spectacular is enabled

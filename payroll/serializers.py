@@ -132,6 +132,8 @@ class CompensatoryDaySerializer(serializers.ModelSerializer):
         if value:
             from django.utils import timezone
 
-            if value > timezone.now().date():
+            # Use localdate() for consistent timezone handling
+            today = timezone.localdate()
+            if value > today:
                 raise serializers.ValidationError("Used date cannot be in the future")
         return value

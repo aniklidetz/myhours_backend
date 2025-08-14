@@ -56,24 +56,34 @@ class IsraeliHolidaysService:
                     datetime.combine(ind_date, datetime.min.time().replace(hour=20))
                 )
 
-                holiday, created = Holiday.objects.update_or_create(
-                    date=ind_date,
-                    defaults={
-                        "name": "Yom HaAtzmaut (Independence Day)",
-                        "is_holiday": True,  # Official holiday with premium pay
-                        "is_shabbat": False,
-                        "is_special_shabbat": False,
-                        "start_time": start_time,
-                        "end_time": end_time,
-                    },
-                )
+                defaults = {
+                    "name": "Yom HaAtzmaut (Independence Day)",
+                    "is_holiday": True,  # Official holiday with premium pay
+                    "is_shabbat": False,
+                    "is_special_shabbat": False,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                }
 
-                if created:
+                try:
+                    holiday = Holiday.objects.get(date=ind_date)
+                    # Update existing holiday
+                    changed = False
+                    for field, value in defaults.items():
+                        if getattr(holiday, field) != value:
+                            setattr(holiday, field, value)
+                            changed = True
+
+                    if changed:
+                        holiday.save(update_fields=list(defaults.keys()))
+                        updated_count += 1
+                        logger.info(f"Updated Independence Day for {year}")
+
+                except Holiday.DoesNotExist:
+                    # Create new holiday
+                    Holiday.objects.create(date=ind_date, **defaults)
                     created_count += 1
                     logger.info(f"Created Independence Day for {year}")
-                else:
-                    updated_count += 1
-                    logger.info(f"Updated Independence Day for {year}")
 
             except Exception as e:
                 logger.error(f"Error syncing Independence Day for {year}: {e}")

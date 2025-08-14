@@ -1,9 +1,5 @@
 # myhours/urls.py
-from drf_spectacular.views import (
-    SpectacularAPIView,
-    SpectacularRedocView,
-    SpectacularSwaggerView,
-)
+from rest_framework import serializers
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import (
     api_view,
@@ -21,6 +17,21 @@ from django.utils import timezone
 from django.views.generic import RedirectView
 
 from .health import health_check as detailed_health_check
+
+
+# Schema serializers
+class HealthCheckResponse(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+    version = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+
+
+class APIRootResponse(serializers.Serializer):
+    message = serializers.CharField()
+    version = serializers.CharField()
+    api_versions = serializers.DictField()
+    endpoints = serializers.DictField()
 
 
 @api_view(["GET"])
@@ -68,6 +79,7 @@ def api_root(request):
 api_root.permission_classes = [AllowAny]
 api_root.authentication_classes = []
 
+# Base URL patterns (always available)
 urlpatterns = [
     # Root redirect to API
     path("", RedirectView.as_view(url="/api/", permanent=False)),
@@ -79,14 +91,6 @@ urlpatterns = [
     path("api/debug/auth/", include("core.debug_urls")),
     # API root
     path("api/", api_root, name="api-root"),
-    # API Documentation
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="swagger-ui",
-    ),
-    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     # API v1 endpoints (current version)
     path("api/v1/", api_root, name="api-v1-root"),
     path("api/v1/users/", include("users.urls")),
@@ -99,6 +103,33 @@ urlpatterns = [
     path("api/v1/integrations/", include("integrations.urls")),
     # Legacy API endpoints removed - all traffic goes to v1 directly
 ]
+
+# Conditionally add drf_spectacular documentation URLs (only when available)
+if getattr(settings, "SPECTACULAR_AVAILABLE", False):
+    try:
+        from drf_spectacular.views import (
+            SpectacularAPIView,
+            SpectacularRedocView,
+            SpectacularSwaggerView,
+        )
+
+        # Add documentation URLs
+        urlpatterns += [
+            path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+            path(
+                "api/docs/",
+                SpectacularSwaggerView.as_view(url_name="schema"),
+                name="swagger-ui",
+            ),
+            path(
+                "api/redoc/",
+                SpectacularRedocView.as_view(url_name="schema"),
+                name="redoc",
+            ),
+        ]
+    except ImportError:
+        # drf_spectacular views not available - skip documentation URLs
+        pass
 
 # Serve media files in development
 if settings.DEBUG:

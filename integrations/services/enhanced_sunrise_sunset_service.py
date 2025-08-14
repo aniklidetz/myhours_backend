@@ -316,3 +316,16 @@ class EnhancedSunriseSunsetService:
 
 # Create service instance
 enhanced_sunrise_sunset_service = EnhancedSunriseSunsetService()
+
+
+# Wrapper function for backward compatibility with tests
+def get_shabbat_times_israeli_timezone(date_obj, lat=31.7683, lon=35.2137):
+    """
+    Wrapper function for test compatibility
+    Maps old function signature to the class method
+    """
+    return enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
+        date_obj=date_obj,
+        lat=lat,
+        lng=lon,  # Note: parameter name change from 'lon' to 'lng'
+    )
