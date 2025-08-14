@@ -150,8 +150,72 @@ jobs:
     - name: Run pytest tests
       run: |
         cd ${{ github.workspace }}
+        # Check project structure and create appropriate pytest.ini
         if [ -d "backend/myhours-backend" ]; then
-          cd backend/myhours-backend
+          echo "Creating pytest.ini for repository with backend subdirectory..."
+          cat > pytest.ini << 'EOF'
+[pytest]
+DJANGO_SETTINGS_MODULE = myhours.settings_ci
+python_files = tests.py test_*.py *_tests.py
+python_classes = Test* *Tests
+python_functions = test_*
+addopts = 
+    --strict-markers
+    --strict-config
+    --verbose
+    --tb=short
+    --cov=backend/myhours-backend
+    --cov-report=term-missing
+    --cov-report=html
+    --cov-report=xml
+    --cov-fail-under=50
+    --durations=10
+    --maxfail=5
+testpaths = 
+    backend/myhours-backend/core/tests
+    backend/myhours-backend/payroll/tests
+    backend/myhours-backend/worktime/tests
+    backend/myhours-backend/users/tests
+    backend/myhours-backend/integrations/tests
+    backend/myhours-backend/biometrics/tests
+    backend/myhours-backend/tests
+markers =
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    integration: marks tests as integration tests
+    unit: marks tests as unit tests
+    api: marks tests as API tests
+    payroll: marks tests related to payroll functionality
+    worktime: marks tests related to worktime functionality
+    users: marks tests related to user management
+    integrations: marks tests related to external integrations
+    biometrics: marks tests related to biometric functionality
+    smoke: marks tests as smoke tests for basic functionality
+    regression: marks tests as regression tests
+    performance: marks tests as performance tests
+    security: marks tests as security tests
+filterwarnings =
+    ignore::UserWarning
+    ignore::DeprecationWarning
+    ignore::PendingDeprecationWarning
+    ignore:pkg_resources is deprecated:DeprecationWarning
+norecursedirs = 
+    .git
+    .tox
+    .env
+    venv
+    .venv
+    node_modules
+    __pycache__
+    .pytest_cache
+    htmlcov
+    staticfiles
+    media
+    logs
+    archive
+    backups
+EOF
+          # Set PYTHONPATH to include the Django project
+          export PYTHONPATH="${{ github.workspace }}/backend/myhours-backend:$PYTHONPATH"
           pytest --verbose --tb=short
         elif [ -f "manage.py" ]; then
           pytest --verbose --tb=short  
@@ -174,7 +238,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: backend/myhours-backend/coverage.xml
+        file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
