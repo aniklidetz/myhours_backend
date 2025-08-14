@@ -48,6 +48,9 @@ from .settings import *  # noqa
 DEBUG = True
 SECRET_KEY = os.environ.get("SECRET_KEY", "test-secret-key-for-ci")
 
+# Override DATABASES to ensure all required keys are present for CI
+DATABASES["default"] = DB_CONFIG_FROM_URL
+
 # Keep Celery and drf-spectacular out of CI test runs (lighter/faster + prevent schema generation crashes)
 INSTALLED_APPS = [
     app for app in INSTALLED_APPS if app not in ("celery", "drf_spectacular")
@@ -117,9 +120,10 @@ LOGGING = {
 }
 
 # ========= Sanity checks =========
-_engine = DATABASES["default"]["ENGINE"]
-_host = DATABASES["default"]["HOST"]
-_name = DATABASES["default"]["NAME"]
+db = DATABASES["default"]
+_engine = db.get("ENGINE", "")
+_host = db.get("HOST", "")
+_name = db.get("NAME", "")
 if _engine != "django.db.backends.postgresql":
     raise RuntimeError(f"Unexpected DB engine in CI: {_engine}")
 if GITHUB_ACTIONS and not _host:
