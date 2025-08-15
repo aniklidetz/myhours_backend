@@ -97,7 +97,7 @@ setup_*.py
 fix_*.py
 validate_*.py
 simple_*.py
-test_*.py
+# Exclude test data files but NOT unit test files
 *_test_data*.py
 *_check.py
 *_validation.py
