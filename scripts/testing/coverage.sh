@@ -14,11 +14,11 @@ export SECRET_KEY="test-secret-key"
 
 # Move coverage reports to archive
 if [ -d "htmlcov" ]; then
-    mv htmlcov/ archive/coverage_reports/htmlcov_$(date +%Y%m%d_%H%M%S)/
+    mv htmlcov/ "archive/coverage_reports/htmlcov_$(date +%Y%m%d_%H%M%S)/"
 fi
 
 if [ -f "coverage.xml" ]; then
-    mv coverage.xml archive/coverage_reports/coverage_$(date +%Y%m%d_%H%M%S).xml
+    mv coverage.xml "archive/coverage_reports/coverage_$(date +%Y%m%d_%H%M%S).xml"
 fi
 
 echo "✅ Coverage reports generated and archived"

@@ -1,0 +1,21 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  # Disable document-start requirement if you don't want '---' at the beginning
+  document-start: disable
+  # Allow both single and double quotes
+  quoted-strings:
+    quote-type: any
+    required: false
+  # Don't require empty line after document start
+  # document-start rule is already disabled above
+  # Allow inline mappings with more than 4 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false

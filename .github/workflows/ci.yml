@@ -1,19 +1,20 @@
+---
 name: CI/CD Pipeline
 
-on:
+"on":
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -28,7 +29,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7
         options: >-
@@ -38,7 +39,7 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      
+
       mongodb:
         image: mongo:7
         env:
@@ -51,426 +52,434 @@ jobs:
           --health-retries 5
         ports:
           - 27017:27017
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Detect project directory
-      id: detect
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_WORKSPACE"
-        echo "Searching for Django project from: $GITHUB_WORKSPACE"
-        # Try common locations for Django project
-        for d in "." "myhours-backend" "backend" "src"; do
-          echo "Checking: $d"
-          if [ -f "$d/manage.py" ]; then
-            echo "✓ Found manage.py in: $d"
-            echo "projdir=$d" >> "$GITHUB_OUTPUT"
-            # Also check for pytest.ini in the same directory
-            if [ -f "$d/pytest.ini" ]; then
-              echo "✓ Found pytest.ini in: $d"
-            else
-              echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect project directory
+        id: detect
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Searching for Django project from: $GITHUB_WORKSPACE"
+          # Try common locations for Django project
+          for d in "." "myhours-backend" "backend" "src"; do
+            echo "Checking: $d"
+            if [ -f "$d/manage.py" ]; then
+              echo "✓ Found manage.py in: $d"
+              echo "projdir=$d" >> "$GITHUB_OUTPUT"
+              # Also check for pytest.ini in the same directory
+              if [ -f "$d/pytest.ini" ]; then
+                echo "✓ Found pytest.ini in: $d"
+              else
+                echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-        done
-        echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
-        echo "projdir=." >> "$GITHUB_OUTPUT"
-    
-    - name: Debug workspace structure
-      run: |
-        echo "Current working directory:"
-        pwd
-        echo "Directory contents:"
-        ls -la
-        echo "Project directory: ${{ steps.detect.outputs.projdir }}"
-        echo "Project directory contents:"
-        ls -la "${{ steps.detect.outputs.projdir }}"
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libpq-dev \
-          postgresql-client \
-          libgomp1 \
-          libglib2.0-0 \
-          libsm6 \
-          libxext6 \
-          libxrender-dev \
-          libgl1-mesa-dev \
-          libopenblas0 \
-          build-essential \
-          cmake
-    
-    - name: Install Python dependencies
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel
-        # Use CI requirements to avoid heavy biometric dependencies
-        if [ -f requirements-ci.txt ]; then
-          pip install -r requirements-ci.txt
-        else
-          pip install -r requirements.txt
-        fi
-    
-    - name: Set up environment variables
-      run: |
-        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
-        echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
-        echo "DEBUG=True" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_test" >> $GITHUB_ENV
-        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
-        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
-        echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
-        echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
-        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
-        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
-        echo "ENABLE_BIOMETRIC_MOCK=True" >> $GITHUB_ENV
-    
-    - name: Wait for PostgreSQL
-      run: |
-        echo "Waiting for PostgreSQL to be ready..."
-        for i in {1..30}; do
-          if pg_isready -h localhost -p 5432 -U postgres; then
-            echo "✅ PostgreSQL is ready!"
-            break
-          fi
-          echo "⏳ Waiting for PostgreSQL... (attempt $i/30)"
-          sleep 2
-        done
-    
-    - name: Test database connectivity
-      shell: bash
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      env:
-        DJANGO_SETTINGS_MODULE: myhours.settings_ci
-      run: |
-        echo "Testing PostgreSQL connectivity..."
-        echo "DATABASE_URL: $DATABASE_URL"
+          done
+          echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
+          echo "projdir=." >> "$GITHUB_OUTPUT"
 
-        # Use a heredoc so YAML sees a single, well-indented bash block
-        python - <<'PY'
-import os, django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings_ci")
-django.setup()
+      - name: Debug workspace structure
+        run: |
+          echo "Current working directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "Project directory: ${{ steps.detect.outputs.projdir }}"
+          echo "Project directory contents:"
+          ls -la "${{ steps.detect.outputs.projdir }}"
 
-from django.db import connection
-with connection.cursor() as cur:
-    cur.execute("SELECT version()")
-    print("✅ Database connected:", cur.fetchone()[0][:50])
-PY
-    
-    - name: Run Django system checks
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py check --deploy
-    
-    - name: Run database migrations
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py migrate
-    
-    - name: Run Django tests
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py test --verbosity=2 --keepdb
-    
-    - name: Debug pytest configuration
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        echo "Current directory: $(pwd)"
-        echo "Checking for pytest.ini and manage.py:"
-        ls -la pytest.ini manage.py
-        echo "Checking test directories:"
-        for dir in core/tests payroll/tests users/tests; do
-          if [ -d "$dir" ]; then
-            echo "✓ Found: $dir ($(ls $dir/*.py | wc -l) test files)"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpq-dev \
+            postgresql-client \
+            libgomp1 \
+            libglib2.0-0 \
+            libsm6 \
+            libxext6 \
+            libxrender-dev \
+            libgl1-mesa-dev \
+            libopenblas0 \
+            build-essential \
+            cmake
+
+      - name: Install Python dependencies
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel
+          # Use CI requirements to avoid heavy biometric dependencies
+          if [ -f requirements-ci.txt ]; then
+            pip install -r requirements-ci.txt
           else
-            echo "✗ Missing: $dir"
+            pip install -r requirements.txt
           fi
-        done
-        echo "Python can import Django:"
-        python -c "import django; print('Django version: ' + str(django.VERSION))"
-    
-    - name: Run pytest tests
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        echo "Running pytest from: $(pwd)"
-        echo "Quick test collection check:"
-        pytest --collect-only -q --tb=no 2>/dev/null | tail -1
-        echo "Running full test suite with coverage:"
-        pytest --verbose --tb=short --cov=. --cov-report=term --cov-report=xml
-    
-    - name: Generate additional coverage report (Django tests)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        echo "Coverage report already generated by pytest above"
-        echo "Running Django test suite for additional coverage:"
-        coverage run --source='.' manage.py test --verbosity=1
-        coverage report --show-missing
-        coverage xml -o coverage-django.xml
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ${{ steps.detect.outputs.projdir }}/coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+
+      - name: Set up environment variables
+        run: |
+          {
+            echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci"
+            echo "SECRET_KEY=test-secret-key-for-ci"
+            echo "DEBUG=True"
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_test"
+            echo "REDIS_URL=redis://localhost:6379/0"
+            echo "ALLOWED_HOSTS=localhost,127.0.0.1"
+            echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal"
+            echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json"
+            echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/"
+            echo "MONGO_DB_NAME=myhours_test"
+            echo "ENABLE_BIOMETRIC_MOCK=True"
+          } >> "$GITHUB_ENV"
+
+      - name: Wait for PostgreSQL
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "✅ PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "⏳ Waiting for PostgreSQL... (attempt $i/30)"
+            sleep 2
+          done
+          echo "❌ PostgreSQL was not ready in time"; exit 1
+
+      - name: Test database connectivity
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        env:
+          DJANGO_SETTINGS_MODULE: myhours.settings_ci
+        run: |
+          echo "Testing PostgreSQL connectivity..."
+          echo "DATABASE_URL: $DATABASE_URL"
+          python manage.py shell <<'PY'
+          from django.db import connection
+          c = connection.cursor()
+          c.execute('SELECT version()')
+          print('✅ Database connected:', c.fetchone()[0][:50])
+          PY
+
+      - name: Run Django system checks
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py check --deploy
+
+      - name: Run database migrations
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py migrate
+
+      - name: Run Django tests
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py test --verbosity=2 --keepdb
+
+      - name: Debug pytest configuration
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Checking for pytest.ini and manage.py:"
+          ls -la pytest.ini manage.py
+          echo "Checking test directories:"
+          for dir in core/tests payroll/tests users/tests; do
+            if [ -d "$dir" ]; then
+              count=$(find "$dir" -type f \( -name "test_*.py" -o -name "*_test.py" \) | wc -l)
+              echo "✓ Found: $dir (${count} test files)"
+            else
+              echo "✗ Missing: $dir"
+            fi
+          done
+          echo "Python can import Django:"
+          python -c "import django; print('Django version: ' + str(django.VERSION))"
+
+      - name: Preflight – ensure pytest collects tests
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python - <<'PY'
+          import subprocess, sys
+          p = subprocess.run(["pytest","-q","--collect-only"], text=True, capture_output=True)
+          print(p.stdout or "")
+          if "collected 0 items" in (p.stdout or ""):
+              sys.exit("No tests collected — check pytest.ini::testpaths and working-directory.")
+          PY
+
+      - name: Run pytest tests
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          echo "Running pytest from: $(pwd)"
+          echo "Quick test collection check:"
+          pytest --collect-only -q --tb=no 2>/dev/null | tail -1
+          echo "Running full test suite with coverage:"
+          pytest --verbose --tb=short --cov=. --cov-report=term --cov-report=xml
+
+      - name: Generate additional coverage report (Django tests)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          echo "Coverage report already generated by pytest above"
+          echo "Running Django test suite for additional coverage:"
+          coverage run --source='.' manage.py test --verbosity=1
+          coverage report --show-missing
+          coverage xml -o coverage-django.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ steps.detect.outputs.projdir }}/coverage.xml
+          fail_ci_if_error: false
+          verbose: true
 
   lint:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Detect project directory
-      id: detect
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_WORKSPACE"
-        echo "Searching for Django project from: $GITHUB_WORKSPACE"
-        # Try common locations for Django project
-        for d in "." "myhours-backend" "backend" "src"; do
-          echo "Checking: $d"
-          if [ -f "$d/manage.py" ]; then
-            echo "✓ Found manage.py in: $d"
-            echo "projdir=$d" >> "$GITHUB_OUTPUT"
-            # Also check for pytest.ini in the same directory
-            if [ -f "$d/pytest.ini" ]; then
-              echo "✓ Found pytest.ini in: $d"
-            else
-              echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect project directory
+        id: detect
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Searching for Django project from: $GITHUB_WORKSPACE"
+          # Try common locations for Django project
+          for d in "." "myhours-backend" "backend" "src"; do
+            echo "Checking: $d"
+            if [ -f "$d/manage.py" ]; then
+              echo "✓ Found manage.py in: $d"
+              echo "projdir=$d" >> "$GITHUB_OUTPUT"
+              # Also check for pytest.ini in the same directory
+              if [ -f "$d/pytest.ini" ]; then
+                echo "✓ Found pytest.ini in: $d"
+              else
+                echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-        done
-        echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
-        echo "projdir=." >> "$GITHUB_OUTPUT"
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install linting dependencies
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort mypy
-    
-    - name: Run Black (code formatting)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        black --check --diff .
-    
-    - name: Run isort (import sorting)  
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        isort --check-only --diff .
-    
-    - name: Run flake8 (linting)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --statistics
-    
-    - name: Run mypy (type checking)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        mypy . --ignore-missing-imports
-      continue-on-error: true
+          done
+          echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
+          echo "projdir=." >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linting dependencies
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort mypy
+
+      - name: Run Black (code formatting)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          black --check --diff . --extend-exclude "/migrations/"
+
+      - name: Run isort (import sorting)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          isort --check-only --diff . --profile black --skip-glob "*/migrations/*.py"
+
+      - name: Run flake8 (linting)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --statistics
+
+      - name: Run mypy (type checking)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          mypy . --ignore-missing-imports
+        continue-on-error: true
 
   security:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Detect project directory
-      id: detect
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_WORKSPACE"
-        echo "Searching for Django project from: $GITHUB_WORKSPACE"
-        # Try common locations for Django project
-        for d in "." "myhours-backend" "backend" "src"; do
-          echo "Checking: $d"
-          if [ -f "$d/manage.py" ]; then
-            echo "✓ Found manage.py in: $d"
-            echo "projdir=$d" >> "$GITHUB_OUTPUT"
-            # Also check for pytest.ini in the same directory
-            if [ -f "$d/pytest.ini" ]; then
-              echo "✓ Found pytest.ini in: $d"
-            else
-              echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect project directory
+        id: detect
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Searching for Django project from: $GITHUB_WORKSPACE"
+          # Try common locations for Django project
+          for d in "." "myhours-backend" "backend" "src"; do
+            echo "Checking: $d"
+            if [ -f "$d/manage.py" ]; then
+              echo "✓ Found manage.py in: $d"
+              echo "projdir=$d" >> "$GITHUB_OUTPUT"
+              # Also check for pytest.ini in the same directory
+              if [ -f "$d/pytest.ini" ]; then
+                echo "✓ Found pytest.ini in: $d"
+              else
+                echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-        done
-        echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
-        echo "projdir=." >> "$GITHUB_OUTPUT"
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install security scanning dependencies
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python -m pip install --upgrade pip
-        pip install safety bandit
-    
-    - name: Run safety (dependency vulnerability scan)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        safety check --json
-      continue-on-error: true
-    
-    - name: Run bandit (security linting)
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        bandit -r . -f json
-      continue-on-error: true
+          done
+          echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
+          echo "projdir=." >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security scanning dependencies
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit
+
+      - name: Run safety (dependency vulnerability scan)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          safety check --json
+        continue-on-error: true
+
+      - name: Run bandit (security linting)
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          bandit -r . -f json
+        continue-on-error: true
 
   build-docker:
     runs-on: ubuntu-latest
     needs: [test, lint]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ghcr.io/${{ github.repository }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-    
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./scripts/deployment/Dockerfile.optimized
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./scripts/deployment/Dockerfile.optimized
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy-staging:
     runs-on: ubuntu-latest
     needs: [build-docker]
     if: github.ref == 'refs/heads/develop'
     environment: staging
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Deploy to staging
-      run: |
-        echo "Deploying to staging environment..."
-        # Add your staging deployment commands here
-        # This could be:
-        # - Updating a Kubernetes deployment
-        # - Deploying to a cloud service
-        # - Running deployment scripts
-    
-    - name: Run smoke tests on staging
-      run: |
-        echo "Running smoke tests on staging..."
-        # Add smoke tests to verify basic functionality
-        # curl -f https://staging.myhours.example.com/health/
-    
-    - name: Notify deployment status
-      if: always()
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        text: "Staging deployment ${{ job.status }}"
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # Add your staging deployment commands here
+          # This could be:
+          # - Updating a Kubernetes deployment
+          # - Deploying to a cloud service
+          # - Running deployment scripts
+
+      - name: Run smoke tests on staging
+        run: |
+          echo "Running smoke tests on staging..."
+          # Add smoke tests to verify basic functionality
+          # curl -f https://staging.myhours.example.com/health/
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: "Staging deployment ${{ job.status }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   deploy-production:
     runs-on: ubuntu-latest
     needs: [build-docker]
     if: github.ref == 'refs/heads/main'
     environment: production
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Deploy to production
-      run: |
-        echo "Deploying to production environment..."
-        # Add your production deployment commands here
-        # This could include:
-        # - Blue-green deployment
-        # - Rolling updates
-        # - Database migrations
-        # - Cache warming
-    
-    - name: Run production health checks
-      run: |
-        echo "Running production health checks..."
-        # Add comprehensive health checks
-        # curl -f https://api.myhours.example.com/health/
-        # Check database connectivity
-        # Verify external API integrations
-    
-    - name: Notify deployment status
-      if: always()
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        text: "Production deployment ${{ job.status }}"
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          # Add your production deployment commands here
+          # This could include:
+          # - Blue-green deployment
+          # - Rolling updates
+          # - Database migrations
+          # - Cache warming
+
+      - name: Run production health checks
+        run: |
+          echo "Running production health checks..."
+          # Add comprehensive health checks
+          # curl -f https://api.myhours.example.com/health/
+          # Check database connectivity
+          # Verify external API integrations
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: "Production deployment ${{ job.status }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   # Performance testing job
   performance:
     runs-on: ubuntu-latest
     needs: [test]
     if: github.ref == 'refs/heads/main'
-    
+
     services:
       postgres:
         image: postgres:15
@@ -485,7 +494,7 @@ PY
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       mongodb:
         image: mongo:7
         env:
@@ -498,82 +507,84 @@ PY
           --health-retries 5
         ports:
           - 27017:27017
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Detect project directory
-      id: detect
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_WORKSPACE"
-        echo "Searching for Django project from: $GITHUB_WORKSPACE"
-        # Try common locations for Django project
-        for d in "." "myhours-backend" "backend" "src"; do
-          echo "Checking: $d"
-          if [ -f "$d/manage.py" ]; then
-            echo "✓ Found manage.py in: $d"
-            echo "projdir=$d" >> "$GITHUB_OUTPUT"
-            # Also check for pytest.ini in the same directory
-            if [ -f "$d/pytest.ini" ]; then
-              echo "✓ Found pytest.ini in: $d"
-            else
-              echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Detect project directory
+        id: detect
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Searching for Django project from: $GITHUB_WORKSPACE"
+          # Try common locations for Django project
+          for d in "." "myhours-backend" "backend" "src"; do
+            echo "Checking: $d"
+            if [ -f "$d/manage.py" ]; then
+              echo "✓ Found manage.py in: $d"
+              echo "projdir=$d" >> "$GITHUB_OUTPUT"
+              # Also check for pytest.ini in the same directory
+              if [ -f "$d/pytest.ini" ]; then
+                echo "✓ Found pytest.ini in: $d"
+              else
+                echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-        done
-        echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
-        echo "projdir=." >> "$GITHUB_OUTPUT"
-    
-    - name: Install dependencies
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-ci.txt
-        pip install locust
-    
-    - name: Set up environment variables
-      run: |
-        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
-        echo "SECRET_KEY=test-secret-key-for-performance" >> $GITHUB_ENV
-        echo "DEBUG=False" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_perf" >> $GITHUB_ENV
-        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
-        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
-        echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
-        echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
-        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
-        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
-    
-    - name: Set up test environment
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py migrate
-        python manage.py collectstatic --noinput
-    
-    - name: Run performance tests
-      run: |
-        echo "Running performance tests..."
-        # Add Locust or other performance testing commands
-        # locust -f performance_tests.py --headless -u 10 -r 2 -t 30s
-    
-    - name: Generate performance report
-      run: |
-        echo "Generating performance report..."
-        # Process performance test results
-        # Generate reports or upload to monitoring systems
+          done
+          echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
+          echo "projdir=." >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install locust
+
+      - name: Set up environment variables
+        run: |
+          {
+            echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci"
+            echo "SECRET_KEY=test-secret-key-for-performance"
+            echo "DEBUG=False"
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_perf"
+            echo "REDIS_URL=redis://localhost:6379/0"
+            echo "ALLOWED_HOSTS=localhost,127.0.0.1"
+            echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal"
+            echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json"
+            echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/"
+            echo "MONGO_DB_NAME=myhours_test"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up test environment
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py migrate
+          python manage.py collectstatic --noinput
+
+      - name: Run performance tests
+        run: |
+          echo "Running performance tests..."
+          # Add Locust or other performance testing commands
+          # locust -f performance_tests.py --headless -u 10 -r 2 -t 30s
+
+      - name: Generate performance report
+        run: |
+          echo "Generating performance report..."
+          # Process performance test results
+          # Generate reports or upload to monitoring systems
 
   # Database migration validation
   migration-check:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -588,7 +599,7 @@ PY
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       mongodb:
         image: mongo:7
         env:
@@ -601,70 +612,72 @@ PY
           --health-retries 5
         ports:
           - 27017:27017
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Detect project directory
-      id: detect
-      run: |
-        set -euo pipefail
-        cd "$GITHUB_WORKSPACE"
-        echo "Searching for Django project from: $GITHUB_WORKSPACE"
-        # Try common locations for Django project
-        for d in "." "myhours-backend" "backend" "src"; do
-          echo "Checking: $d"
-          if [ -f "$d/manage.py" ]; then
-            echo "✓ Found manage.py in: $d"
-            echo "projdir=$d" >> "$GITHUB_OUTPUT"
-            # Also check for pytest.ini in the same directory
-            if [ -f "$d/pytest.ini" ]; then
-              echo "✓ Found pytest.ini in: $d"
-            else
-              echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Detect project directory
+        id: detect
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          echo "Searching for Django project from: $GITHUB_WORKSPACE"
+          # Try common locations for Django project
+          for d in "." "myhours-backend" "backend" "src"; do
+            echo "Checking: $d"
+            if [ -f "$d/manage.py" ]; then
+              echo "✓ Found manage.py in: $d"
+              echo "projdir=$d" >> "$GITHUB_OUTPUT"
+              # Also check for pytest.ini in the same directory
+              if [ -f "$d/pytest.ini" ]; then
+                echo "✓ Found pytest.ini in: $d"
+              else
+                echo "⚠ No pytest.ini in: $d (may cause test collection issues)"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-        done
-        echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
-        echo "projdir=." >> "$GITHUB_OUTPUT"
-    
-    - name: Install dependencies
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-ci.txt
-    
-    - name: Set up environment variables
-      run: |
-        echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci" >> $GITHUB_ENV
-        echo "SECRET_KEY=test-secret-key-for-migration-check" >> $GITHUB_ENV
-        echo "DEBUG=True" >> $GITHUB_ENV
-        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_migration" >> $GITHUB_ENV
-        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
-        echo "ALLOWED_HOSTS=localhost,127.0.0.1" >> $GITHUB_ENV
-        echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal" >> $GITHUB_ENV
-        echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json" >> $GITHUB_ENV
-        echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/" >> $GITHUB_ENV
-        echo "MONGO_DB_NAME=myhours_test" >> $GITHUB_ENV
-    
-    - name: Check migration consistency
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py makemigrations --check --dry-run
-    
-    - name: Run migrations
-      working-directory: ${{ steps.detect.outputs.projdir }}
-      run: |
-        python manage.py migrate
-    
-    - name: Validate migration rollback
-      run: |
-        # Test migration rollback scenarios if needed
-        echo "Migration validation completed"
+          done
+          echo "⚠ Could not detect project dir with manage.py. Falling back to repo root."
+          echo "projdir=." >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Set up environment variables
+        run: |
+          {
+            echo "DJANGO_SETTINGS_MODULE=myhours.settings_ci"
+            echo "SECRET_KEY=test-secret-key-for-migration-check"
+            echo "DEBUG=True"
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/myhours_migration"
+            echo "REDIS_URL=redis://localhost:6379/0"
+            echo "ALLOWED_HOSTS=localhost,127.0.0.1"
+            echo "HEBCAL_API_URL=https://www.hebcal.com/hebcal"
+            echo "SUNRISE_SUNSET_API_URL=https://api.sunrise-sunset.org/json"
+            echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/"
+            echo "MONGO_DB_NAME=myhours_test"
+          } >> "$GITHUB_ENV"
+
+      - name: Check migration consistency
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py makemigrations --check --dry-run
+
+      - name: Run migrations
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python manage.py migrate
+
+      - name: Validate migration rollback
+        run: |
+          # Test migration rollback scenarios if needed
+          echo "Migration validation completed"

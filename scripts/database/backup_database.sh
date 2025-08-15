@@ -21,7 +21,7 @@ if command -v mongodump &> /dev/null; then
     mongodump --host localhost:27017 --db biometrics_db --out "$BACKUP_DIR/mongodb_backup/"
     cd "$BACKUP_DIR" && tar -czf "mongodb_backup_$TIMESTAMP.tar.gz" mongodb_backup/
     rm -rf mongodb_backup/
-    cd - > /dev/null
+    cd - > /dev/null || exit
 else
     echo "⚠️ mongodump not found, skipping MongoDB backup"
 fi
