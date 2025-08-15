@@ -194,40 +194,45 @@ jobs:
       - name: Sanity check – list test files found by runner  
         run: |
           echo "Current directory: $(pwd)"
+          echo "Repository structure:"
+          ls -la | head -15
           
-          PROJECT_DIR="backend/myhours-backend"
-          if [ -d "$PROJECT_DIR" ]; then
-            echo "✓ Found project directory: $PROJECT_DIR"
-            echo "Project structure:"
-            ls -la "$PROJECT_DIR" | head -10
-            
-            echo ""
-            echo "Checking for config files:"
-            [ -f "$PROJECT_DIR/pytest.ini" ] && echo "✓ pytest.ini found" || echo "✗ pytest.ini missing"
-            [ -f "$PROJECT_DIR/.coveragerc" ] && echo "✓ .coveragerc found" || echo "✗ .coveragerc missing"
-            [ -f "$PROJECT_DIR/manage.py" ] && echo "✓ manage.py found" || echo "✗ manage.py missing"
-            
-            echo ""
-            echo "Scanning test directories and files:"
-            total_files=0
-            for dir in core/tests payroll/tests worktime/tests users/tests integrations/tests biometrics/tests tests; do
-              full_path="$PROJECT_DIR/$dir"
-              if [ -d "$full_path" ]; then
-                count=$(find "$full_path" -type f \( -name "test_*.py" -o -name "*_test.py" \) | wc -l)
-                echo "✓ Found: $dir (${count} test files)"
-                total_files=$((total_files + count))
-                # Show first few test files as samples
-                find "$full_path" -type f \( -name "test_*.py" -o -name "*_test.py" \) | head -2 | sed 's|.*/||' | sed 's/^/    /'
-              else
-                echo "✗ Missing: $dir"
-              fi
-            done
-            echo "Total test files found: $total_files"
+          # Detect actual project location
+          if [ -f "manage.py" ] && [ -f "pytest.ini" ]; then
+            PROJECT_DIR="."
+            echo "✓ Found project in current directory (GitHub structure)"
+          elif [ -d "backend/myhours-backend" ] && [ -f "backend/myhours-backend/manage.py" ]; then
+            PROJECT_DIR="backend/myhours-backend"
+            echo "✓ Found project in: $PROJECT_DIR (local structure)"
           else
-            echo "⚠ Project directory not found at expected location: $PROJECT_DIR"
-            echo "Repository structure:"
-            ls -la
+            echo "⚠ Cannot locate Django project automatically"
+            echo "Searching for manage.py:"
+            find . -name "manage.py" -type f | head -5
+            PROJECT_DIR="."
           fi
+          
+          echo ""
+          echo "Checking for config files in $PROJECT_DIR:"
+          [ -f "$PROJECT_DIR/pytest.ini" ] && echo "✓ pytest.ini found" || echo "✗ pytest.ini missing"
+          [ -f "$PROJECT_DIR/.coveragerc" ] && echo "✓ .coveragerc found" || echo "✗ .coveragerc missing"
+          [ -f "$PROJECT_DIR/manage.py" ] && echo "✓ manage.py found" || echo "✗ manage.py missing"
+          
+          echo ""
+          echo "Scanning test directories and files:"
+          total_files=0
+          for dir in core/tests payroll/tests worktime/tests users/tests integrations/tests biometrics/tests tests; do
+            full_path="$PROJECT_DIR/$dir"
+            if [ -d "$full_path" ]; then
+              count=$(find "$full_path" -type f \( -name "test_*.py" -o -name "*_test.py" \) | wc -l)
+              echo "✓ Found: $dir (${count} test files)"
+              total_files=$((total_files + count))
+              # Show first few test files as samples
+              find "$full_path" -type f \( -name "test_*.py" -o -name "*_test.py" \) | head -2 | sed 's|.*/||' | sed 's/^/    /'
+            else
+              echo "✗ Missing: $dir"
+            fi
+          done
+          echo "Total test files found: $total_files"
 
       - name: Run pytest tests
         env:
@@ -240,23 +245,37 @@ jobs:
         run: |
           set -eo pipefail
           echo "Running pytest from: $(pwd)"
+          echo "Current directory contents:"
+          ls -la
 
-          PROJECT_DIR="backend/myhours-backend"
-          if [ -d "$PROJECT_DIR" ]; then
+          # Try to detect where the Django project actually is
+          if [ -f "manage.py" ] && [ -f "pytest.ini" ]; then
+            # Project is in the current directory (GitHub structure)
+            CONFIG_DIR="."
+            TEST_TARGET="."
+            echo "✓ Found project in current directory"
+          elif [ -d "backend/myhours-backend" ] && [ -f "backend/myhours-backend/manage.py" ]; then
+            # Project is in backend/myhours-backend (local structure)
+            PROJECT_DIR="backend/myhours-backend"
             export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
             CONFIG_DIR="$PROJECT_DIR"
             TEST_TARGET="$PROJECT_DIR"
-            echo "✓ Found project directory: $PROJECT_DIR"
+            echo "✓ Found project in: $PROJECT_DIR"
           else
-            CONFIG_DIR="."
-            TEST_TARGET="."
-            echo "⚠ Using current directory as project root"
-            export PYTHONPATH="${PYTHONPATH:-}"
+            echo "❌ Cannot find Django project! Looking for manage.py in:"
+            find . -name "manage.py" -type f | head -5
+            exit 1
           fi
 
           echo "Config dir: $CONFIG_DIR"
           echo "Test target: $TEST_TARGET"
           echo "PYTHONPATH: ${PYTHONPATH:-not set}"
+          
+          # Show what test directories are available
+          echo "Available test directories:"
+          for dir in core/tests payroll/tests worktime/tests users/tests integrations/tests biometrics/tests tests; do
+            [ -d "${CONFIG_DIR}/${dir}" ] && echo "  ✓ ${dir}" || echo "  ✗ ${dir}"
+          done
 
           pytest "$TEST_TARGET" \
             -c "$CONFIG_DIR/pytest.ini" \
@@ -268,21 +287,27 @@ jobs:
       - name: Generate additional coverage report (Django tests)
         run: |
           echo "Coverage report already generated by pytest above"
-          PROJECT_DIR="backend/myhours-backend"
-          if [ -d "$PROJECT_DIR" ]; then
-            cd "$PROJECT_DIR"
+          
+          # Detect project location
+          if [ -f "manage.py" ]; then
+            echo "Running Django test suite for additional coverage from current directory"
+            coverage run --source='.' manage.py test --verbosity=1
+            coverage report --show-missing
+            coverage xml -o coverage-django.xml
+          elif [ -d "backend/myhours-backend" ] && [ -f "backend/myhours-backend/manage.py" ]; then
+            cd "backend/myhours-backend"
             echo "Running Django test suite for additional coverage from: $(pwd)"
             coverage run --source='.' manage.py test --verbosity=1
             coverage report --show-missing
             coverage xml -o coverage-django.xml
           else
-            echo "⚠ Skipping Django tests - project directory not found"
+            echo "⚠ Skipping Django tests - manage.py not found"
           fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: backend/myhours-backend/coverage.xml,backend/myhours-backend/coverage-django.xml
+          files: ./coverage.xml,./coverage-django.xml,backend/myhours-backend/coverage.xml,backend/myhours-backend/coverage-django.xml
           fail_ci_if_error: false
           verbose: true
 
