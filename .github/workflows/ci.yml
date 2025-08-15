@@ -131,6 +131,8 @@ jobs:
           else
             pip install -r requirements.txt
           fi
+          # Add OpenCV for biometric tests
+          pip install --no-cache-dir "numpy>=1.24" "opencv-python-headless<5"
 
       - name: Set up environment variables
         run: |

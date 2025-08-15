@@ -182,7 +182,9 @@ class HebcalServiceTest(TestCase):
         )
 
         # Verify holidays were created (only paid holidays are now saved)
-        self.assertGreaterEqual(created, 1)  # At least one paid holiday should be created
+        self.assertGreaterEqual(
+            created, 1
+        )  # At least one paid holiday should be created
         self.assertEqual(updated, 0)
 
         # Verify in database
@@ -204,8 +206,8 @@ class HebcalServiceTest(TestCase):
                 "name": "Old Name",  # Different name - will be updated
                 "is_holiday": False,  # Wrong value - should be True
                 "is_shabbat": True,  # Wrong value - should be False
-                "is_special_shabbat": False
-            }
+                "is_special_shabbat": False,
+            },
         )
 
         # Mock API response with updated data
@@ -243,12 +245,12 @@ class HebcalServiceTest(TestCase):
         # Create test holidays
         Holiday.objects.get_or_create(
             date=date(2025, 9, 16),
-            defaults={"name": "Rosh Hashanah", "is_holiday": True, "is_shabbat": False}
+            defaults={"name": "Rosh Hashanah", "is_holiday": True, "is_shabbat": False},
         )
 
         Holiday.objects.get_or_create(
             date=date(2025, 10, 4),
-            defaults={"name": "Yom Kippur", "is_holiday": True, "is_shabbat": False}
+            defaults={"name": "Yom Kippur", "is_holiday": True, "is_shabbat": False},
         )
 
         # Test holiday detection
@@ -261,7 +263,7 @@ class HebcalServiceTest(TestCase):
         # Create test holiday
         Holiday.objects.get_or_create(
             date=date(2025, 9, 16),
-            defaults={"name": "Rosh Hashanah", "is_holiday": True, "is_shabbat": False}
+            defaults={"name": "Rosh Hashanah", "is_holiday": True, "is_shabbat": False},
         )
 
         # Test getting holiday name
@@ -658,7 +660,9 @@ class IntegrationPerformanceTest(TestCase):
             )
 
             # Should handle large datasets efficiently (non-paid holidays are now filtered)
-            self.assertGreaterEqual(created, 70)  # At least 70% should be created after filtering
+            self.assertGreaterEqual(
+                created, 70
+            )  # At least 70% should be created after filtering
             self.assertEqual(updated, 0)
 
             # Verify holidays were created (filtered for paid holidays only)

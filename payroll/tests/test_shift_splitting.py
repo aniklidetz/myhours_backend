@@ -428,164 +428,202 @@ class ShiftSplittingTest(TestCase):
 
 class ShiftSplitterEdgeCasesTest(TestCase):
     """Test edge cases and boundary conditions for ShiftSplitter"""
-    
+
     def setUp(self):
         self.israel_tz = pytz.timezone("Israel")
-    
+
     def test_split_shift_with_naive_datetime_inputs(self):
         """Test handling of timezone-naive datetime inputs (lines 49, 51)"""
         # Create naive datetime objects (no timezone)
         naive_check_in = datetime(2025, 7, 25, 15, 0)  # Friday 3 PM (naive)
         naive_check_out = datetime(2025, 7, 25, 20, 0)  # Friday 8 PM (naive)
-        
+
         # Should handle naive datetimes by making them timezone-aware
         result = ShiftSplitter.split_shift_for_sabbath(
             naive_check_in, naive_check_out, use_api=False
         )
-        
+
         # Should complete without errors and provide reasonable split
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         self.assertGreater(result["before_sabbath"], Decimal("0"))
         self.assertGreater(result["during_sabbath"], Decimal("0"))
-    
+
     def test_split_shift_with_provided_sabbath_start_time_naive(self):
         """Test with provided sabbath_start_time that is naive (lines 60-62)"""
         check_in = self.israel_tz.localize(datetime(2025, 7, 25, 15, 0))
         check_out = self.israel_tz.localize(datetime(2025, 7, 25, 20, 0))
-        
+
         # Provide naive sabbath start time
         naive_sabbath_start = datetime(2025, 7, 25, 18, 45)  # 6:45 PM naive
-        
+
         result = ShiftSplitter.split_shift_for_sabbath(
             check_in, check_out, sabbath_start_time=naive_sabbath_start, use_api=False
         )
-        
+
         # Should handle naive sabbath_start_time correctly
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         # Should split at 18:45 (provided time)
         self.assertEqual(result["before_sabbath"], Decimal("3.75"))  # 3 PM to 6:45 PM
         self.assertEqual(result["during_sabbath"], Decimal("1.25"))  # 6:45 PM to 8 PM
-    
+
     def test_split_shift_saturday_start_date_calculation(self):
         """Test when check_in is on Saturday, not Friday (lines 73-74)"""
         # Saturday shift - should find Friday for Sabbath calculation
-        saturday_check_in = self.israel_tz.localize(datetime(2025, 7, 26, 10, 0))  # Saturday 10 AM
-        saturday_check_out = self.israel_tz.localize(datetime(2025, 7, 26, 15, 0))  # Saturday 3 PM
-        
+        saturday_check_in = self.israel_tz.localize(
+            datetime(2025, 7, 26, 10, 0)
+        )  # Saturday 10 AM
+        saturday_check_out = self.israel_tz.localize(
+            datetime(2025, 7, 26, 15, 0)
+        )  # Saturday 3 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             saturday_check_in, saturday_check_out, use_api=False
         )
-        
+
         # The algorithm finds the Friday of current week, which is July 25
         # Sabbath starts Friday 19:30, so Saturday 10 AM is after Sabbath start
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         # Saturday work comes after Sabbath already started, but algorithm may calculate differently
         # Let's just verify the logic works without specific values
-        self.assertGreaterEqual(result["before_sabbath"] + result["during_sabbath"], result["total_hours"])
-    
+        self.assertGreaterEqual(
+            result["before_sabbath"] + result["during_sabbath"], result["total_hours"]
+        )
+
     @patch.object(SunriseSunsetService, "get_shabbat_times")
     def test_api_returns_no_start_time(self, mock_sabbath_times):
         """Test when API succeeds but returns no start time (line 91)"""
         # Mock API response without start time
         mock_sabbath_times.return_value = {
             "end": "2025-07-26T17:31:00+00:00",
-            "is_estimated": False
+            "is_estimated": False,
         }
-        
+
         check_in = self.israel_tz.localize(datetime(2025, 7, 25, 15, 0))
         check_out = self.israel_tz.localize(datetime(2025, 7, 25, 20, 0))
-        
+
         result = ShiftSplitter.split_shift_for_sabbath(
             check_in, check_out, use_api=True
         )
-        
+
         # Should fallback to default time when API has no start time
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         self.assertFalse(result["api_used"])  # API failed, fallback used
-        
+
     def test_split_shift_monday_to_friday_calculation_fallback(self):
         """Test fallback Friday calculation for non-Friday dates (lines 100-101)"""
         # Monday shift - should find next Friday for calculation
-        monday_check_in = self.israel_tz.localize(datetime(2025, 7, 21, 15, 0))  # Monday 3 PM
-        monday_check_out = self.israel_tz.localize(datetime(2025, 7, 21, 20, 0))  # Monday 8 PM
-        
+        monday_check_in = self.israel_tz.localize(
+            datetime(2025, 7, 21, 15, 0)
+        )  # Monday 3 PM
+        monday_check_out = self.israel_tz.localize(
+            datetime(2025, 7, 21, 20, 0)
+        )  # Monday 8 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             monday_check_in, monday_check_out, use_api=False
         )
-        
+
         # Monday shift should be all before Sabbath (no Sabbath on Monday)
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         self.assertEqual(result["before_sabbath"], Decimal("5.00"))
         self.assertEqual(result["during_sabbath"], Decimal("0.00"))
-    
+
     def test_winter_month_sabbath_calculation_edge_case(self):
         """Test winter month edge case (line 108)"""
         # January (winter) - should use DEFAULT_SABBATH_START_HOUR
-        winter_check_in = self.israel_tz.localize(datetime(2025, 1, 3, 17, 0))  # Friday 5 PM
-        winter_check_out = self.israel_tz.localize(datetime(2025, 1, 3, 20, 0))  # Friday 8 PM
-        
+        winter_check_in = self.israel_tz.localize(
+            datetime(2025, 1, 3, 17, 0)
+        )  # Friday 5 PM
+        winter_check_out = self.israel_tz.localize(
+            datetime(2025, 1, 3, 20, 0)
+        )  # Friday 8 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             winter_check_in, winter_check_out, use_api=False
         )
-        
+
         # Should use winter time (18:30)
         self.assertEqual(result["total_hours"], Decimal("3.00"))
         self.assertEqual(result["before_sabbath"], Decimal("1.50"))  # 5 PM to 6:30 PM
         self.assertEqual(result["during_sabbath"], Decimal("1.50"))  # 6:30 PM to 8 PM
-    
+
     def test_non_friday_date_calculation_default_mode(self):
         """Test non-Friday date handling in default mode (lines 120-121)"""
         # Wednesday shift
-        wednesday_check_in = self.israel_tz.localize(datetime(2025, 7, 23, 17, 0))  # Wednesday 5 PM
-        wednesday_check_out = self.israel_tz.localize(datetime(2025, 7, 23, 21, 0))  # Wednesday 9 PM
-        
+        wednesday_check_in = self.israel_tz.localize(
+            datetime(2025, 7, 23, 17, 0)
+        )  # Wednesday 5 PM
+        wednesday_check_out = self.israel_tz.localize(
+            datetime(2025, 7, 23, 21, 0)
+        )  # Wednesday 9 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             wednesday_check_in, wednesday_check_out, use_api=False
         )
-        
+
         # Wednesday shift should be all before next Sabbath
         self.assertEqual(result["total_hours"], Decimal("4.00"))
         self.assertEqual(result["before_sabbath"], Decimal("4.00"))
         self.assertEqual(result["during_sabbath"], Decimal("0.00"))
-    
+
     def test_overtime_calculation_with_large_overtime_before_sabbath(self):
         """Test overtime calculation edge case (lines 216-221)"""
         # 12 total hours, 1 during Sabbath = 11 hours before Sabbath
         total_hours = Decimal("12.0")
         sabbath_hours = Decimal("1.0")
-        
+
         breakdown = ShiftSplitter.calculate_split_overtime(total_hours, sabbath_hours)
-        
+
         # 11 hours before Sabbath: 8.6 regular + 2.4 overtime
         # 1 hour during Sabbath
         self.assertEqual(breakdown["regular_hours"], Decimal("8.60"))  # Daily norm
-        self.assertEqual(breakdown["overtime_before_sabbath_1"], Decimal("2.00"))  # First 2 OT hours
-        self.assertEqual(breakdown["overtime_before_sabbath_2"], Decimal("0.40"))  # Remaining before Sabbath
-        
+        self.assertEqual(
+            breakdown["overtime_before_sabbath_1"], Decimal("2.00")
+        )  # First 2 OT hours
+        self.assertEqual(
+            breakdown["overtime_before_sabbath_2"], Decimal("0.40")
+        )  # Remaining before Sabbath
+
         # Sabbath hours: since we already hit the daily norm, Sabbath hours are overtime
         # No hours left in daily norm (8.6 already used), so all Sabbath goes to overtime
-        self.assertEqual(breakdown["sabbath_regular"], Decimal("0.00"))  # No norm hours left
-        self.assertEqual(breakdown["sabbath_overtime_1"], Decimal("0.00"))  # First 2 OT slots used up
-        self.assertEqual(breakdown["sabbath_overtime_2"], Decimal("1.00"))  # All Sabbath hours at 200%
-    
+        self.assertEqual(
+            breakdown["sabbath_regular"], Decimal("0.00")
+        )  # No norm hours left
+        self.assertEqual(
+            breakdown["sabbath_overtime_1"], Decimal("0.00")
+        )  # First 2 OT slots used up
+        self.assertEqual(
+            breakdown["sabbath_overtime_2"], Decimal("1.00")
+        )  # All Sabbath hours at 200%
+
     def test_overtime_calculation_with_no_sabbath_overtime_available(self):
         """Test when all overtime slots are used before Sabbath (line 255)"""
         # 10 total hours, 2 during Sabbath, but all OT slots used before
         total_hours = Decimal("14.0")
         sabbath_hours = Decimal("2.0")
-        
+
         breakdown = ShiftSplitter.calculate_split_overtime(total_hours, sabbath_hours)
-        
+
         # 12 hours before Sabbath should use all OT slots
         self.assertEqual(breakdown["regular_hours"], Decimal("8.60"))
-        self.assertEqual(breakdown["overtime_before_sabbath_1"], Decimal("2.00"))  # First 2 OT
-        self.assertEqual(breakdown["overtime_before_sabbath_2"], Decimal("1.40"))  # Rest before Sabbath
-        
+        self.assertEqual(
+            breakdown["overtime_before_sabbath_1"], Decimal("2.00")
+        )  # First 2 OT
+        self.assertEqual(
+            breakdown["overtime_before_sabbath_2"], Decimal("1.40")
+        )  # Rest before Sabbath
+
         # Sabbath hours should go to higher tier since OT slots are used
-        self.assertEqual(breakdown["sabbath_regular"], Decimal("0.00"))  # No norm hours left
-        self.assertEqual(breakdown["sabbath_overtime_1"], Decimal("0.00"))  # No first tier slots left
-        self.assertEqual(breakdown["sabbath_overtime_2"], Decimal("2.00"))  # All Sabbath hours at 200%
-    
+        self.assertEqual(
+            breakdown["sabbath_regular"], Decimal("0.00")
+        )  # No norm hours left
+        self.assertEqual(
+            breakdown["sabbath_overtime_1"], Decimal("0.00")
+        )  # No first tier slots left
+        self.assertEqual(
+            breakdown["sabbath_overtime_2"], Decimal("2.00")
+        )  # All Sabbath hours at 200%
+
     def test_payment_calculation_with_all_overtime_categories(self):
         """Test payment calculation covering all categories (lines 300-304, 313-317, 358-362)"""
         # Breakdown that covers all payment categories
@@ -597,19 +635,30 @@ class ShiftSplitterEdgeCasesTest(TestCase):
             "sabbath_overtime_1": Decimal("1.50"),
             "sabbath_overtime_2": Decimal("0.50"),  # Covers lines 358-362
         }
-        
+
         hourly_rate = Decimal("100.00")
-        payment = ShiftSplitter.calculate_payment_for_split_shift(breakdown, hourly_rate)
-        
+        payment = ShiftSplitter.calculate_payment_for_split_shift(
+            breakdown, hourly_rate
+        )
+
         # Verify all payment categories are calculated
         self.assertEqual(payment["regular_pay"], Decimal("800.00"))  # 8 * 100
-        self.assertEqual(payment["overtime_before_sabbath_pay"], Decimal("400.00"))  # 2*125 + 1*150
+        self.assertEqual(
+            payment["overtime_before_sabbath_pay"], Decimal("400.00")
+        )  # 2*125 + 1*150
         self.assertEqual(payment["sabbath_pay"], Decimal("150.00"))  # 1 * 100 * 1.5
-        self.assertEqual(payment["sabbath_overtime_pay"], Decimal("362.50"))  # 1.5*175 + 0.5*200
-        
-        expected_total = Decimal("800.00") + Decimal("400.00") + Decimal("150.00") + Decimal("362.50")
+        self.assertEqual(
+            payment["sabbath_overtime_pay"], Decimal("362.50")
+        )  # 1.5*175 + 0.5*200
+
+        expected_total = (
+            Decimal("800.00")
+            + Decimal("400.00")
+            + Decimal("150.00")
+            + Decimal("362.50")
+        )
         self.assertEqual(payment["total_pay"], expected_total)
-        
+
         # Verify details structure includes all categories
         details = payment["details"]
         self.assertIn("regular", details)
@@ -618,47 +667,59 @@ class ShiftSplitterEdgeCasesTest(TestCase):
         self.assertIn("sabbath_150", details)
         self.assertIn("sabbath_overtime_175", details)
         self.assertIn("sabbath_overtime_200", details)
-    
+
     def test_zero_hours_edge_case(self):
         """Test edge case with zero duration shift"""
         # Shift with same start and end time
         same_time = self.israel_tz.localize(datetime(2025, 7, 25, 19, 30))
-        
-        result = ShiftSplitter.split_shift_for_sabbath(same_time, same_time, use_api=False)
-        
+
+        result = ShiftSplitter.split_shift_for_sabbath(
+            same_time, same_time, use_api=False
+        )
+
         self.assertEqual(result["total_hours"], Decimal("0.00"))
         self.assertEqual(result["before_sabbath"], Decimal("0.00"))
         self.assertEqual(result["during_sabbath"], Decimal("0.00"))
-    
+
     def test_exactly_at_night_boundary_22_00(self):
         """Test shift that starts/ends exactly at night boundary (22:00)"""
         # This would be for night shift testing if those methods existed
         # For now, test basic functionality at this time boundary
         night_start = self.israel_tz.localize(datetime(2025, 7, 25, 22, 0))  # 10 PM
-        night_end = self.israel_tz.localize(datetime(2025, 7, 26, 2, 0))    # 2 AM next day
-        
-        result = ShiftSplitter.split_shift_for_sabbath(night_start, night_end, use_api=False)
-        
+        night_end = self.israel_tz.localize(
+            datetime(2025, 7, 26, 2, 0)
+        )  # 2 AM next day
+
+        result = ShiftSplitter.split_shift_for_sabbath(
+            night_start, night_end, use_api=False
+        )
+
         # Saturday night work should be all during Sabbath
         self.assertEqual(result["total_hours"], Decimal("4.00"))
         self.assertEqual(result["before_sabbath"], Decimal("0.00"))
         self.assertEqual(result["during_sabbath"], Decimal("4.00"))
-    
+
     def test_shift_crossing_multiple_days(self):
         """Test very long shift crossing multiple day boundaries"""
         # 36-hour shift Friday to Sunday
-        long_start = self.israel_tz.localize(datetime(2025, 7, 25, 12, 0))  # Friday noon
-        long_end = self.israel_tz.localize(datetime(2025, 7, 27, 0, 0))     # Sunday midnight
-        
-        result = ShiftSplitter.split_shift_for_sabbath(long_start, long_end, use_api=False)
-        
+        long_start = self.israel_tz.localize(
+            datetime(2025, 7, 25, 12, 0)
+        )  # Friday noon
+        long_end = self.israel_tz.localize(
+            datetime(2025, 7, 27, 0, 0)
+        )  # Sunday midnight
+
+        result = ShiftSplitter.split_shift_for_sabbath(
+            long_start, long_end, use_api=False
+        )
+
         # Should handle very long shifts
         self.assertEqual(result["total_hours"], Decimal("36.00"))
         self.assertGreater(result["before_sabbath"], Decimal("0"))
         self.assertGreater(result["during_sabbath"], Decimal("0"))
         # Most of the shift should be during Sabbath
         self.assertGreater(result["during_sabbath"], result["before_sabbath"])
-    
+
     @patch.object(SunriseSunsetService, "get_shabbat_times")
     def test_api_with_sunday_date_finds_next_friday(self, mock_sabbath_times):
         """Test API call with Sunday date finding next Friday (lines 73-74)"""
@@ -668,47 +729,59 @@ class ShiftSplitterEdgeCasesTest(TestCase):
             "end": "2025-07-26T17:31:00+00:00",
             "is_estimated": False,
         }
-        
+
         # Sunday shift - should find next Friday for API call
-        sunday_check_in = self.israel_tz.localize(datetime(2025, 7, 27, 15, 0))  # Sunday 3 PM
-        sunday_check_out = self.israel_tz.localize(datetime(2025, 7, 27, 20, 0))  # Sunday 8 PM
-        
+        sunday_check_in = self.israel_tz.localize(
+            datetime(2025, 7, 27, 15, 0)
+        )  # Sunday 3 PM
+        sunday_check_out = self.israel_tz.localize(
+            datetime(2025, 7, 27, 20, 0)
+        )  # Sunday 8 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             sunday_check_in, sunday_check_out, use_api=True
         )
-        
+
         # Sunday work should be before next Sabbath
         self.assertEqual(result["total_hours"], Decimal("5.00"))
         self.assertTrue(result["api_used"])
         # API should have been called for finding Friday date
         mock_sabbath_times.assert_called_once()
-    
+
     def test_fallback_with_thursday_date_finds_next_friday(self):
         """Test fallback with Thursday date finding next Friday (lines 100-101)"""
         # Thursday shift - should find next Friday for fallback calculation
-        thursday_check_in = self.israel_tz.localize(datetime(2025, 7, 24, 17, 0))  # Thursday 5 PM
-        thursday_check_out = self.israel_tz.localize(datetime(2025, 7, 24, 21, 0))  # Thursday 9 PM
-        
+        thursday_check_in = self.israel_tz.localize(
+            datetime(2025, 7, 24, 17, 0)
+        )  # Thursday 5 PM
+        thursday_check_out = self.israel_tz.localize(
+            datetime(2025, 7, 24, 21, 0)
+        )  # Thursday 9 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             thursday_check_in, thursday_check_out, use_api=False
         )
-        
+
         # Thursday work should be before next Sabbath
         self.assertEqual(result["total_hours"], Decimal("4.00"))
         self.assertEqual(result["before_sabbath"], Decimal("4.00"))
         self.assertEqual(result["during_sabbath"], Decimal("0.00"))
         self.assertFalse(result["api_used"])
-    
+
     def test_fallback_with_february_winter_month(self):
         """Test fallback calculation with February winter month (line 108)"""
         # February (winter month outside 5-9 range)
-        feb_check_in = self.israel_tz.localize(datetime(2025, 2, 7, 17, 0))  # Friday 5 PM
-        feb_check_out = self.israel_tz.localize(datetime(2025, 2, 7, 20, 0))  # Friday 8 PM
-        
+        feb_check_in = self.israel_tz.localize(
+            datetime(2025, 2, 7, 17, 0)
+        )  # Friday 5 PM
+        feb_check_out = self.israel_tz.localize(
+            datetime(2025, 2, 7, 20, 0)
+        )  # Friday 8 PM
+
         result = ShiftSplitter.split_shift_for_sabbath(
             feb_check_in, feb_check_out, use_api=False
         )
-        
+
         # February should use DEFAULT_SABBATH_START_HOUR (18:30)
         self.assertEqual(result["total_hours"], Decimal("3.00"))
         self.assertEqual(result["before_sabbath"], Decimal("1.50"))  # 5 PM to 6:30 PM

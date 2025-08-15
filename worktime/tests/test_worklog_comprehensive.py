@@ -167,12 +167,15 @@ class WorkLogModelTest(TestCase):
     def test_worklog_location_tracking(self):
         """Test location tracking functionality"""
         from decimal import Decimal
+
         worklog = WorkLog.objects.create(
             employee=self.employee,
             check_in=timezone.now(),
             location_check_in="Office - Tel Aviv",
             latitude_check_in=Decimal("32.085300"),  # Use Decimal with 6 decimal places
-            longitude_check_in=Decimal("34.781800"),  # Use Decimal with 6 decimal places
+            longitude_check_in=Decimal(
+                "34.781800"
+            ),  # Use Decimal with 6 decimal places
         )
 
         self.assertEqual(worklog.location_check_in, "Office - Tel Aviv")

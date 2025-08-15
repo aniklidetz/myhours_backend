@@ -36,14 +36,14 @@ class SafeToJsonTest(TestCase):
         """Test valid JSON bytes input"""
         json_data = {"message": "hello", "status": "ok"}
         json_bytes = json.dumps(json_data).encode("utf-8")
-        
+
         result = safe_to_json(json_bytes)
         self.assertEqual(result, json_data)
 
     def test_invalid_bytes_input_returns_empty_dict(self):
         """Test invalid JSON bytes returns empty dict"""
         invalid_bytes = b"not valid json"
-        
+
         result = safe_to_json(invalid_bytes)
         self.assertEqual(result, {})
 
@@ -51,7 +51,7 @@ class SafeToJsonTest(TestCase):
         """Test bytes with Unicode decode errors"""
         # Create bytes with invalid UTF-8 sequence
         invalid_utf8_bytes = b'{"key": "value\xff"}'  # \xff is invalid UTF-8
-        
+
         result = safe_to_json(invalid_utf8_bytes)
         # Should handle decode error gracefully and return result
         self.assertIsInstance(result, dict)
@@ -60,7 +60,7 @@ class SafeToJsonTest(TestCase):
         """Test bytearray input (same logic as bytes)"""
         json_data = {"test": "data"}
         json_bytearray = bytearray(json.dumps(json_data).encode("utf-8"))
-        
+
         result = safe_to_json(json_bytearray)
         self.assertEqual(result, json_data)
 
@@ -68,14 +68,14 @@ class SafeToJsonTest(TestCase):
         """Test valid JSON string input"""
         json_string = '{"name": "Alice", "age": 25}'
         expected = {"name": "Alice", "age": 25}
-        
+
         result = safe_to_json(json_string)
         self.assertEqual(result, expected)
 
     def test_invalid_json_string_returns_empty_dict(self):
         """Test invalid JSON string returns empty dict"""
         invalid_string = "not valid json"
-        
+
         result = safe_to_json(invalid_string)
         self.assertEqual(result, {})
 
@@ -89,7 +89,7 @@ class SafeToJsonTest(TestCase):
         json_data = {"response": "data"}
         mock_response = MagicMock()
         mock_response.json.return_value = json_data
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, json_data)
         mock_response.json.assert_called_once()
@@ -99,16 +99,18 @@ class SafeToJsonTest(TestCase):
         mock_response = MagicMock()
         mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
         mock_response.content = b'{"fallback": "data"}'
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, {"fallback": "data"})
 
     def test_response_object_json_unicode_error(self):
         """Test response object when json() method has Unicode error"""
         mock_response = MagicMock()
-        mock_response.json.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "Invalid UTF-8")
+        mock_response.json.side_effect = UnicodeDecodeError(
+            "utf-8", b"", 0, 1, "Invalid UTF-8"
+        )
         mock_response.content = b'{"fallback": "content"}'
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, {"fallback": "content"})
 
@@ -117,7 +119,7 @@ class SafeToJsonTest(TestCase):
         mock_response = MagicMock()
         del mock_response.json  # Remove json method
         mock_response.content = b'{"content": "data"}'
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, {"content": "data"})
 
@@ -127,7 +129,7 @@ class SafeToJsonTest(TestCase):
         del mock_response.json
         del mock_response.content
         mock_response.text = '{"text": "data"}'
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, {"text": "data"})
 
@@ -136,71 +138,76 @@ class SafeToJsonTest(TestCase):
         mock_response = MagicMock()
         mock_response.json = "not_callable"  # Not a method
         mock_response.content = b'{"fallback": "content"}'
-        
+
         result = safe_to_json(mock_response)
         self.assertEqual(result, {"fallback": "content"})
 
     def test_object_with_only_content_attribute(self):
         """Test object with only content attribute"""
         # Test that content bytes work correctly
-        content_bytes = b'{"only_content": true}'  # Fixed: use valid JSON (lowercase true)
+        content_bytes = (
+            b'{"only_content": true}'  # Fixed: use valid JSON (lowercase true)
+        )
         result = safe_to_json(content_bytes)
         self.assertEqual(result, {"only_content": True})
-        
+
         # Also test that an object with content would work
         class ContentObject:
             def __init__(self):
                 self.content = b'{"test_content": "works"}'
-                
+
         obj = ContentObject()
         result = safe_to_json(obj)
         self.assertEqual(result, {"test_content": "works"})
 
     def test_object_with_only_text_attribute(self):
-        """Test object with only text attribute"""  
+        """Test object with only text attribute"""
         # Test that text content works correctly with valid JSON
         text_string = '{"only_text": true}'  # Fixed: use valid JSON (lowercase true)
         result = safe_to_json(text_string)
         self.assertEqual(result, {"only_text": True})
-        
+
         # Test that an object with text attribute works
         class TextObject:
             def __init__(self):
                 self.text = '{"test_text": "works"}'
-        
+
         obj = TextObject()
         result = safe_to_json(obj)
         self.assertEqual(result, {"test_text": "works"})
 
     def test_final_fallback_str_conversion(self):
         """Test final fallback using str() conversion"""
+
         # Create object that converts to valid JSON string
         class JsonObject:
             def __str__(self):
                 return '{"fallback": "string"}'
-        
+
         obj = JsonObject()
         result = safe_to_json(obj)
         self.assertEqual(result, {"fallback": "string"})
 
     def test_final_fallback_invalid_json_returns_empty_dict(self):
         """Test final fallback with invalid JSON returns empty dict"""
+
         # Object that converts to invalid JSON
         class InvalidJsonObject:
             def __str__(self):
                 return "invalid json"
-        
+
         obj = InvalidJsonObject()
         result = safe_to_json(obj)
         self.assertEqual(result, {})
 
     def test_final_fallback_unicode_error_returns_empty_dict(self):
         """Test final fallback with Unicode error returns empty dict"""
+
         # Mock str() to raise UnicodeDecodeError
         class UnicodeErrorObject:
             def __str__(self):
                 raise UnicodeDecodeError("ascii", b"", 0, 1, "ordinal not in range")
-        
+
         obj = UnicodeErrorObject()
         result = safe_to_json(obj)
         self.assertEqual(result, {})
@@ -227,14 +234,14 @@ class SafeToJsonTest(TestCase):
         """Test boolean input uses final fallback"""
         result_true = safe_to_json(True)
         result_false = safe_to_json(False)
-        
+
         # str(True) = "True" and str(False) = "False" are not valid JSON, so return {}
         self.assertEqual(result_true, {})
         self.assertEqual(result_false, {})
 
     def test_complex_nested_json_string(self):
         """Test complex nested JSON string"""
-        complex_json = '''
+        complex_json = """
         {
             "users": [
                 {"id": 1, "name": "John", "active": true},
@@ -245,10 +252,10 @@ class SafeToJsonTest(TestCase):
                 "page": 1
             }
         }
-        '''
-        
+        """
+
         result = safe_to_json(complex_json)
-        
+
         self.assertIsInstance(result, dict)
         self.assertIn("users", result)
         self.assertIn("metadata", result)
@@ -259,6 +266,6 @@ class SafeToJsonTest(TestCase):
         """Test JSON with Unicode characters"""
         unicode_json = '{"message": "Hello 世界", "emoji": "🌍"}'
         expected = {"message": "Hello 世界", "emoji": "🌍"}
-        
+
         result = safe_to_json(unicode_json)
         self.assertEqual(result, expected)

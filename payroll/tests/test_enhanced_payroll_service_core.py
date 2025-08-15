@@ -46,12 +46,9 @@ class EnhancedPayrollServiceInitTest(TestCase):
     def test_service_initialization_basic(self):
         """Test basic service initialization"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1,
-            fast_mode=False
+            employee=self.employee, year=2025, month=1, fast_mode=False
         )
-        
+
         self.assertEqual(service.employee, self.employee)
         self.assertEqual(service.year, 2025)
         self.assertEqual(service.month, 1)
@@ -64,23 +61,20 @@ class EnhancedPayrollServiceInitTest(TestCase):
     def test_service_initialization_fast_mode(self):
         """Test service initialization with fast mode"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1,
-            fast_mode=True
+            employee=self.employee, year=2025, month=1, fast_mode=True
         )
-        
+
         self.assertTrue(service.fast_mode)
 
-    @patch('payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month')
+    @patch(
+        "payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month"
+    )
     def test_load_holidays_called_on_init(self, mock_load_holidays):
         """Test that holiday loading is called during initialization"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         mock_load_holidays.assert_called_once()
 
 
@@ -104,74 +98,72 @@ class EnhancedPayrollServiceHolidayTest(TestCase):
             hourly_rate=Decimal("50.00"),
             currency="ILS",
         )
-        
+
         # Create a test holiday
         self.holiday = Holiday.objects.create(
-            name="Test Holiday",
-            date=date(2025, 1, 15),
-            is_holiday=True
+            name="Test Holiday", date=date(2025, 1, 15), is_holiday=True
         )
 
     def test_load_holidays_for_month(self):
         """Test loading holidays for a specific month"""
-        with patch('payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month') as mock_load:
+        with patch(
+            "payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month"
+        ) as mock_load:
             # Mock the holidays_cache manually
             mock_holidays_cache = {
-                "2025-01-15": {'name': 'Test Holiday', 'is_holiday': True}
+                "2025-01-15": {"name": "Test Holiday", "is_holiday": True}
             }
-            
+
             service = EnhancedPayrollCalculationService(
-                employee=self.employee,
-                year=2025,
-                month=1
+                employee=self.employee, year=2025, month=1
             )
             service.holidays_cache = mock_holidays_cache
-            
+
             # Check that holiday is loaded into cache
             holiday_key = "2025-01-15"
             self.assertIn(holiday_key, service.holidays_cache)
-            self.assertEqual(service.holidays_cache[holiday_key]['name'], "Test Holiday")
+            self.assertEqual(
+                service.holidays_cache[holiday_key]["name"], "Test Holiday"
+            )
 
     def test_get_holiday_from_cache(self):
         """Test retrieving holiday from cache"""
-        with patch('payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month'):
+        with patch(
+            "payroll.services.EnhancedPayrollCalculationService._load_holidays_for_month"
+        ):
             service = EnhancedPayrollCalculationService(
-                employee=self.employee,
-                year=2025,
-                month=1
+                employee=self.employee, year=2025, month=1
             )
-            
+
             # Manually set cache
             service.holidays_cache = {
                 "2025-01-15": {
-                    'name': 'Test Holiday', 
-                    'is_holiday': True,
-                    'is_shabbat': False,
-                    'is_special_shabbat': False
+                    "name": "Test Holiday",
+                    "is_holiday": True,
+                    "is_shabbat": False,
+                    "is_special_shabbat": False,
                 }
             }
-            
+
             work_date = date(2025, 1, 15)
             holiday_info = service.get_holiday_from_cache(work_date)
-            
+
             self.assertIsNotNone(holiday_info)
             # holiday_info could be a Holiday object or dict depending on implementation
-            if hasattr(holiday_info, 'name'):
+            if hasattr(holiday_info, "name"):
                 self.assertEqual(holiday_info.name, "Test Holiday")
             else:
-                self.assertEqual(holiday_info['name'], "Test Holiday")
+                self.assertEqual(holiday_info["name"], "Test Holiday")
 
     def test_get_holiday_from_cache_no_holiday(self):
         """Test retrieving non-existent holiday from cache"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         work_date = date(2025, 1, 20)  # No holiday on this date
         holiday_info = service.get_holiday_from_cache(work_date)
-        
+
         self.assertIsNone(holiday_info)
 
 
@@ -199,34 +191,32 @@ class EnhancedPayrollServiceWorkLogTest(TestCase):
     def test_get_work_logs_for_month(self):
         """Test retrieving work logs for a month"""
         # Create work logs for the month
-        tz = pytz.timezone('Asia/Jerusalem')
+        tz = pytz.timezone("Asia/Jerusalem")
         check_in = tz.localize(datetime(2025, 1, 15, 9, 0))
         check_out = tz.localize(datetime(2025, 1, 15, 17, 0))
-        
+
         work_log = WorkLog.objects.create(
             employee=self.employee,
             check_in=check_in,
             check_out=check_out,
         )
-        
+
         # Create work log for different month (should not be included)
         check_in_feb = tz.localize(datetime(2025, 2, 15, 9, 0))
         check_out_feb = tz.localize(datetime(2025, 2, 15, 17, 0))
-        
+
         WorkLog.objects.create(
             employee=self.employee,
             check_in=check_in_feb,
             check_out=check_out_feb,
         )
-        
+
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         work_logs = service.get_work_logs_for_month()
-        
+
         self.assertEqual(work_logs.count(), 1)
         self.assertEqual(work_logs.first(), work_log)
 
@@ -255,34 +245,30 @@ class EnhancedPayrollServiceNightShiftTest(TestCase):
     def test_is_night_shift_detection(self):
         """Test night shift detection logic"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         # Mock work log with night hours
         work_log_mock = Mock()
         work_log_mock.get_night_hours.return_value = 3.5  # 3.5 hours at night
-        
+
         is_night, night_hours = service.is_night_shift(work_log_mock)
-        
+
         self.assertTrue(is_night)
         self.assertEqual(night_hours, Decimal("3.5"))
 
     def test_is_not_night_shift_detection(self):
         """Test non-night shift detection"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         # Mock work log with minimal night hours
         work_log_mock = Mock()
         work_log_mock.get_night_hours.return_value = 1.0  # Only 1 hour at night
-        
+
         is_night, night_hours = service.is_night_shift(work_log_mock)
-        
+
         self.assertFalse(is_night)
         self.assertEqual(night_hours, Decimal("1.0"))
 
@@ -308,48 +294,50 @@ class EnhancedPayrollServiceSabbathTest(TestCase):
             currency="ILS",
         )
 
-    @patch('payroll.services.EnhancedPayrollCalculationService.get_shabbat_from_cache')
+    @patch("payroll.services.EnhancedPayrollCalculationService.get_shabbat_from_cache")
     def test_is_sabbath_work_with_cached_data(self, mock_get_sabbath):
         """Test Sabbath work detection with cached data"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         # Mock cached Sabbath data
         mock_get_sabbath.return_value = {
-            'start_time': datetime(2025, 1, 17, 17, 30),  # Friday evening
-            'end_time': datetime(2025, 1, 18, 18, 30),    # Saturday evening
-            'type': 'weekly_sabbath'
+            "start_time": datetime(2025, 1, 17, 17, 30),  # Friday evening
+            "end_time": datetime(2025, 1, 18, 18, 30),  # Saturday evening
+            "type": "weekly_sabbath",
         }
-        
+
         # Test work during Sabbath
-        work_datetime = timezone.make_aware(datetime(2025, 1, 18, 10, 0))  # Saturday morning
-        
-        is_sabbath, sabbath_type, sabbath_info = service.is_sabbath_work_precise(work_datetime)
-        
+        work_datetime = timezone.make_aware(
+            datetime(2025, 1, 18, 10, 0)
+        )  # Saturday morning
+
+        is_sabbath, sabbath_type, sabbath_info = service.is_sabbath_work_precise(
+            work_datetime
+        )
+
         self.assertTrue(is_sabbath)
-        self.assertEqual(sabbath_type, 'saturday_precise')
+        self.assertEqual(sabbath_type, "saturday_precise")
         self.assertIsNotNone(sabbath_info)
 
-    @patch('payroll.services.EnhancedPayrollCalculationService.get_shabbat_from_cache')
+    @patch("payroll.services.EnhancedPayrollCalculationService.get_shabbat_from_cache")
     def test_is_not_sabbath_work(self, mock_get_sabbath):
         """Test non-Sabbath work detection"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         # Mock no Sabbath data
         mock_get_sabbath.return_value = None
-        
+
         # Test work on regular weekday
         work_datetime = timezone.make_aware(datetime(2025, 1, 15, 10, 0))  # Wednesday
-        
-        is_sabbath, sabbath_type, sabbath_info = service.is_sabbath_work_precise(work_datetime)
-        
+
+        is_sabbath, sabbath_type, sabbath_info = service.is_sabbath_work_precise(
+            work_datetime
+        )
+
         self.assertFalse(is_sabbath)
         self.assertIsNone(sabbath_type)
         self.assertIsNone(sabbath_info)
@@ -375,41 +363,33 @@ class EnhancedPayrollServiceHolidayWorkTest(TestCase):
             hourly_rate=Decimal("50.00"),
             currency="ILS",
         )
-        
+
         # Create a test holiday (use get_or_create to avoid unique constraint violation)
         self.holiday, created = Holiday.objects.get_or_create(
-            date=date(2025, 1, 1),
-            defaults={
-                "name": "New Year",
-                "is_holiday": True
-            }
+            date=date(2025, 1, 1), defaults={"name": "New Year", "is_holiday": True}
         )
 
     def test_is_holiday_work_enhanced(self):
         """Test enhanced holiday work detection"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         work_date = date(2025, 1, 1)  # New Year - not a paid holiday in Israel
         holiday_obj = service.is_holiday_work_enhanced(work_date)
-        
+
         # New Year is not an official paid holiday in Israel, so should return None
         self.assertIsNone(holiday_obj)
 
     def test_is_not_holiday_work(self):
         """Test non-holiday work detection"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         work_date = date(2025, 1, 15)  # Regular day
         holiday_obj = service.is_holiday_work_enhanced(work_date)
-        
+
         self.assertIsNone(holiday_obj)
 
 
@@ -434,39 +414,41 @@ class EnhancedPayrollServiceCalculationTest(TestCase):
             currency="ILS",
         )
 
-    @patch('payroll.services.EnhancedPayrollCalculationService.sync_missing_holidays_for_month')
-    @patch('payroll.services.EnhancedPayrollCalculationService.get_work_logs_for_month')
-    def test_calculate_monthly_salary_enhanced_no_work_logs(self, mock_get_logs, mock_sync_holidays):
+    @patch(
+        "payroll.services.EnhancedPayrollCalculationService.sync_missing_holidays_for_month"
+    )
+    @patch("payroll.services.EnhancedPayrollCalculationService.get_work_logs_for_month")
+    def test_calculate_monthly_salary_enhanced_no_work_logs(
+        self, mock_get_logs, mock_sync_holidays
+    ):
         """Test monthly salary calculation with no work logs"""
         service = EnhancedPayrollCalculationService(
-            employee=self.employee,
-            year=2025,
-            month=1
+            employee=self.employee, year=2025, month=1
         )
-        
+
         # Mock empty queryset
         mock_queryset = Mock()
         mock_queryset.exists.return_value = False
         mock_queryset.count.return_value = 0
         mock_get_logs.return_value = mock_queryset
-        
+
         # Mock API usage tracking
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 0,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 0,
         }
-        
+
         result = service.calculate_monthly_salary_enhanced()
-        
-        self.assertEqual(result['employee'], self.employee.get_full_name())
-        self.assertEqual(result['period'], "2025-01")
-        self.assertEqual(result['calculation_type'], "hourly")
-        self.assertEqual(result['work_sessions_count'], 0)
-        self.assertEqual(result['note'], "No work logs for this period")
-        
+
+        self.assertEqual(result["employee"], self.employee.get_full_name())
+        self.assertEqual(result["period"], "2025-01")
+        self.assertEqual(result["calculation_type"], "hourly")
+        self.assertEqual(result["work_sessions_count"], 0)
+        self.assertEqual(result["note"], "No work logs for this period")
+
         # Verify methods were called
         mock_sync_holidays.assert_called_once()
         mock_get_logs.assert_called_once()
@@ -504,16 +486,16 @@ class EnhancedPayrollServiceAPIUsageTest(TestCase):
         )
 
         service = EnhancedPayrollCalculationService(self.employee, 2025, 7)
-        
+
         # Mock api_usage initialization to prevent AttributeError
         service.api_usage = {
-            'sunrise_sunset_calls': 1,
-            'hebcal_calls': 1,
-            'precise_sabbath_times': 1,
-            'api_holidays_found': 0,
-            'fallback_calculations': 0,
+            "sunrise_sunset_calls": 1,
+            "hebcal_calls": 1,
+            "precise_sabbath_times": 1,
+            "api_holidays_found": 0,
+            "fallback_calculations": 0,
         }
-        
+
         result = service.calculate_monthly_salary_enhanced()
 
         # Should track API integrations used
@@ -561,11 +543,11 @@ class EnhancedPayrollServiceCalculationModesTest(TestCase):
             self.employee, 2025, 7, fast_mode=True
         )
         service_fast.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 1,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 1,
         }
         result_fast = service_fast.calculate_monthly_salary_enhanced()
 
@@ -574,11 +556,11 @@ class EnhancedPayrollServiceCalculationModesTest(TestCase):
             self.employee, 2025, 7, fast_mode=False
         )
         service_full.api_usage = {
-            'sunrise_sunset_calls': 2,
-            'hebcal_calls': 1,
-            'precise_sabbath_times': 1,
-            'api_holidays_found': 0,
-            'fallback_calculations': 0,
+            "sunrise_sunset_calls": 2,
+            "hebcal_calls": 1,
+            "precise_sabbath_times": 1,
+            "api_holidays_found": 0,
+            "fallback_calculations": 0,
         }
         result_full = service_full.calculate_monthly_salary_enhanced()
 
@@ -651,11 +633,11 @@ class EnhancedPayrollServiceEmployeeTypesTest(TestCase):
 
         service = EnhancedPayrollCalculationService(self.monthly_employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 12,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 12,
         }
         result = service.calculate_monthly_salary_enhanced()
 
@@ -684,11 +666,11 @@ class EnhancedPayrollServiceEmployeeTypesTest(TestCase):
 
         service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 4,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 4,
         }
         result = service.calculate_monthly_salary_enhanced()
 
@@ -741,17 +723,19 @@ class EnhancedPayrollServiceCompensatoryDaysTest(TestCase):
 
         service = EnhancedPayrollCalculationService(self.employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 1,
-            'hebcal_calls': 1,
-            'precise_sabbath_times': 1,
-            'api_holidays_found': 0,
-            'fallback_calculations': 0,
+            "sunrise_sunset_calls": 1,
+            "hebcal_calls": 1,
+            "precise_sabbath_times": 1,
+            "api_holidays_found": 0,
+            "fallback_calculations": 0,
         }
         result = service.calculate_monthly_salary_enhanced()
 
         # Should track compensatory days earned
         comp_days = result.get("compensatory_days_earned", 0)
-        self.assertGreaterEqual(comp_days, 0)  # May or may not have comp days depending on implementation
+        self.assertGreaterEqual(
+            comp_days, 0
+        )  # May or may not have comp days depending on implementation
 
 
 class EnhancedPayrollServiceWorkingDaysTest(TestCase):
@@ -791,11 +775,11 @@ class EnhancedPayrollServiceWorkingDaysTest(TestCase):
 
         service = EnhancedPayrollCalculationService(self.employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 1,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 8,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 1,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 8,
         }
         result = service.calculate_monthly_salary_enhanced()
 
@@ -866,11 +850,11 @@ class EnhancedPayrollServiceCurrencyTest(TestCase):
 
         service = EnhancedPayrollCalculationService(usd_employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 1,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 1,
         }
         result = service.calculate_monthly_salary_enhanced()
 
@@ -916,11 +900,11 @@ class EnhancedPayrollServiceCachingTest(TestCase):
         # First calculation - should save to DB
         service = EnhancedPayrollCalculationService(self.employee, 2025, 7)
         service.api_usage = {
-            'sunrise_sunset_calls': 0,
-            'hebcal_calls': 0,
-            'precise_sabbath_times': 0,
-            'api_holidays_found': 0,
-            'fallback_calculations': 1,
+            "sunrise_sunset_calls": 0,
+            "hebcal_calls": 0,
+            "precise_sabbath_times": 0,
+            "api_holidays_found": 0,
+            "fallback_calculations": 1,
         }
         result1 = service.calculate_monthly_salary_enhanced()
 

@@ -4,7 +4,11 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import cv2
+try:
+    import cv2  # type: ignore
+except (ImportError, OSError):
+    cv2 = None
+
 import face_recognition
 import numpy as np
 from PIL import Image
@@ -16,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 class FaceProcessor:
     """Service for processing face images and extracting embeddings"""
+
+    def _require_cv2(self):
+        """Ensure OpenCV is available"""
+        if cv2 is None:
+            raise RuntimeError(
+                "OpenCV (cv2) is required for FaceProcessor but not installed. Install with: pip install opencv-python-headless"
+            )
 
     def __init__(self):
         self.tolerance = getattr(settings, "FACE_RECOGNITION_TOLERANCE", 0.4)
@@ -33,6 +44,7 @@ class FaceProcessor:
         Returns:
             Numpy array of the image or None if failed
         """
+        self._require_cv2()
         try:
             # Input validation
             if not base64_string or not isinstance(base64_string, str):

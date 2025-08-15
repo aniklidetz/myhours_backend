@@ -94,15 +94,17 @@ class CalcOvertimeTest(TestCase):
     def test_calc_overtime_decimal_precision(self):
         """Test that result always has 2 decimal places"""
         test_cases = [
-            (Decimal("8.0"), "0.00"),   # No overtime
-            (Decimal("9.0"), "0.40"),   # Overtime = 0.40
+            (Decimal("8.0"), "0.00"),  # No overtime
+            (Decimal("9.0"), "0.40"),  # Overtime = 0.40
             (Decimal("10.5"), "1.90"),  # Overtime = 1.90
         ]
-        
+
         for hours, expected_str in test_cases:
             result = calc_overtime(hours)
             # Check that result has exactly 2 decimal places when converted to string
             result_str = str(result)
-            self.assertIn('.', result_str)
-            decimal_part = result_str.split('.')[1]
-            self.assertEqual(len(decimal_part), 2, f"Result {result} should have 2 decimal places")
+            self.assertIn(".", result_str)
+            decimal_part = result_str.split(".")[1]
+            self.assertEqual(
+                len(decimal_part), 2, f"Result {result} should have 2 decimal places"
+            )

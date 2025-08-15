@@ -175,8 +175,10 @@ class BiometricRegistrationTest(APITestCase):
         # Check for error indication in response - be flexible about the format
         response_str = str(response.data).lower()
         self.assertTrue(
-            "face" in response_str or "process" in response_str or "error" in response_str,
-            f"Expected error response but got: {response.data}"
+            "face" in response_str
+            or "process" in response_str
+            or "error" in response_str,
+            f"Expected error response but got: {response.data}",
         )
 
 

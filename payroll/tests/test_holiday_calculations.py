@@ -76,7 +76,7 @@ class HolidayCalculationTest(TestCase):
                 "name": "Rosh Hashana",
                 "is_holiday": True,
                 "is_shabbat": False,
-            }
+            },
         )
 
         # Work on Rosh Hashanah
@@ -114,7 +114,7 @@ class HolidayCalculationTest(TestCase):
 
         Holiday.objects.get_or_create(
             date=date(2025, 7, 25),  # Используем дату из mock_holidays выше
-            defaults={"name": "Yom Kippur", "is_holiday": True, "is_shabbat": False}
+            defaults={"name": "Yom Kippur", "is_holiday": True, "is_shabbat": False},
         )
 
         # Work on Yom Kippur
@@ -162,7 +162,10 @@ class HolidayCalculationTest(TestCase):
         ]
 
         # Create Holiday entries with official Israeli holiday names
-        holiday_names = ["Pesach I", "Pesach VII"]  # Official names for first and last days of Passover
+        holiday_names = [
+            "Pesach I",
+            "Pesach VII",
+        ]  # Official names for first and last days of Passover
         for i, day in enumerate([10, 11]):
             Holiday.objects.get_or_create(
                 date=date(2025, 7, day),  # Используем даты из mock_holidays выше
@@ -170,7 +173,7 @@ class HolidayCalculationTest(TestCase):
                     "name": holiday_names[i],
                     "is_holiday": True,
                     "is_shabbat": False,
-                }
+                },
             )
 
         # Work both days
@@ -214,7 +217,7 @@ class HolidayCalculationTest(TestCase):
                 "name": "Test Holiday",
                 "is_holiday": True,
                 "is_shabbat": False,
-            }
+            },
         )
 
         # Night shift during holiday (10 PM to 6 AM)
@@ -256,7 +259,7 @@ class HolidayCalculationTest(TestCase):
                 "name": "Yom Kippur",
                 "is_holiday": True,
                 "is_shabbat": False,
-            }
+            },
         )
 
         # Holiday work
@@ -344,7 +347,7 @@ class HolidayCalculationTest(TestCase):
                 "name": "Yom HaAtzmaut",  # Israeli Independence Day - official paid holiday
                 "is_holiday": True,
                 "is_shabbat": False,
-            }
+            },
         )
 
         # Work on the custom holiday

@@ -111,7 +111,7 @@ class WorkLogAPITest(BaseAPITestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Handle both paginated and non-paginated responses
         if isinstance(response.data, dict) and "results" in response.data:
             # Paginated response
@@ -170,11 +170,11 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            data = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            data = response.data["results"]
         else:
             data = response.data
-        
+
         # All results should be for the specified employee
         for worklog in data:
             self.assertEqual(worklog["employee"], self.employee.id)
@@ -192,11 +192,11 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            data = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            data = response.data["results"]
         else:
             data = response.data
-        
+
         # Verify all results are within date range
         for worklog in data:
             worklog_date = worklog["check_in"][:10]  # Extract date part
@@ -212,11 +212,11 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            data = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            data = response.data["results"]
         else:
             data = response.data
-        
+
         for worklog in data:
             self.assertTrue(worklog["is_approved"])
 
@@ -225,11 +225,11 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            data = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            data = response.data["results"]
         else:
             data = response.data
-        
+
         for worklog in data:
             self.assertFalse(worklog["is_approved"])
 
@@ -276,8 +276,8 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            current_sessions = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            current_sessions = response.data["results"]
         else:
             current_sessions = response.data
         self.assertGreater(
@@ -311,8 +311,8 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            worklogs = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            worklogs = response.data["results"]
         else:
             worklogs = response.data
         self.assertGreater(len(worklogs), 0)
@@ -387,11 +387,11 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            data = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            data = response.data["results"]
         else:
             data = response.data
-        
+
         # Results should contain work logs with 'Office' in location
         for worklog in data:
             location_fields = [
@@ -409,8 +409,8 @@ class WorkLogAPITest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Handle both paginated and non-paginated responses
-        if hasattr(response.data, 'get') and 'results' in response.data:
-            worklogs = response.data['results']
+        if hasattr(response.data, "get") and "results" in response.data:
+            worklogs = response.data["results"]
         else:
             worklogs = response.data
         if len(worklogs) > 1:

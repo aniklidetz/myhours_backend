@@ -26,16 +26,16 @@ class PayrollAPIAuthenticationTest(APITestCase):
         self.admin_user = User.objects.create_superuser(
             username="admin", email="admin@test.com", password="testpass123"
         )
-        
+
         # Create Employee profile for admin with admin role
         self.admin_employee = Employee.objects.create(
             user=self.admin_user,
             first_name="Admin",
-            last_name="User", 
+            last_name="User",
             email="admin@test.com",
             employment_type="full_time",
             role="admin",  # This is crucial for payroll access
-            is_active=True
+            is_active=True,
         )
 
         # Create regular user
@@ -50,7 +50,9 @@ class PayrollAPIAuthenticationTest(APITestCase):
             last_name="Monthly",
             email="monthly@test.com",
             employment_type="full_time",
-            monthly_salary=Decimal("10000.00"),  # Changed from base_salary to monthly_salary
+            monthly_salary=Decimal(
+                "10000.00"
+            ),  # Changed from base_salary to monthly_salary
             hourly_rate=None,  # Testing null hourly_rate case
         )
 
@@ -61,7 +63,7 @@ class PayrollAPIAuthenticationTest(APITestCase):
             employment_type="hourly",
             hourly_rate=Decimal("50.00"),
         )
-        
+
         # Import and create Salary records for proper calculation_type
         from payroll.models import Salary
 
@@ -70,15 +72,15 @@ class PayrollAPIAuthenticationTest(APITestCase):
             employee=self.monthly_employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
-            currency="ILS"
+            currency="ILS",
         )
-        
-        # Create hourly salary record  
+
+        # Create hourly salary record
         Salary.objects.create(
             employee=self.hourly_employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
-            currency="ILS"
+            currency="ILS",
         )
 
     def test_unauthenticated_access_denied(self):
@@ -161,19 +163,23 @@ class PayrollAPIAuthenticationTest(APITestCase):
 
     def test_csrf_token_flow(self):
         """Test session-based authentication works (simplified)"""
-        # Use Django's built-in test client with force_login 
+        # Use Django's built-in test client with force_login
         # to simulate session authentication
         from django.test import Client
+
         client = Client()
         client.force_login(self.admin_user)
 
         # Test API access with session auth
-        api_url = reverse("current-earnings") 
-        response = client.get(api_url, {
-            "year": datetime.now().year,
-            "month": datetime.now().month,
-        })
-        
+        api_url = reverse("current-earnings")
+        response = client.get(
+            api_url,
+            {
+                "year": datetime.now().year,
+                "month": datetime.now().month,
+            },
+        )
+
         # Should work with session auth
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("total_salary", response.json())
@@ -188,7 +194,7 @@ class PayrollAPIErrorHandlingTest(TestCase):
         self.admin_user = User.objects.create_superuser(
             username="admin", email="admin@test.com", password="testpass123"
         )
-        
+
         # Create Employee profile for admin with admin role (needed for payroll access)
         self.admin_employee = Employee.objects.create(
             user=self.admin_user,
@@ -197,9 +203,9 @@ class PayrollAPIErrorHandlingTest(TestCase):
             email="admin@test.com",
             employment_type="full_time",
             role="admin",
-            is_active=True
+            is_active=True,
         )
-        
+
         self.client.force_login(self.admin_user)
 
     def test_invalid_employee_id(self):
@@ -225,7 +231,7 @@ class PayrollAPIErrorHandlingTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("total_salary", response.json())
 
-        # Missing month - API should use current month  
+        # Missing month - API should use current month
         response = self.client.get(url, {"year": 2025})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("total_salary", response.json())

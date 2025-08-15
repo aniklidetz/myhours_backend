@@ -218,7 +218,9 @@ class SeederFeatureFlagTest(TestCase):
     def test_seeder_creates_project_employees_when_enabled(self):
         """Test seeder creates project employees when feature is enabled"""
         # Skip this test as the seeder doesn't implement project employee creation logic
-        self.skipTest("Seeder does not implement project employee creation based on feature flag")
+        self.skipTest(
+            "Seeder does not implement project employee creation based on feature flag"
+        )
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": False})
     def test_seeder_converts_project_employees_when_disabled(self):
