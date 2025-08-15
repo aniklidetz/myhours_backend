@@ -238,12 +238,12 @@ jobs:
           MONGO_DB_NAME: myhours_test
           ENABLE_BIOMETRIC_MOCK: "True"
         run: |
-          set -euo pipefail
+          set -eo pipefail
           echo "Running pytest from: $(pwd)"
 
           PROJECT_DIR="backend/myhours-backend"
           if [ -d "$PROJECT_DIR" ]; then
-            export PYTHONPATH="$PROJECT_DIR:$PYTHONPATH"
+            export PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}"
             CONFIG_DIR="$PROJECT_DIR"
             TEST_TARGET="$PROJECT_DIR"
             echo "✓ Found project directory: $PROJECT_DIR"
@@ -251,11 +251,12 @@ jobs:
             CONFIG_DIR="."
             TEST_TARGET="."
             echo "⚠ Using current directory as project root"
+            export PYTHONPATH="${PYTHONPATH:-}"
           fi
 
           echo "Config dir: $CONFIG_DIR"
           echo "Test target: $TEST_TARGET"
-          echo "PYTHONPATH: $PYTHONPATH"
+          echo "PYTHONPATH: ${PYTHONPATH:-not set}"
 
           pytest "$TEST_TARGET" \
             -c "$CONFIG_DIR/pytest.ini" \
