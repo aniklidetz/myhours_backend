@@ -191,43 +191,48 @@ jobs:
         run: |
           python manage.py test --verbosity=2 --keepdb
 
-      - name: Debug pytest configuration
+      - name: Sanity check – list test files found by runner  
         working-directory: ${{ steps.detect.outputs.projdir }}
         run: |
           echo "Current directory: $(pwd)"
           echo "Checking for pytest.ini and manage.py:"
           ls -la pytest.ini manage.py
-          echo "Checking test directories:"
-          for dir in core/tests payroll/tests users/tests; do
+          echo "Scanning all test directories and files:"
+          total_files=0
+          for dir in core/tests payroll/tests worktime/tests users/tests integrations/tests biometrics/tests tests; do
             if [ -d "$dir" ]; then
               count=$(find "$dir" -type f \( -name "test_*.py" -o -name "*_test.py" \) | wc -l)
               echo "✓ Found: $dir (${count} test files)"
+              total_files=$((total_files + count))
+              # Show first few test files as samples
+              find "$dir" -type f \( -name "test_*.py" -o -name "*_test.py" \) | head -3 | sed 's/^/    /'
             else
               echo "✗ Missing: $dir"
             fi
           done
+          echo "Total test files found: $total_files"
           echo "Python can import Django:"
           python -c "import django; print('Django version: ' + str(django.VERSION))"
-
-      - name: Preflight – ensure pytest collects tests
-        working-directory: ${{ steps.detect.outputs.projdir }}
-        run: |
-          python - <<'PY'
-          import subprocess, sys
-          p = subprocess.run(["pytest","-q","--collect-only"], text=True, capture_output=True)
-          print(p.stdout or "")
-          if "collected 0 items" in (p.stdout or ""):
-              sys.exit("No tests collected — check pytest.ini::testpaths and working-directory.")
-          PY
 
       - name: Run pytest tests
         working-directory: ${{ steps.detect.outputs.projdir }}
         run: |
           echo "Running pytest from: $(pwd)"
-          echo "Quick test collection check:"
-          pytest --collect-only -q --tb=no 2>/dev/null | tail -1
-          echo "Running full test suite with coverage:"
-          pytest --verbose --tb=short --cov=. --cov-report=term --cov-report=xml
+          echo "Using explicit test directory paths to bypass testpaths discovery issues:"
+          pytest \
+            core/tests \
+            payroll/tests \
+            worktime/tests \
+            users/tests \
+            integrations/tests \
+            biometrics/tests \
+            tests \
+            --maxfail=1 \
+            -q \
+            --disable-warnings \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=term
 
       - name: Generate additional coverage report (Django tests)
         working-directory: ${{ steps.detect.outputs.projdir }}
