@@ -1,4 +1,5 @@
 # users/models.py
+import logging
 import re
 
 from django.contrib.auth.models import User
@@ -258,8 +259,6 @@ class Employee(models.Model):
 
     def send_notification(self, message, notification_type="info"):
         """Send notification to employee (placeholder implementation for tests)"""
-        import logging
-
         logger = logging.getLogger("users.models")
         logger.info(f"Notification to {self.email}: [{notification_type}] {message}")
         return True

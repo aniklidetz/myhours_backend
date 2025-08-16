@@ -111,11 +111,14 @@ FEATURE_FLAGS = {
     "ENABLE_PROJECT_PAYROLL": True,
 }
 
-# Simplified logging for CI
+# Simplified logging for CI with INFO level for tests
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "users.models": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
     "root": {"handlers": ["console"], "level": "WARNING"},
 }
 
