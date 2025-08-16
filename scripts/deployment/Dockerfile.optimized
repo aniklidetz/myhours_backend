@@ -1,13 +1,51 @@
-# Optimized Dockerfile for faster builds
+# Multi-stage build for optimized image size with compile support
+# Stage 1: Builder with compile dependencies for dlib/face_recognition
+FROM python:3.11-slim as builder
+
+# Python environment optimization
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies for compiling dlib
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libgomp1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgl1 \
+    libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory for building
+WORKDIR /build
+
+# Copy requirements and install with compilation support
+# Use separate requirements files for different scenarios
+COPY requirements*.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip wheel && \
+    # Install runtime dependencies first (lighter packages)
+    if [ -f requirements-ci.txt ]; then \
+        pip install --prefix=/install --prefer-binary --no-cache-dir -r requirements-ci.txt; \
+    fi && \
+    # Install biometric dependencies that may need compilation
+    pip install --prefix=/install --prefer-binary --no-cache-dir \
+        face-recognition==1.3.0 \
+        face_recognition_models==0.3.0 \
+        dlib==19.24.6
+
+# Stage 2: Runtime image (minimal size)
 FROM python:3.11-slim
 
 # Python environment optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install system dependencies (minimal runtime set for headless operation)
-# Note: build-essential & cmake removed (~100MB saved) since we use pre-built wheels
-# If compilation needed, use multi-stage build with build dependencies in builder stage
+# Install only runtime dependencies (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libglib2.0-0 \
@@ -18,27 +56,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenblas0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional: Install PNG library with t64 fallback (uncomment if runtime errors occur)
-# RUN apt-get update && \
-#     (apt-get install -y --no-install-recommends libpng16-16 || \
-#      apt-get install -y --no-install-recommends libpng16-16t64) && \
-#     rm -rf /var/lib/apt/lists/* || true
-
 # Create app user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Set work directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies with BuildKit cache optimization
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy compiled packages from builder stage
+COPY --from=builder /install /usr/local
 
 # Copy project files
 COPY . .
