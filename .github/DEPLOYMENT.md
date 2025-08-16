@@ -18,12 +18,12 @@ The CI/CD pipeline now uses configurable deployment flags through GitHub Reposit
 
 **Staging Deployment:**
 - Triggers on: All branches **except** `main`
-- Condition: `success() && github.ref != 'refs/heads/main' && DEPLOY_STAGING == '1'`
+- Condition: `success() && github.ref != 'refs/heads/main' && (vars.DEPLOY_STAGING || '1') == '1'`
 - Purpose: Test deployments for feature branches and develop
 
 **Production Deployment:**
 - Triggers on: `main` branch only
-- Condition: `success() && github.ref == 'refs/heads/main' && DEPLOY_PRODUCTION == '1'`
+- Condition: `success() && github.ref == 'refs/heads/main' && (vars.DEPLOY_PRODUCTION || '1') == '1'`
 - Purpose: Production releases
 
 ## Benefits

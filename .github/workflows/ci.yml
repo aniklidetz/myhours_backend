@@ -474,7 +474,7 @@ jobs:
   deploy-staging:
     runs-on: ubuntu-latest
     needs: [test, lint, security, migration-check, performance, build-docker]
-    if: ${{ success() && github.ref != 'refs/heads/main' && env.DEPLOY_STAGING == '1' }}
+    if: ${{ success() && github.ref != 'refs/heads/main' && (vars.DEPLOY_STAGING || '1') == '1' }}
     environment: staging
     concurrency:
       group: deploy-staging-${{ github.ref }}
@@ -508,7 +508,7 @@ jobs:
           # curl -f https://staging.myhours.example.com/health/
 
       - name: Notify deployment status
-        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ success() && (vars.SLACK_WEBHOOK_URL != '' || secrets.SLACK_WEBHOOK_URL != '') }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
@@ -520,7 +520,7 @@ jobs:
   deploy-production:
     runs-on: ubuntu-latest
     needs: [test, lint, security, migration-check, performance, build-docker]
-    if: ${{ success() && github.ref == 'refs/heads/main' && env.DEPLOY_PRODUCTION == '1' }}
+    if: ${{ success() && github.ref == 'refs/heads/main' && (vars.DEPLOY_PRODUCTION || '1') == '1' }}
     environment: production
     concurrency:
       group: deploy-production-${{ github.ref }}
@@ -557,7 +557,7 @@ jobs:
           # Verify external API integrations
 
       - name: Notify deployment status
-        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ success() && (vars.SLACK_WEBHOOK_URL != '' || secrets.SLACK_WEBHOOK_URL != '') }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
