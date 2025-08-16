@@ -12,7 +12,7 @@ The CI/CD pipeline now uses configurable deployment flags through GitHub Reposit
 |----------|---------|-------------|
 | `DEPLOY_STAGING` | `'1'` | Controls staging deployment (0=disabled, 1=enabled) |
 | `DEPLOY_PRODUCTION` | `'1'` | Controls production deployment (0=disabled, 1=enabled) |
-| `SLACK_WEBHOOK_URL` | `''` | Slack webhook URL for notifications (optional) |
+| `SLACK_WEBHOOK_URL` | `''` | Slack webhook URL for notifications (configure in Variables, not Secrets!) |
 
 ### Deployment Logic
 
@@ -63,9 +63,11 @@ DEPLOY_PRODUCTION=1
 - Verify branch conditions match your workflow
 
 ### Missing Slack Notifications
-- Set `SLACK_WEBHOOK_URL` in Repository Variables
+- Set `SLACK_WEBHOOK_URL` in Repository Variables (not Secrets!)
 - Notification only sends on successful deployments
 - Check webhook URL is valid
+
+**⚠️ Security Note**: While `SLACK_WEBHOOK_URL` is set in Variables (making it visible in logs), this is required for GitHub Actions conditionals. The URL itself is not highly sensitive as it only allows posting to a specific Slack channel. For maximum security, consider using a Slack bot token with limited permissions instead.
 
 ## Alternative Deployment Strategies
 
