@@ -1,6 +1,6 @@
 # Multi-stage build for optimized image size with compile support
 # Stage 1: Builder with compile dependencies for dlib/face_recognition
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Python environment optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \
