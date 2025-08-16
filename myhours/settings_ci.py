@@ -92,8 +92,8 @@ MONGO_CONNECTION_STRING = os.getenv(
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "myhours_ci_test")
 ENABLE_BIOMETRIC_MOCK = os.getenv("ENABLE_BIOMETRIC_MOCK", "False").lower() == "true"
 
-# Lightweight Mongo mock during tests/CI
-if "test" in sys.argv or GITHUB_ACTIONS:
+# Lightweight Mongo mock only when ENABLE_BIOMETRIC_MOCK is True
+if ENABLE_BIOMETRIC_MOCK and ("test" in sys.argv or GITHUB_ACTIONS):
 
     class _MockMongoService:
         def get_all_active_embeddings(self):

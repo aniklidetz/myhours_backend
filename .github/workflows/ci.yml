@@ -151,6 +151,7 @@ jobs:
             echo "MONGO_CONNECTION_STRING=mongodb://root:password@localhost:27017/"
             echo "MONGO_DB_NAME=myhours_test"
             echo "ENABLE_BIOMETRIC_MOCK=True"
+            echo "FULL=1"
           } >> "$GITHUB_ENV"
 
       - name: Wait for PostgreSQL
@@ -286,10 +287,11 @@ jobs:
 
           pytest "$TEST_TARGET" \
             -c "$CONFIG_DIR/pytest.ini" \
-            --maxfail=1 -q --disable-warnings \
+            -q --disable-warnings \
             --cov="$TEST_TARGET" \
             --cov-config="$CONFIG_DIR/.coveragerc" \
-            --cov-report=xml --cov-report=term
+            --cov-report=xml --cov-report=term \
+            --cov-fail-under=50
 
       - name: Coverage summary
         run: |

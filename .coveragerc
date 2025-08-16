@@ -1,6 +1,6 @@
 [run]
 branch = True
-source = biometrics, users, worktime, payroll, integrations
+source = biometrics, users, worktime, payroll, integrations, core
 omit = 
     */migrations/*
     */management/commands/*

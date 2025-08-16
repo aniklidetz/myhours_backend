@@ -786,12 +786,24 @@ def check_out(request):
     """
     Biometric check-out
     """
-    # MOCK MODE SHORT-CIRCUIT - must be BEFORE any validation
+    # MOCK MODE with business logic validation
     if getattr(settings, "ENABLE_BIOMETRIC_MOCK", False):
         logger.critical("USING BIOMETRIC MOCK MODE FOR CHECK-OUT - NOT FOR PRODUCTION!")
 
         if hasattr(request.user, "employees") and request.user.employees.exists():
             employee = request.user.employees.first()
+
+            # Check for active check-in (business logic validation)
+            worklog = WorkLog.objects.filter(
+                employee=employee, check_out__isnull=True
+            ).first()
+
+            if not worklog:
+                return Response(
+                    {"success": False, "error": "No active check-in found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             return Response(
                 {
                     "success": True,
