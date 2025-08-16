@@ -10,6 +10,11 @@ name: CI/CD Pipeline
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "18"
+  # Deployment control flags (configure in Repository → Variables)
+  DEPLOY_STAGING: ${{ vars.DEPLOY_STAGING || '1' }}
+  DEPLOY_PRODUCTION: ${{ vars.DEPLOY_PRODUCTION || '1' }}
+  # Slack notifications (use vars instead of secrets for conditionals)
+  SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL || secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
   test:
@@ -468,11 +473,22 @@ jobs:
 
   deploy-staging:
     runs-on: ubuntu-latest
-    needs: [build-docker]
-    if: github.ref == 'refs/heads/develop'
+    needs: [test, lint, security, migration-check, performance, build-docker]
+    if: ${{ success() && github.ref != 'refs/heads/main' && env.DEPLOY_STAGING == '1' }}
     environment: staging
+    concurrency:
+      group: deploy-staging-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
+      - name: Debug deployment gates
+        run: |
+          echo "=== Deployment Debug Info ==="
+          echo "DEPLOY_STAGING=${DEPLOY_STAGING}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+          echo "Job conditions met: staging deployment proceeding"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -492,22 +508,33 @@ jobs:
           # curl -f https://staging.myhours.example.com/health/
 
       - name: Notify deployment status
-        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
-          text: "Staging deployment ${{ job.status }}"
+          text: "Staging deployment ${{ job.status }} for branch ${{ github.ref_name }}"
           fields: repo,commit,author,workflow,job,took
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
 
   deploy-production:
     runs-on: ubuntu-latest
-    needs: [build-docker]
-    if: github.ref == 'refs/heads/main'
+    needs: [test, lint, security, migration-check, performance, build-docker]
+    if: ${{ success() && github.ref == 'refs/heads/main' && env.DEPLOY_PRODUCTION == '1' }}
     environment: production
+    concurrency:
+      group: deploy-production-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
+      - name: Debug deployment gates
+        run: |
+          echo "=== Production Deployment Debug Info ==="
+          echo "DEPLOY_PRODUCTION=${DEPLOY_PRODUCTION}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+          echo "Job conditions met: production deployment proceeding"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -530,14 +557,14 @@ jobs:
           # Verify external API integrations
 
       - name: Notify deployment status
-        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ success() && env.SLACK_WEBHOOK_URL != '' }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
-          text: "Production deployment ${{ job.status }}"
+          text: "Production deployment ${{ job.status }} for main branch"
           fields: repo,commit,author,workflow,job,took
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
 
   # Performance testing job
   performance:
