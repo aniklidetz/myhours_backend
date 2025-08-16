@@ -1,19 +1,28 @@
 # Optimized Dockerfile for faster builds
 FROM python:3.11-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Python environment optimization
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies (minimal runtime set for headless operation)
+# Note: build-essential & cmake removed (~100MB saved) since we use pre-built wheels
+# If compilation needed, use multi-stage build with build dependencies in builder stage
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
-    libgl1-mesa-glx \
+    libxrender1 \
+    libgl1 \
     libopenblas0 \
-    libpng16-16 \
-    build-essential \
-    cmake \
     && rm -rf /var/lib/apt/lists/*
+
+# Optional: Install PNG library with t64 fallback (uncomment if runtime errors occur)
+# RUN apt-get update && \
+#     (apt-get install -y --no-install-recommends libpng16-16 || \
+#      apt-get install -y --no-install-recommends libpng16-16t64) && \
+#     rm -rf /var/lib/apt/lists/* || true
 
 # Create app user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -24,12 +33,12 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies with optimizations
-ENV PIP_NO_CACHE_DIR=1
+# Install Python dependencies with BuildKit cache optimization
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-RUN pip install --upgrade pip && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
     pip install wheel && \
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY . .
