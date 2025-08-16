@@ -7,18 +7,25 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Holiday',
+            name="Holiday",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date', models.DateField()),
-                ('name', models.CharField(max_length=100)),
-                ('is_shabbat', models.BooleanField(default=False)),
-                ('is_holiday', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("date", models.DateField()),
+                ("name", models.CharField(max_length=100)),
+                ("is_shabbat", models.BooleanField(default=False)),
+                ("is_holiday", models.BooleanField(default=True)),
             ],
         ),
     ]

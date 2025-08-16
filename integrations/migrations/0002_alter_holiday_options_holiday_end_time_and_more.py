@@ -6,32 +6,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('integrations', '0001_initial'),
+        ("integrations", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='holiday',
-            options={'ordering': ['-date'], 'verbose_name': 'Holiday', 'verbose_name_plural': 'Holidays'},
+            name="holiday",
+            options={
+                "ordering": ["-date"],
+                "verbose_name": "Holiday",
+                "verbose_name_plural": "Holidays",
+            },
         ),
         migrations.AddField(
-            model_name='holiday',
-            name='end_time',
+            model_name="holiday",
+            name="end_time",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='holiday',
-            name='is_special_shabbat',
+            model_name="holiday",
+            name="is_special_shabbat",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='holiday',
-            name='start_time',
+            model_name="holiday",
+            name="start_time",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AlterField(
-            model_name='holiday',
-            name='date',
+            model_name="holiday",
+            name="date",
             field=models.DateField(unique=True),
         ),
     ]

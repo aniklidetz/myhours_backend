@@ -6,8 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('worktime', '0003_alter_worklog_options_and_more'),
+        ("worktime", "0003_alter_worklog_options_and_more"),
     ]
 
-    operations = [
-    ]
+    operations = []

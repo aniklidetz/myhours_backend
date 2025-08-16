@@ -13,9 +13,9 @@ class EmployeeQuerySet(models.QuerySet):
 
     def with_optimized_annotations(self):
         """Add annotations to avoid N+1 queries for computed properties"""
+        # Import here to avoid circular imports
         from django.db.models import Exists, OuterRef
 
-        # Import here to avoid circular imports
         from biometrics.models import BiometricProfile
 
         return self.annotate(

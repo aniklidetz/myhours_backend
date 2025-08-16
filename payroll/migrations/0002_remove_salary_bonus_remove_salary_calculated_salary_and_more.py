@@ -9,83 +9,143 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('payroll', '0001_initial'),
-        ('users', '0003_biometricsession_devicetoken_employeeinvitation_and_more'),
+        ("payroll", "0001_initial"),
+        ("users", "0003_biometricsession_devicetoken_employeeinvitation_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='salary',
-            name='bonus',
+            model_name="salary",
+            name="bonus",
         ),
         migrations.RemoveField(
-            model_name='salary',
-            name='calculated_salary',
+            model_name="salary",
+            name="calculated_salary",
         ),
         migrations.RemoveField(
-            model_name='salary',
-            name='deductions',
+            model_name="salary",
+            name="deductions",
         ),
         migrations.AddField(
-            model_name='salary',
-            name='calculation_type',
-            field=models.CharField(choices=[('hourly', 'hourly'), ('monthly', 'monthly'), ('project', 'project')], default='hourly', max_length=10),
+            model_name="salary",
+            name="calculation_type",
+            field=models.CharField(
+                choices=[
+                    ("hourly", "hourly"),
+                    ("monthly", "monthly"),
+                    ("project", "project"),
+                ],
+                default="hourly",
+                max_length=10,
+            ),
         ),
         migrations.AddField(
-            model_name='salary',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, default=django.utils.timezone.now),
+            model_name="salary",
+            name="created_at",
+            field=models.DateTimeField(
+                auto_now_add=True, default=django.utils.timezone.now
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
-            model_name='salary',
-            name='project_completed',
+            model_name="salary",
+            name="project_completed",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='salary',
-            name='project_end_date',
+            model_name="salary",
+            name="project_end_date",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='salary',
-            name='project_start_date',
+            model_name="salary",
+            name="project_start_date",
             field=models.DateField(blank=True, null=True),
         ),
         migrations.AlterField(
-            model_name='salary',
-            name='base_salary',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Monthly salary or total project cost (required for monthly/project types)', max_digits=10, null=True, validators=[django.core.validators.MinValueValidator(0)]),
+            model_name="salary",
+            name="base_salary",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                help_text="Monthly salary or total project cost (required for monthly/project types)",
+                max_digits=10,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(0)],
+            ),
         ),
         migrations.AlterField(
-            model_name='salary',
-            name='currency',
-            field=models.CharField(choices=[('ILS', 'Israeli Shekel'), ('USD', 'US Dollar'), ('EUR', 'Euro')], default='ILS', max_length=3),
+            model_name="salary",
+            name="currency",
+            field=models.CharField(
+                choices=[
+                    ("ILS", "Israeli Shekel"),
+                    ("USD", "US Dollar"),
+                    ("EUR", "Euro"),
+                ],
+                default="ILS",
+                max_length=3,
+            ),
         ),
         migrations.AlterField(
-            model_name='salary',
-            name='employee',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='salary_info', to='users.employee'),
+            model_name="salary",
+            name="employee",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="salary_info",
+                to="users.employee",
+            ),
         ),
         migrations.AlterField(
-            model_name='salary',
-            name='hourly_rate',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Hourly rate (required for hourly type)', max_digits=6, null=True, validators=[django.core.validators.MinValueValidator(0)]),
+            model_name="salary",
+            name="hourly_rate",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                help_text="Hourly rate (required for hourly type)",
+                max_digits=6,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(0)],
+            ),
         ),
         migrations.CreateModel(
-            name='CompensatoryDay',
+            name="CompensatoryDay",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date_earned', models.DateField()),
-                ('reason', models.CharField(choices=[('shabbat', 'Work on Shabbat'), ('holiday', 'Work on Holiday')], max_length=50)),
-                ('date_used', models.DateField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='compensatory_days', to='users.employee')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("date_earned", models.DateField()),
+                (
+                    "reason",
+                    models.CharField(
+                        choices=[
+                            ("shabbat", "Work on Shabbat"),
+                            ("holiday", "Work on Holiday"),
+                        ],
+                        max_length=50,
+                    ),
+                ),
+                ("date_used", models.DateField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "employee",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="compensatory_days",
+                        to="users.employee",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Compensatory Day',
-                'verbose_name_plural': 'Compensatory Days',
-                'ordering': ['-date_earned'],
+                "verbose_name": "Compensatory Day",
+                "verbose_name_plural": "Compensatory Days",
+                "ordering": ["-date_earned"],
             },
         ),
     ]

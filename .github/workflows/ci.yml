@@ -492,11 +492,12 @@ jobs:
           # curl -f https://staging.myhours.example.com/health/
 
       - name: Notify deployment status
-        if: always()
+        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
           text: "Staging deployment ${{ job.status }}"
+          fields: repo,commit,author,workflow,job,took
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -529,11 +530,12 @@ jobs:
           # Verify external API integrations
 
       - name: Notify deployment status
-        if: always()
+        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' }}
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
           text: "Production deployment ${{ job.status }}"
+          fields: repo,commit,author,workflow,job,took
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 

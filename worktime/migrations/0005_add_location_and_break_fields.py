@@ -6,33 +6,60 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('worktime', '0004_auto_20250723_1601'),
+        ("worktime", "0004_auto_20250723_1601"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='worklog',
-            name='break_minutes',
-            field=models.PositiveIntegerField(default=0, help_text='Break time taken during this work session (in minutes)'),
+            model_name="worklog",
+            name="break_minutes",
+            field=models.PositiveIntegerField(
+                default=0,
+                help_text="Break time taken during this work session (in minutes)",
+            ),
         ),
         migrations.AddField(
-            model_name='worklog',
-            name='latitude_check_in',
-            field=models.DecimalField(blank=True, decimal_places=6, help_text='Latitude coordinate for check-in location', max_digits=9, null=True),
+            model_name="worklog",
+            name="latitude_check_in",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                help_text="Latitude coordinate for check-in location",
+                max_digits=9,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='worklog',
-            name='latitude_check_out',
-            field=models.DecimalField(blank=True, decimal_places=6, help_text='Latitude coordinate for check-out location', max_digits=9, null=True),
+            model_name="worklog",
+            name="latitude_check_out",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                help_text="Latitude coordinate for check-out location",
+                max_digits=9,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='worklog',
-            name='longitude_check_in',
-            field=models.DecimalField(blank=True, decimal_places=6, help_text='Longitude coordinate for check-in location', max_digits=9, null=True),
+            model_name="worklog",
+            name="longitude_check_in",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                help_text="Longitude coordinate for check-in location",
+                max_digits=9,
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='worklog',
-            name='longitude_check_out',
-            field=models.DecimalField(blank=True, decimal_places=6, help_text='Longitude coordinate for check-out location', max_digits=9, null=True),
+            model_name="worklog",
+            name="longitude_check_out",
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=6,
+                help_text="Longitude coordinate for check-out location",
+                max_digits=9,
+                null=True,
+            ),
         ),
     ]

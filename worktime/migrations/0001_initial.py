@@ -9,20 +9,39 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('users', '0001_initial'),
+        ("users", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='WorkLog',
+            name="WorkLog",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('check_in', models.DateTimeField()),
-                ('check_out', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('location_check_in', models.CharField(blank=True, max_length=255, null=True)),
-                ('location_check_out', models.CharField(blank=True, max_length=255, null=True)),
-                ('employee', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='users.employee')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("check_in", models.DateTimeField()),
+                ("check_out", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "location_check_in",
+                    models.CharField(blank=True, max_length=255, null=True),
+                ),
+                (
+                    "location_check_out",
+                    models.CharField(blank=True, max_length=255, null=True),
+                ),
+                (
+                    "employee",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="users.employee"
+                    ),
+                ),
             ],
         ),
     ]

@@ -8,35 +8,62 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0003_biometricsession_devicetoken_employeeinvitation_and_more'),
+        ("users", "0003_biometricsession_devicetoken_employeeinvitation_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='employee',
-            options={'default_related_name': 'employees', 'ordering': ['last_name', 'first_name'], 'verbose_name': 'Employee', 'verbose_name_plural': 'Employees'},
+            name="employee",
+            options={
+                "default_related_name": "employees",
+                "ordering": ["last_name", "first_name"],
+                "verbose_name": "Employee",
+                "verbose_name_plural": "Employees",
+            },
         ),
         migrations.AlterField(
-            model_name='employee',
-            name='role',
-            field=models.CharField(choices=[('employee', 'Employee'), ('manager', 'Manager'), ('accountant', 'Accountant'), ('admin', 'Administrator'), ('hr', 'HR'), ('project_manager', 'Project Manager')], default='employee', max_length=20),
+            model_name="employee",
+            name="role",
+            field=models.CharField(
+                choices=[
+                    ("employee", "Employee"),
+                    ("manager", "Manager"),
+                    ("accountant", "Accountant"),
+                    ("admin", "Administrator"),
+                    ("hr", "HR"),
+                    ("project_manager", "Project Manager"),
+                ],
+                default="employee",
+                max_length=20,
+            ),
         ),
         migrations.AlterField(
-            model_name='employee',
-            name='user',
-            field=models.ForeignKey(blank=True, help_text='Django user account (created when invitation is accepted)', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='employees', to=settings.AUTH_USER_MODEL),
+            model_name="employee",
+            name="user",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Django user account (created when invitation is accepted)",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="employees",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddIndex(
-            model_name='employee',
-            index=models.Index(fields=['role'], name='users_emplo_role_e06716_idx'),
+            model_name="employee",
+            index=models.Index(fields=["role"], name="users_emplo_role_e06716_idx"),
         ),
         migrations.AddIndex(
-            model_name='employee',
-            index=models.Index(fields=['employment_type'], name='users_emplo_employm_717d1a_idx'),
+            model_name="employee",
+            index=models.Index(
+                fields=["employment_type"], name="users_emplo_employm_717d1a_idx"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='employee',
-            constraint=models.UniqueConstraint(fields=('user', 'employment_type'), name='uniq_user_employment_type'),
+            model_name="employee",
+            constraint=models.UniqueConstraint(
+                fields=("user", "employment_type"), name="uniq_user_employment_type"
+            ),
         ),
     ]

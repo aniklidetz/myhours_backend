@@ -19,10 +19,7 @@ from users.permissions import IsEmployeeOrAbove
 from worktime.models import WorkLog
 
 from .models import BiometricAttempt, BiometricLog, BiometricProfile, FaceQualityCheck
-from .serializers import (
-    FaceRecognitionSerializer,
-    FaceRegistrationSerializer,
-)
+from .serializers import FaceRecognitionSerializer, FaceRegistrationSerializer
 from .services.enhanced_biometric_service import (
     CriticalBiometricError,
     enhanced_biometric_service,
