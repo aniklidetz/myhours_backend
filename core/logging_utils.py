@@ -245,11 +245,11 @@ def err_tag(exc: BaseException) -> str:
 
     # Get exception message and sanitize it
     text = str(exc)
-    
+
     # Simple sanitization from emails and long tokens
-    text = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '***@***', text)
-    text = re.sub(r'\b(?:Bearer\s+)?[A-Za-z0-9._-]{16,}\b', '****', text)
-    
+    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "***@***", text)
+    text = re.sub(r"\b(?:Bearer\s+)?[A-Za-z0-9._-]{16,}\b", "****", text)
+
     # Limit length
     return text[:120] if text.strip() else exc.__class__.__name__
 

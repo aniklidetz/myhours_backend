@@ -115,7 +115,9 @@ class MongoBiometricRepository:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to create indexes", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to create indexes: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
 
     def save_face_embeddings(
         self, employee_id: int, embeddings: List[Dict]
@@ -196,17 +198,15 @@ class MongoBiometricRepository:
             from core.logging_utils import err_tag
 
             logger.error(
-                "❌ Duplicate key error for employee",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"❌ Duplicate key error for employee {employee_id}: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
         except Exception as e:
             from core.logging_utils import err_tag
 
             logger.error(
-                "❌ Failed to save embeddings for employee",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"❌ Failed to save embeddings for employee {employee_id}: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     def get_face_embeddings(self, employee_id: int) -> Optional[List[Dict]]:

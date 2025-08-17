@@ -25,6 +25,7 @@ except ImportError:
         """Placeholder for tests to patch."""
         return None
 
+
 from .models import Employee, EmployeeInvitation
 from .serializers import (
     AcceptInvitationSerializer,

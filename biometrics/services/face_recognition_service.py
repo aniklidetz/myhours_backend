@@ -62,7 +62,9 @@ class FaceRecognitionService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error(f"Error decoding image: {err_tag(e)}")  # lgtm[py/clear-text-logging-sensitive-data]
+            logger.error(
+                f"Error decoding image: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     @classmethod
@@ -118,7 +120,9 @@ class FaceRecognitionService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Error extracting face features", extra={"err": err_tag(e)})
+            logger.error(
+                f"Error extracting face features: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     @classmethod
@@ -169,7 +173,9 @@ class FaceRecognitionService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Error saving employee face", extra={"err": err_tag(e)})
+            logger.error(
+                f"Error saving employee face: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     @classmethod
