@@ -197,10 +197,10 @@ class BiometricService:
             return result
 
         except PyMongoError as e:
-            logger.error(f"MongoDB error retrieving face encodings: {e}")
+            logger.exception("MongoDB error retrieving face encodings")
             return []
         except Exception as e:
-            logger.error(f"Unexpected error retrieving face encodings: {e}")
+            logger.exception("Unexpected error retrieving face encodings")
             return []
 
     @classmethod

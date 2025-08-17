@@ -441,41 +441,43 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "pii_redactor": {"()": "myhours.logging_filters.PIIRedactorFilter"},
+    },
     "formatters": {
         "verbose": {
             "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
             "style": "{",
         },
-        "simple": {
-            "format": "{levelname} {asctime} {message}",
-            "style": "{",
-        },
-        "minimal": {
-            "format": "{levelname} {message}",
-            "style": "{",
-        },
+        "simple": {"format": "{levelname} {asctime} {message}", "style": "{"},
+        "minimal": {"format": "{levelname} {message}", "style": "{"},
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "minimal",
-            "level": "INFO" if not DEBUG else "DEBUG",
+            "level": "DEBUG" if DEBUG else "INFO",
+            "filters": ["pii_redactor"],
         },
         "django_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": BASE_DIR / "logs" / "django.log",
-            "maxBytes": 1024 * 1024 * 5,  # 5MB (reduced from 15MB)
-            "backupCount": 3,  # Keep 3 backups (reduced from 10)
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
             "formatter": "simple",
             "level": "INFO",
+            "encoding": "utf-8",
+            "filters": ["pii_redactor"],
         },
         "biometric_file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": BASE_DIR / "logs" / "biometric.log",
-            "maxBytes": 1024 * 1024 * 2,  # 2MB (reduced from 5MB)
-            "backupCount": 2,  # Keep 2 backups (reduced from 5)
+            "maxBytes": 2 * 1024 * 1024,
+            "backupCount": 2,
             "formatter": "simple",
             "level": "INFO",
+            "encoding": "utf-8",
+            "filters": ["pii_redactor"],
         },
     },
     "loggers": {
@@ -485,8 +487,8 @@ LOGGING = {
             "propagate": False,
         },
         "biometrics": {
-            "handlers": ["biometric_file", "console"] if DEBUG else ["biometric_file"],
-            "level": "INFO",  # Changed from DEBUG to INFO
+            "handlers": ["biometric_file"] + (["console"] if DEBUG else []),
+            "level": "INFO",
             "propagate": False,
         },
         "users": {
@@ -504,10 +506,19 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "": {  # Root logger
+        # optional: route gunicorn logs through filtered console
+        "gunicorn.error": {
             "handlers": ["console"],
-            "level": "WARNING",  # Only warnings and errors for root
+            "level": "INFO",
+            "propagate": False,
         },
+        "gunicorn.access": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # root
+        "": {"handlers": ["console"], "level": "WARNING"},
     },
 }
 

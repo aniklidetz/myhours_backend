@@ -572,7 +572,7 @@ class FaceProcessor:
             return None, has_eyes
 
         except Exception as e:
-            logger.error(f"Failed to extract face encoding: {e}")
+            logger.exception("Failed to extract face encoding")
             return None, False
 
     def process_registration_image(self, base64_image: str) -> Dict[str, Any]:
@@ -683,7 +683,7 @@ class FaceProcessor:
         )
 
         if encoding is None:
-            logger.error("Failed to extract face encoding")
+            logger.exception("Failed to extract face encoding")
             return {"success": False, "error": "Failed to extract face encoding"}
 
         logger.info(f"Face encoding extracted successfully: shape={encoding.shape}")

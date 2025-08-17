@@ -65,20 +65,30 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Override to catch and log validation errors"""
-        logger.info(f"Employee creation POST data: {request.data}")
+        # Do not log raw request data
+        logger.info(
+            "Employee creation: request received",
+            extra={"fields": list(getattr(request, "data", {}).keys())},
+        )
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
             logger.error(f"Employee creation validation error: {str(e)}")
-            logger.error(f"Serializer errors: {serializer.errors}")
+            # Log only error fields, not full values
+            logger.warning(
+                "Validation failed", extra={"fields": list(serializer.errors.keys())}
+            )
             raise
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         """Log employee creation and create default salary configuration"""
         # Debug log the incoming data
-        logger.info(f"Employee creation request data: {self.request.data}")
+        logger.info(
+            "Employee creation: sanitized metadata",
+            extra={"fields": list(getattr(self.request, "data", {}).keys())},
+        )
         employee = serializer.save()
         logger.info(
             "New employee created",
