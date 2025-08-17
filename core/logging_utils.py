@@ -235,16 +235,23 @@ def err_tag(exc: BaseException) -> str:
         exc: Exception instance
 
     Returns:
-        Safe error tag (either safe_message attribute or exception class name)
+        Safe error tag with sanitized message content
     """
     # Check if exception has safe message attributes
     for attr in ("safe_message", "public_message"):
         msg = getattr(exc, attr, None)
         if msg:
-            return str(msg)
+            return str(msg)[:120]
 
-    # Otherwise return only exception class name (no sensitive data)
-    return exc.__class__.__name__
+    # Get exception message and sanitize it
+    text = str(exc)
+    
+    # Simple sanitization from emails and long tokens
+    text = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '***@***', text)
+    text = re.sub(r'\b(?:Bearer\s+)?[A-Za-z0-9._-]{16,}\b', '****', text)
+    
+    # Limit length
+    return text[:120] if text.strip() else exc.__class__.__name__
 
 
 # Usage examples:

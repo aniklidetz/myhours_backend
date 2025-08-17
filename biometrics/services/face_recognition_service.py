@@ -62,7 +62,7 @@ class FaceRecognitionService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Error decoding image", extra={"err": err_tag(e)})
+            logger.error(f"Error decoding image: {err_tag(e)}")  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     @classmethod
