@@ -260,7 +260,11 @@ class Employee(models.Model):
     def send_notification(self, message, notification_type="info"):
         """Send notification to employee (placeholder implementation for tests)"""
         logger = logging.getLogger("users.models")
-        logger.info(f"Notification to {self.email}: [{notification_type}] {message}")
+        # Do not log recipient emails
+        logger.info(
+            "Notification sent",
+            extra={"user_id": self.id, "notification_type": notification_type},
+        )
         return True
 
 

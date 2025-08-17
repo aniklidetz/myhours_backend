@@ -147,7 +147,7 @@ class MongoDBService:
                 return str(result.inserted_id)
 
         except Exception as e:
-            logger.error(f"Failed to save embeddings: {e}")
+            logger.exception("Failed to save embeddings")
             return None
 
     def get_face_embeddings(self, employee_id: int) -> Optional[List[Dict]]:
@@ -193,7 +193,7 @@ class MongoDBService:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to retrieve embeddings: {e}")
+            logger.exception("Failed to retrieve embeddings")
             return None
 
     def get_all_active_embeddings(self) -> List[Tuple[int, List[Dict]]]:
@@ -248,7 +248,7 @@ class MongoDBService:
             return results
 
         except Exception as e:
-            logger.error(f"Failed to retrieve all embeddings: {e}")
+            logger.exception("Failed to retrieve all embeddings")
             return []
 
     def deactivate_embeddings(self, employee_id: int) -> bool:
@@ -281,7 +281,7 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to deactivate embeddings: {e}")
+            logger.exception("Failed to deactivate embeddings")
             return False
 
     def delete_embeddings(self, employee_id: int) -> bool:
@@ -306,7 +306,7 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to delete embeddings: {e}")
+            logger.exception("Failed to delete embeddings")
             return False
 
     def get_statistics(self) -> Dict:

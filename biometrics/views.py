@@ -234,7 +234,10 @@ def register_face(request):
     # DETAILED LOGGING for registration debugging
     logger.info(f"🔍 Face registration debug:")
     logger.info(f"   - Request employee_id: {employee_id}")
-    logger.info(f"   - Authenticated user: {request.user.id} ({request.user.email})")
+    # Do not log emails; keep only user_id
+    logger.info(
+        "Authenticated user", extra={"user_id": getattr(request.user, "id", None)}
+    )
     if request.user.employees.exists():
         user_employee = request.user.employees.first()
         logger.info(f"   - Authenticated user employee_id: {user_employee.id}")

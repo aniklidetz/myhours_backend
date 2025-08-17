@@ -441,17 +441,17 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-
     "filters": {
         "pii_redactor": {"()": "myhours.logging_filters.PIIRedactorFilter"},
     },
-
     "formatters": {
-        "verbose": {"format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}", "style": "{"},
-        "simple":  {"format": "{levelname} {asctime} {message}", "style": "{"},
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {"format": "{levelname} {asctime} {message}", "style": "{"},
         "minimal": {"format": "{levelname} {message}", "style": "{"},
     },
-
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
@@ -480,18 +480,43 @@ LOGGING = {
             "filters": ["pii_redactor"],
         },
     },
-
     "loggers": {
-        "django":     {"handlers": ["django_file"] if not DEBUG else ["console"], "level": "INFO", "propagate": False},
-        "biometrics": {"handlers": ["biometric_file"] + (["console"] if DEBUG else []), "level": "INFO", "propagate": False},
-        "users":      {"handlers": ["django_file"] if not DEBUG else ["console"], "level": "INFO", "propagate": False},
-        "payroll":    {"handlers": ["django_file"] if not DEBUG else ["console"], "level": "INFO", "propagate": False},
-        "worktime":   {"handlers": ["django_file"] if not DEBUG else ["console"], "level": "INFO", "propagate": False},
-
+        "django": {
+            "handlers": ["django_file"] if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "biometrics": {
+            "handlers": ["biometric_file"] + (["console"] if DEBUG else []),
+            "level": "INFO",
+            "propagate": False,
+        },
+        "users": {
+            "handlers": ["django_file"] if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "payroll": {
+            "handlers": ["django_file"] if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "worktime": {
+            "handlers": ["django_file"] if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # optional: route gunicorn logs through filtered console
-        "gunicorn.error":  {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "gunicorn.access": {"handlers": ["console"], "level": "INFO", "propagate": False},
-
+        "gunicorn.error": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gunicorn.access": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # root
         "": {"handlers": ["console"], "level": "WARNING"},
     },
