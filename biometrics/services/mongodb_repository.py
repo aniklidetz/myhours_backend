@@ -58,7 +58,8 @@ class MongoBiometricRepository:
             import sys
 
             if "test" not in sys.argv:
-                logger.error(f"Failed to connect to MongoDB: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Failed to connect to MongoDB", extra={"err": err_tag(e)})
             self.client = None
             self.db = None
             self.collection = None
@@ -111,7 +112,8 @@ class MongoBiometricRepository:
             logger.info("MongoDB indexes verified/created successfully")
 
         except Exception as e:
-            logger.error(f"Failed to create indexes: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to create indexes", extra={"err": err_tag(e)})
 
     def save_face_embeddings(
         self, employee_id: int, embeddings: List[Dict]
@@ -189,12 +191,12 @@ class MongoBiometricRepository:
                 return None
 
         except DuplicateKeyError as e:
-            logger.error(f"❌ Duplicate key error for employee {employee_id}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("❌ Duplicate key error for employee", extra={"err": err_tag(e), "employee_id": employee_id})
             return None
         except Exception as e:
-            logger.error(
-                f"❌ Failed to save embeddings for employee {employee_id}: {e}"
-            )
+            from core.logging_utils import err_tag
+            logger.error("❌ Failed to save embeddings for employee", extra={"err": err_tag(e), "employee_id": employee_id})
             return None
 
     def get_face_embeddings(self, employee_id: int) -> Optional[List[Dict]]:
@@ -227,9 +229,8 @@ class MongoBiometricRepository:
                 return None
 
         except Exception as e:
-            logger.error(
-                f"Failed to retrieve embeddings for employee {employee_id}: {e}"
-            )
+            from core.logging_utils import err_tag
+            logger.error("Failed to retrieve embeddings for employee", extra={"err": err_tag(e), "employee_id": employee_id})
             return None
 
     def get_all_employee_ids(self) -> List[int]:
@@ -253,7 +254,8 @@ class MongoBiometricRepository:
             return employee_ids
 
         except Exception as e:
-            logger.error(f"Failed to get all employee IDs: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to get all employee IDs", extra={"err": err_tag(e)})
             return []
 
     def find_matching_employee(
@@ -301,9 +303,8 @@ class MongoBiometricRepository:
                             best_match = (employee_id, confidence)
 
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to calculate distance for employee {employee_id}: {e}"
-                        )
+                        from core.logging_utils import err_tag
+                        logger.warning("Failed to calculate distance for employee", extra={"err": err_tag(e), "employee_id": employee_id})
                         continue
 
             if best_match:
@@ -317,7 +318,8 @@ class MongoBiometricRepository:
             return best_match
 
         except Exception as e:
-            logger.error(f"Failed to find matching employee: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to find matching employee", extra={"err": err_tag(e)})
             return None
 
     def delete_embeddings(self, employee_id: int) -> bool:
@@ -346,9 +348,8 @@ class MongoBiometricRepository:
                 return False
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to delete embeddings for employee {employee_id}: {e}"
-            )
+            from core.logging_utils import err_tag
+            logger.error("❌ Failed to delete embeddings for employee", extra={"err": err_tag(e), "employee_id": employee_id})
             return False
 
     def deactivate_embeddings(self, employee_id: int) -> bool:
@@ -387,9 +388,8 @@ class MongoBiometricRepository:
                 return False
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to deactivate embeddings for employee {employee_id}: {e}"
-            )
+            from core.logging_utils import err_tag
+            logger.error("❌ Failed to deactivate embeddings for employee", extra={"err": err_tag(e), "employee_id": employee_id})
             return False
 
     def get_statistics(self) -> Dict:
@@ -434,10 +434,11 @@ class MongoBiometricRepository:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get statistics: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to get statistics", extra={"err": err_tag(e)})
             return {
                 "status": "error",
-                "error": str(e),
+                "error": err_tag(e),  # Use safe error tag in return value too
                 "total_documents": 0,
                 "active_documents": 0,
                 "total_embeddings": 0,
@@ -462,7 +463,8 @@ class MongoBiometricRepository:
 
             return True
         except Exception as e:
-            logger.error(f"MongoDB health check failed: {e}")
+            from core.logging_utils import err_tag
+            logger.error("MongoDB health check failed", extra={"err": err_tag(e)})
             return False
 
 

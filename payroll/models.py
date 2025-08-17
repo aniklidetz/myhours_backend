@@ -112,7 +112,8 @@ class Salary(models.Model):
 
         except Exception as e:
             logger = logging.getLogger(__name__)
-            logger.error(f"Error calculating working days for {year}-{month:02d}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error calculating working days", extra={"err": err_tag(e), "year": year, "month": month})
             # Fallback: approximate working days for 5-day week
             _, num_days = calendar.monthrange(year, month)
             return max(1, int(num_days * 5 / 7))  # Approximate 5-day work week

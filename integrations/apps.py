@@ -47,7 +47,8 @@ class IntegrationsConfig(AppConfig):
                                 f"Auto-synced holidays for {year}: {created} created, {updated} updated"
                             )
                         except Exception as e:
-                            logger.error(f"Error auto-syncing holidays for {year}: {e}")
+                            from core.logging_utils import err_tag
+                            logger.error("Error auto-syncing holidays", extra={"err": err_tag(e), "year": year})
 
                     # Set cache flag to prevent re-sync for 7 days
                     cache.set(sync_key, True, cache_timeout)
@@ -60,7 +61,8 @@ class IntegrationsConfig(AppConfig):
                     )
 
             except Exception as e:
-                logger.error(f"Error in automatic holiday synchronization: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Error in automatic holiday synchronization", extra={"err": err_tag(e)})
             finally:
                 # Close database connections in this thread
                 connections.close_all()

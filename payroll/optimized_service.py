@@ -106,7 +106,8 @@ class OptimizedPayrollService:
                 self.api_usage["cache_misses"] += 1
                 holidays_cache = {}  # Ensure we have a dict even if cache fails
         except Exception as e:
-            logger.warning(f"Failed to load holidays cache: {e}")
+            from core.logging_utils import err_tag
+            logger.warning("Failed to load holidays cache", extra={"err": err_tag(e)})
             holidays_cache = {}
             self.api_usage["cache_misses"] += 1
 
@@ -124,7 +125,8 @@ class OptimizedPayrollService:
                 f"📊 Found {len(existing_summaries)} existing monthly summaries"
             )
         except Exception as e:
-            logger.warning(f"Error loading existing summaries: {e}")
+            from core.logging_utils import err_tag
+            logger.warning("Error loading existing summaries", extra={"err": err_tag(e)})
 
         # 4. Process each employee with optimized logic
         results = []
@@ -152,9 +154,8 @@ class OptimizedPayrollService:
                 results.append(result)
 
             except Exception as e:
-                logger.error(
-                    f"Error calculating payroll for employee {employee.id}: {e}"
-                )
+                from core.logging_utils import err_tag
+                logger.error("Error calculating payroll for employee", extra={"err": err_tag(e), "employee_id": employee.id})
                 # Add error result
                 results.append(self._create_error_result(employee, year, month, str(e)))
 
@@ -246,7 +247,8 @@ class OptimizedPayrollService:
             }
 
         except Exception as e:
-            logger.error(f"Error in single employee calculation: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error in single employee calculation", extra={"err": err_tag(e), "employee_id": employee.id})
             return self._create_error_result(employee, year, month, str(e))
 
     def _convert_summary_to_result(

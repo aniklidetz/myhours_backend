@@ -14,7 +14,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from core.logging_utils import get_safe_logger, safe_log_employee
+from core.logging_utils import get_safe_logger
 
 from .models import Employee, EmployeeInvitation
 from .serializers import (
@@ -74,7 +74,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
-            logger.error(f"Employee creation validation error: {str(e)}")
+            logger.exception("Employee creation validation error")
             # Log only error fields, not full values
             logger.warning(
                 "Validation failed", extra={"fields": list(serializer.errors.keys())}
@@ -90,15 +90,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             extra={"fields": list(getattr(self.request, "data", {}).keys())},
         )
         employee = serializer.save()
+        from hashlib import blake2b
+        emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
+        creator_corr = blake2b(str(self.request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "New employee created",
             extra={
-                **safe_log_employee(employee, "employee_created"),
-                "created_by": (
-                    safe_log_employee(self.request.user, "creator")
-                    if hasattr(self.request.user, "employee")
-                    else str(self.request.user.id)[:8]
-                ),
+                "employee_corr": emp_corr,
+                "created_by_corr": creator_corr,
             },
         )
 
@@ -158,10 +157,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         # Create salary configuration
         salary = Salary.objects.create(**salary_data)
+        from hashlib import blake2b
+        emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Created default salary configuration",
             extra={
-                **safe_log_employee(employee, "salary_config_created"),
+                "employee_corr": emp_corr,
                 "calculation_type": salary.calculation_type,
                 "currency": salary.currency,
             },
@@ -214,20 +215,24 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     salary.hourly_rate = None  # Clear hourly rate for monthly employees
                     salary.calculation_type = "monthly"
                     salary.save()
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.info(
                         "Updated monthly salary",
                         extra={
-                            **safe_log_employee(employee, "salary_updated"),
+                            "employee_corr": emp_corr,
                             "new_monthly_salary": str(salary.base_salary),
                         },
                     )
                 except (ValueError, TypeError) as e:
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.error(
                         "Invalid monthly salary value",
                         extra={
-                            **safe_log_employee(employee, "salary_update_error"),
-                            "error": str(e),
-                            "value": monthly_salary,
+                            "employee_corr": emp_corr,
+                            "error_type": type(e).__name__,
+                            "has_value": bool(monthly_salary),
                         },
                     )
             elif employee.employment_type == "hourly" and hourly_rate is not None:
@@ -238,20 +243,24 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     )
                     salary.calculation_type = "hourly"
                     salary.save()
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.info(
                         "Updated hourly rate",
                         extra={
-                            **safe_log_employee(employee, "salary_updated"),
+                            "employee_corr": emp_corr,
                             "new_hourly_rate": str(salary.hourly_rate),
                         },
                     )
                 except (ValueError, TypeError) as e:
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.error(
                         "Invalid hourly rate value",
                         extra={
-                            **safe_log_employee(employee, "salary_update_error"),
-                            "error": str(e),
-                            "value": hourly_rate,
+                            "employee_corr": emp_corr,
+                            "error_type": type(e).__name__,
+                            "has_value": bool(hourly_rate),
                         },
                     )
             elif employee.employment_type == "contract" and monthly_salary is not None:
@@ -262,32 +271,35 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     )
                     salary.calculation_type = "project"
                     salary.save()
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.info(
                         "Updated contract project salary",
                         extra={
-                            **safe_log_employee(employee, "salary_updated"),
+                            "employee_corr": emp_corr,
                             "new_project_salary": str(salary.base_salary),
                         },
                     )
                 except (ValueError, TypeError) as e:
+                    from hashlib import blake2b
+                    emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
                     logger.error(
                         "Invalid contract project salary value",
                         extra={
-                            **safe_log_employee(employee, "salary_update_error"),
-                            "error": str(e),
-                            "value": monthly_salary,
+                            "employee_corr": emp_corr,
+                            "error_type": type(e).__name__,
+                            "has_value": bool(monthly_salary),
                         },
                     )
 
+        from hashlib import blake2b
+        emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
+        updater_corr = blake2b(str(self.request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Employee updated",
             extra={
-                **safe_log_employee(employee, "employee_updated"),
-                "updated_by": (
-                    safe_log_employee(self.request.user, "updater")
-                    if hasattr(self.request.user, "employee")
-                    else str(self.request.user.id)[:8]
-                ),
+                "employee_corr": emp_corr,
+                "updated_by_corr": updater_corr,
             },
         )
 
@@ -295,16 +307,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         """Soft-delete: просто деактивируем сотрудника."""
         instance.is_active = False
         instance.save(update_fields=["is_active"])
+        from hashlib import blake2b
+        emp_corr = blake2b(str(instance.pk).encode(), digest_size=6).hexdigest()
+        deleter_corr = blake2b(str(self.request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Employee deleted",
             extra={
                 "action": "employee_deleted",
-                "employee_id": str(instance.id)[:8],
-                "deleted_by": (
-                    safe_log_employee(self.request.user, "deleter")
-                    if hasattr(self.request.user, "employee")
-                    else str(self.request.user.id)[:8]
-                ),
+                "employee_corr": emp_corr,
+                "deleted_by_corr": deleter_corr,
             },
         )
 
@@ -314,15 +325,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee = self.get_object()
         employee.is_active = True
         employee.save()
+        from hashlib import blake2b
+        emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
+        activator_corr = blake2b(str(request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Employee activated",
             extra={
-                **safe_log_employee(employee, "employee_activated"),
-                "activated_by": (
-                    safe_log_employee(request.user, "activator")
-                    if hasattr(request.user, "employee")
-                    else str(request.user.id)[:8]
-                ),
+                "employee_corr": emp_corr,
+                "activated_by_corr": activator_corr,
             },
         )
         return Response({"status": "Employee activated"})
@@ -333,15 +343,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee = self.get_object()
         employee.is_active = False
         employee.save()
+        from hashlib import blake2b
+        emp_corr = blake2b(str(employee.pk).encode(), digest_size=6).hexdigest()
+        deactivator_corr = blake2b(str(request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Employee deactivated",
             extra={
-                **safe_log_employee(employee, "employee_deactivated"),
-                "deactivated_by": (
-                    safe_log_employee(request.user, "deactivator")
-                    if hasattr(request.user, "employee")
-                    else str(request.user.id)[:8]
-                ),
+                "employee_corr": emp_corr,
+                "deactivated_by_corr": deactivator_corr,
             },
         )
         return Response({"status": "Employee deactivated"})
@@ -349,6 +358,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
     def send_invitation(self, request, pk=None):
         """Send invitation email to employee"""
+        from hashlib import blake2b
         employee = self.get_object()
 
         # Check if employee already has user account
@@ -386,7 +396,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         safe_logger = get_safe_logger(__name__)
         safe_logger.info(
             "Invitation URL generated",
-            extra=safe_log_employee(employee, "invitation_sent"),
+            extra={
+                "employee_corr": blake2b(str(employee.pk).encode(), digest_size=6).hexdigest(),
+                "action": "invitation_sent",
+            },
         )
 
         # Mark as sent

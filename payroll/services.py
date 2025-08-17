@@ -1574,10 +1574,15 @@ class EnhancedPayrollCalculationService:
             result["base_salary"] = float(proportional_base_salary)
             result["overtime_bonus"] = float(total_bonuses)
 
+            import hashlib
+            def _short_hash(v): return hashlib.sha256(str(v).encode("utf-8")).hexdigest()[:8]
             logger.info(
-                f"Monthly employee {self.employee.get_full_name()}: "
-                f"Proportional base ₪{proportional_base_salary} ({total_hours_worked}/{self.MONTHLY_WORK_HOURS} hours) + "
-                f"Bonuses ₪{total_bonuses} = Total ₪{result['total_gross_pay']}"
+                "Monthly payroll computed",
+                extra={
+                    "employee": _short_hash(getattr(self.employee, "id", "n/a")),
+                    "hours": total_hours_worked,
+                    "has_bonus": bool(total_bonuses),
+                },
             )
 
         else:
@@ -1927,7 +1932,8 @@ class EnhancedPayrollCalculationService:
                 # Hourly employees: calculate full daily pay
                 return self.calculate_daily_pay_hourly(work_log, save_to_db=True)
         except Exception as e:
-            logger.error(f"Error in calculate_daily_pay for WorkLog {work_log.id}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error in calculate_daily_pay", extra={"err": err_tag(e), "worklog_id": work_log.id})
             # Return minimal result to prevent crashes
             return {
                 "date": work_log.check_in.date(),

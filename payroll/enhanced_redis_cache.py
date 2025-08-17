@@ -34,7 +34,8 @@ class EnhancedPayrollCache(PayrollRedisCache):
             # Get basic holiday data
             holidays_dict = self.get_holidays_for_month(year, month)
         except Exception as e:
-            logger.error(f"Error getting holidays for {year}-{month}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error getting holidays", extra={"err": err_tag(e), "year": year, "month": month})
             return {}
 
         # Enhance with precise Shabbat times
@@ -72,7 +73,8 @@ class EnhancedPayrollCache(PayrollRedisCache):
 
                         logger.debug(f"Enhanced Shabbat {date_str} with precise times")
                 except Exception as e:
-                    logger.error(f"Error enhancing Shabbat data for {date_str}: {e}")
+                    from core.logging_utils import err_tag
+                    logger.error("Error enhancing Shabbat data", extra={"err": err_tag(e), "date": date_str})
                     # Continue processing other dates
 
         return holidays_dict
@@ -157,7 +159,8 @@ class EnhancedPayrollCache(PayrollRedisCache):
             )
 
         except Exception as e:
-            logger.error(f"Error caching enhanced Shabbat times: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error caching enhanced Shabbat times", extra={"err": err_tag(e), "year": year, "month": month})
 
     def is_work_during_shabbat(self, work_start, work_end, work_date) -> Dict[str, Any]:
         """
@@ -235,7 +238,8 @@ class EnhancedPayrollCache(PayrollRedisCache):
                 }
 
         except Exception as e:
-            logger.error(f"Error calculating Shabbat overlap: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error calculating Shabbat overlap", extra={"err": err_tag(e), "work_date": str(work_date)})
 
         return {
             "is_shabbat_work": False,

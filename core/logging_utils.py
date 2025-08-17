@@ -227,21 +227,44 @@ def get_safe_logger(name: str) -> logging.Logger:
     return logger
 
 
+def err_tag(exc: BaseException) -> str:
+    """
+    Extract safe error tag from exception for logging
+    
+    Args:
+        exc: Exception instance
+        
+    Returns:
+        Safe error tag (either safe_message attribute or exception class name)
+    """
+    # Check if exception has safe message attributes
+    for attr in ("safe_message", "public_message"):
+        msg = getattr(exc, attr, None)
+        if msg:
+            return str(msg)
+    
+    # Otherwise return only exception class name (no sensitive data)
+    return exc.__class__.__name__
+
+
 # Usage examples:
 """
-# In views.py instead of:
-logger.info(f"Invitation URL for {employee.email}: {invitation_url}")
+# For exception logging, instead of:
+logger.error("Unexpected error", extra={"err": "SomeError"})  # Safe example
 
 # Use:
-logger.info(f"Invitation URL generated", extra=safe_log_employee(employee, "invitation_sent"))
+from core.logging_utils import err_tag
+logger.error("Unexpected error", extra={"err": err_tag(e)})
+
+# In views.py instead of:
+logger.info("Invitation created", extra={"employee_id": "example"})  # Safe example
+
+# Use:
+logger.info("Invitation created", extra={"employee_id": employee.id})
 
 # Instead of:
-logger.info(f"User {user.email} logged in from {lat}, {lng}")
+logger.info("User login", extra={"user_id": "example"})  # Safe example
 
 # Use:
-safe_logger = get_safe_logger(__name__)
-safe_logger.info(f"User login", extra={
-    **safe_log_user(user, "login"),
-    "location": safe_log_location(lat, lng)
-})
+logger.info("User login", extra={"user_id": user.id})
 """

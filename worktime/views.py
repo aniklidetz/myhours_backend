@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from django.core.cache import cache
 from django.utils import timezone
 
-from core.logging_utils import safe_log_employee
 
 from .filters import WorkLogFilter
 from .models import WorkLog
@@ -86,18 +85,18 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         auth_header = request.META.get("HTTP_AUTHORIZATION", "MISSING")
         user_agent = request.META.get("HTTP_USER_AGENT", "MISSING")
 
-        logger.error(f" WORKTIME API DEBUG:")
-        logger.error(f"  Path: {request.path}")
-        logger.error(f"  Employee filter: {employee_filter}")
-        logger.error(
-            f"  Auth header: {auth_header[:50]}..."
-            if auth_header != "MISSING"
-            else "  Auth header: MISSING"
+        logger.debug(
+            "Worktime API request",
+            extra={
+                "endpoint": getattr(request.resolver_match, "view_name", None),
+                "has_employee_filter": bool(employee_filter),
+                "filter_keys": sorted(employee_filter.keys()) if isinstance(employee_filter, dict) else None,
+                "has_auth": auth_header != "MISSING",
+                "is_authenticated": request.user.is_authenticated,
+                "has_user_agent": user_agent != "MISSING",
+                "query_param_keys": sorted(request.query_params.keys()) if request.query_params else [],
+            },
         )
-        logger.error(f"  User: {request.user}")
-        logger.error(f"  Is authenticated: {request.user.is_authenticated}")
-        logger.error(f"  User agent: {user_agent[:100]}...")
-        logger.error(f"  Query params: {dict(request.query_params)}")
 
         # If employee filter is present but user is not authenticated, this is the bug
         if employee_filter and not request.user.is_authenticated:
@@ -121,10 +120,12 @@ class WorkLogViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Log work session creation"""
         worklog = serializer.save()
+        from hashlib import blake2b
+        emp_corr = blake2b(str(worklog.employee.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Work session started",
             extra={
-                **safe_log_employee(worklog.employee, "work_session"),
+                "employee_corr": emp_corr,
                 "check_in_time": (
                     worklog.check_in.isoformat() if worklog.check_in else None
                 ),
@@ -135,10 +136,12 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         """Log work session updates"""
         worklog = serializer.save()
         if worklog.check_out:
+            from hashlib import blake2b
+            emp_corr = blake2b(str(worklog.employee.pk).encode(), digest_size=6).hexdigest()
             logger.info(
                 "Work session ended",
                 extra={
-                    **safe_log_employee(worklog.employee, "work_session"),
+                    "employee_corr": emp_corr,
                     "duration_hours": worklog.get_total_hours(),
                 },
             )
@@ -149,15 +152,15 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         worklog = self.get_object()
         worklog.is_approved = True
         worklog.save()
+        from hashlib import blake2b
+        actor = "employee" if hasattr(request.user, "employee") else "user"
+        actor_corr = blake2b(str(request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Work log approved",
             extra={
-                "worklog_id": str(worklog.id)[:8],
-                "approved_by": (
-                    safe_log_employee(request.user, "approver")
-                    if hasattr(request.user, "employee")
-                    else str(request.user.id)[:8]
-                ),
+                "actor_role": actor,
+                "actor_corr": actor_corr,
+                "worklog_present": True,
             },
         )
         return Response({"status": "Work log approved"})

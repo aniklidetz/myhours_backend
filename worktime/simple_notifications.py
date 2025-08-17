@@ -7,7 +7,6 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from core.logging_utils import safe_log_employee
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +124,11 @@ class SimpleNotificationService:
         # TODO: Integrate with real push service (Firebase, OneSignal, etc.)
         logger.info(
             "Push notification sent",
-            extra=safe_log_employee(employee, "push_notification"),
+            extra={
+                "employee_id": getattr(employee, "id", None),
+                "user_id": getattr(employee, "user_id", None),
+                "notification_type": "push",
+            },
         )
 
         # For now, just log it safely

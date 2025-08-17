@@ -68,7 +68,8 @@ class FaceProcessor:
                     f"Base64 validation passed, test decode length: {len(test_decode)}"
                 )
             except Exception as e:
-                logger.error(f"Invalid base64 format: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Invalid base64 format", extra={"err": err_tag(e)})
                 return None
 
             # Decode full base64
@@ -116,7 +117,8 @@ class FaceProcessor:
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to decode base64 image: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to decode base64 image", extra={"err": err_tag(e)})
             logger.debug(f"Base64 string preview: {base64_string[:100]}...")
             return None
 
@@ -167,7 +169,8 @@ class FaceProcessor:
             return enhanced
 
         except Exception as e:
-            logger.error(f"Image preprocessing failed: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Image preprocessing failed", extra={"err": err_tag(e)})
             return image  # Return original if preprocessing fails
 
     def check_image_quality(self, image: np.ndarray) -> Dict[str, Any]:
@@ -529,7 +532,7 @@ class FaceProcessor:
             return face_locations, face_landmarks
 
         except Exception as e:
-            logger.exception(f"Face detection completely failed: {e}")
+            logger.exception("Face detection completely failed")
             return [], []
 
     def extract_face_encoding(
@@ -790,7 +793,8 @@ class FaceProcessor:
             return is_match, float(confidence)
 
         except Exception as e:
-            logger.error(f"Failed to compare faces: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to compare faces", extra={"err": err_tag(e)})
             return False, 0.0
 
     def find_matching_employee(

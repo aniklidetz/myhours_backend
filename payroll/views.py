@@ -12,7 +12,6 @@ from rest_framework.response import Response
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from core.logging_utils import safe_log_employee
 from users.models import Employee
 from users.permissions import IsEmployeeOrAbove
 from worktime.models import WorkLog
@@ -256,7 +255,10 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
             salary = employee.salary_info
             logger.info(
                 "Processing employee",
-                extra=safe_log_employee(employee, "payroll_processing"),
+                extra={
+                    "employee_id": getattr(employee, "id", None),
+                    "action": "payroll_processing",
+                },
             )
 
             # Используем prefetched данные вместо отдельного запроса
@@ -285,7 +287,8 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                     logger.info(
                         "Enhanced calculation completed",
                         extra={
-                            **safe_log_employee(employee, "enhanced_calc"),
+                            "employee_id": getattr(employee, "id", None),
+                            "action": "enhanced_calc",
                             "calculation_type": "enhanced_fast",
                         },
                     )
@@ -293,7 +296,8 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                     logger.warning(
                         "Enhanced calculation failed, using fallback",
                         extra={
-                            **safe_log_employee(employee, "calc_fallback"),
+                            "employee_id": getattr(employee, "id", None),
+                            "action": "calc_fallback",
                             "error_type": type(e).__name__,
                         },
                     )
@@ -311,7 +315,8 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                     logger.info(
                         "Monthly calculation completed",
                         extra={
-                            **safe_log_employee(employee, "monthly_calc"),
+                            "employee_id": getattr(employee, "id", None),
+                            "action": "monthly_calc",
                             "calculation_type": "monthly_proportional",
                         },
                     )
@@ -319,7 +324,8 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                     logger.warning(
                         "Monthly calculation failed, using base salary",
                         extra={
-                            **safe_log_employee(employee, "monthly_fallback"),
+                            "employee_id": getattr(employee, "id", None),
+                            "action": "monthly_fallback",
                             "error_type": type(e).__name__,
                         },
                     )
@@ -346,14 +352,18 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
             payroll_data.append(employee_data)
             logger.info(
                 "Employee added to payroll data",
-                extra=safe_log_employee(employee, "payroll_added"),
+                extra={
+                    "employee_id": getattr(employee, "id", None),
+                    "action": "payroll_added",
+                },
             )
 
         except Exception as e:
             logger.error(
                 "Error calculating payroll for employee",
                 extra={
-                    **safe_log_employee(employee, "payroll_error"),
+                    "employee_id": getattr(employee, "id", None),
+                    "action": "payroll_error",
                     "error_type": type(e).__name__,
                 },
             )
@@ -551,7 +561,10 @@ def enhanced_earnings(request):
         except Exception:
             logger.exception(
                 "Error in enhanced_earnings calculation",
-                extra=safe_log_employee(target_employee, "calc_error"),
+                extra={
+                    "employee_id": getattr(target_employee, "id", None),
+                    "action": "calc_error",
+                },
             )
             return Response(
                 {
@@ -866,7 +879,8 @@ def recalculate_payroll(request):
                     service.calculate_monthly_salary_enhanced()
                     success_count += 1
                 except Exception as e:
-                    logger.error(f"Failed to recalculate for {employee.id}: {e}")
+                    from core.logging_utils import err_tag
+                    logger.error("Failed to recalculate", extra={"err": err_tag(e), "employee_id": employee.id})
 
             return Response(
                 {
@@ -1232,7 +1246,10 @@ def backward_compatible_earnings(request):
         except Exception:
             logger.exception(
                 "Error using enhanced service",
-                extra=safe_log_employee(target_employee, "enhanced_service_error"),
+                extra={
+                    "employee_id": getattr(target_employee, "id", None),
+                    "action": "enhanced_service_error",
+                },
             )
             # Fallback to old logic
             pass
@@ -1266,7 +1283,10 @@ def backward_compatible_earnings(request):
             except Exception as calc_error:
                 logger.exception(
                     "Error in backward_compatible_earnings calculation",
-                    extra=safe_log_employee(target_employee, "backward_calc_error"),
+                    extra={
+                        "employee_id": getattr(target_employee, "id", None),
+                        "action": "backward_calc_error",
+                    },
                 )
                 # Возвращаем безопасный fallback
                 return Response(
@@ -1408,7 +1428,10 @@ def backward_compatible_earnings(request):
             except Exception as calc_error:
                 logger.exception(
                     "Error in backward_compatible_earnings for monthly employee",
-                    extra=safe_log_employee(target_employee, "monthly_calc_error"),
+                    extra={
+                        "employee_id": getattr(target_employee, "id", None),
+                        "action": "monthly_calc_error",
+                    },
                 )
                 # Возвращаем безопасный fallback для месячных сотрудников
                 return Response(

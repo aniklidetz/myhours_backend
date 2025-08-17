@@ -106,7 +106,8 @@ class HebcalService:
             return holidays
 
         except Exception as e:
-            logger.error(f"Error fetching holidays from Hebcal API: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error fetching holidays from Hebcal API", extra={"err": err_tag(e)})
             return []  # Return an empty list on failure
 
     @classmethod
@@ -134,7 +135,8 @@ class HebcalService:
                         }
                     )
                 except Exception as e:
-                    logger.error(f"Error generating Shabbat for {current_date}: {e}")
+                    from core.logging_utils import err_tag
+                    logger.error("Error generating Shabbat", extra={"err": err_tag(e), "date": str(current_date)})
 
             current_date += timedelta(days=1)
 
@@ -307,7 +309,8 @@ class HebcalService:
                     created_count += 1
 
             except Exception as e:
-                logger.error(f"Error syncing weekly Shabbat on {holiday_date_str}: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Error syncing weekly Shabbat", extra={"err": err_tag(e), "date": holiday_date_str})
 
         # Add Israeli national holidays (like Independence Day)
         try:
@@ -317,7 +320,8 @@ class HebcalService:
             created_count += nat_created
             updated_count += nat_updated
         except Exception as e:
-            logger.error(f"Error syncing Israeli national holidays: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error syncing Israeli national holidays", extra={"err": err_tag(e)})
 
         return created_count, updated_count
 
@@ -358,7 +362,8 @@ class HebcalService:
             return None
 
         except Exception as e:
-            logger.error(f"Error getting holiday name for {holiday_date}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error getting holiday name", extra={"err": err_tag(e), "date": str(holiday_date)})
             return None
 
     @classmethod
@@ -397,5 +402,6 @@ class HebcalService:
             return False
 
         except Exception as e:
-            logger.error(f"Error checking if {check_date} is holiday: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error checking if date is holiday", extra={"err": err_tag(e), "date": str(check_date)})
             return False

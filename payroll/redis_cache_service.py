@@ -289,8 +289,11 @@ class PayrollRedisCache:
         try:
             cached_data = self.redis_client.get(cache_key)
             if cached_data:
+                import hashlib
+                def _short_hash(v): return hashlib.sha256(str(v).encode("utf-8")).hexdigest()[:8]
                 logger.debug(
-                    f"📊 Cache HIT: monthly summary for employee {employee_id} {year}-{month:02d}"
+                    "📊 Cache HIT: monthly summary",
+                    extra={"employee": _short_hash(employee_id), "period": f"{year}-{month:02d}"}
                 )
                 return json.loads(cached_data)
         except Exception as e:
@@ -314,8 +317,11 @@ class PayrollRedisCache:
                 60 * 60,  # 1 hour
                 json.dumps(summary_data, default=self._serialize_decimal),
             )
+            import hashlib
+            def _short_hash(v): return hashlib.sha256(str(v).encode("utf-8")).hexdigest()[:8]
             logger.debug(
-                f"📊 Cached monthly summary for employee {employee_id} {year}-{month:02d}"
+                "📊 Cached monthly summary",
+                extra={"employee": _short_hash(employee_id), "period": f"{year}-{month:02d}"}
             )
         except Exception as e:
             logger.warning(f"Redis set error for monthly summary: {e}")
@@ -337,7 +343,12 @@ class PayrollRedisCache:
                 keys = self.redis_client.keys(pattern)
                 if keys:
                     self.redis_client.delete(*keys)
-                    logger.info(f"🗑️ Invalidated cache pattern: {pattern}")
+                    import hashlib
+                    pattern_hash = hashlib.sha256(str(pattern).encode("utf-8")).hexdigest()[:8]
+                    logger.info(
+                        "🗑️ Invalidated cache keys",
+                        extra={"pattern_hash": pattern_hash, "count": len(keys)}
+                    )
         except Exception as e:
             logger.warning(f"Cache invalidation error: {e}")
 

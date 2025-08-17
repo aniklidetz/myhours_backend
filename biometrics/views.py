@@ -232,8 +232,8 @@ def register_face(request):
     images = [image]  # Convert single image to list for processor
 
     # DETAILED LOGGING for registration debugging
-    logger.info(f"🔍 Face registration debug:")
-    logger.info(f"   - Request employee_id: {employee_id}")
+    logger.info("🔍 Face registration debug:")
+    logger.info("Request employee", extra={"employee_id": employee_id})
     # Do not log emails; keep only user_id
     logger.info(
         "Authenticated user", extra={"user_id": getattr(request.user, "id", None)}
@@ -267,7 +267,8 @@ def register_face(request):
 
         if not (is_admin or is_self):
             logger.warning(
-                f"Permission denied for user {request.user.id} trying to register employee {employee_id}"
+                "Permission denied",
+                extra={"user_id": request.user.id, "target_employee_id": employee_id}
             )
             return Response(
                 {
@@ -302,8 +303,8 @@ def register_face(request):
         else:
             # REAL biometric processing
             logger.info("Processing real biometric data for registration")
-            logger.info(f"Image data length: {len(image)}")
-            logger.info(f"Employee ID: {employee_id}")
+            logger.info("Image data received", extra={"data_length": len(image)})
+            logger.info("Processing employee", extra={"employee_id": employee_id})
 
             try:
                 if face_processor is None:
@@ -314,9 +315,9 @@ def register_face(request):
                 result = face_processor.process_images(images)
                 logger.info(f"Face processor result: {result}")
             except Exception as e:
-                logger.exception(f"Face processor threw exception: {e}")
+                logger.exception("Face processor threw exception")
                 return Response(
-                    {"error": f"Face processing failed: {str(e)}"},
+                    {"error": "Face processing failed"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
@@ -380,7 +381,8 @@ def register_face(request):
         except CriticalBiometricError as e:
             # Critical MongoDB failure - alert DevOps
             logger.critical(
-                f"CRITICAL: Biometric registration failed for employee {employee_id}: {str(e)}"
+                "CRITICAL: Biometric registration failed",
+                extra={"employee_id": employee_id}
             )
             return Response(
                 {
@@ -392,16 +394,18 @@ def register_face(request):
 
         except BiometricError as e:
             # General biometric service error
-            logger.error(f"Biometric service error during registration: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Biometric service error during registration")
+            return Response({"error": "Biometric registration failed"}, status=status.HTTP_400_BAD_REQUEST)
 
         except ValidationError as e:
             # Validation error (employee not found, etc.)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Validation error during registration")
+            return Response({"error": "Invalid registration data"}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             # Other unexpected errors
-            logger.error(f"Unexpected error during biometric registration: {str(e)}")
+            from core.logging_utils import err_tag
+            logger.error("Unexpected error during biometric registration", extra={"err": err_tag(e)})
             return Response(
                 {"error": "Registration failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -652,11 +656,12 @@ def check_in(request):
         employee = Employee.objects.get(id=match_result["employee_id"])
 
         # DETAILED LOGGING for mismatch debugging
-        logger.info(f"Check-in matching debug:")
-        logger.info(f"   - Recognized employee ID: {match_result['employee_id']}")
-        logger.info(f"   - Recognized employee name: {employee.get_full_name()}")
-        logger.info(f"   - Confidence: {match_result['confidence']}")
-        logger.info(f"   - Used fallback: {used_fallback}")
+        logger.info("Check-in matching debug")
+        logger.info("Recognition result", extra={
+            "employee_id": match_result['employee_id'],
+            "confidence": match_result['confidence'],
+            "used_fallback": used_fallback
+        })
         if request.user.employees.exists():
             user_employee = request.user.employees.first()
             logger.info(f"   - Authenticated user employee ID: {user_employee.id}")
@@ -747,9 +752,9 @@ def check_in(request):
                     pass
 
         except Exception as worklog_error:
-            logger.exception(f"Failed to create worklog: {worklog_error}")
+            logger.exception("Failed to create worklog")
             return Response(
-                {"error": f"Failed to create work log: {str(worklog_error)}"},
+                {"error": "Failed to create work log"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -895,7 +900,8 @@ def check_out(request):
                     }
 
             except CriticalBiometricError as e:
-                logger.error(f"Critical biometric error during check-out: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Critical biometric error during check-out", extra={"err": err_tag(e)})
                 return Response(
                     {
                         "success": False,
@@ -904,7 +910,8 @@ def check_out(request):
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
             except Exception as e:
-                logger.error(f"Unexpected error during check-out: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Unexpected error during check-out", extra={"err": err_tag(e)})
                 match_result = {"success": False, "error": "Face processing failed"}
 
             if not match_result["success"]:
@@ -930,7 +937,8 @@ def check_out(request):
             employee = Employee.objects.get(id=match_result["employee_id"])
         except Employee.DoesNotExist:
             logger.error(
-                f"Employee with ID {match_result['employee_id']} not found in Django database"
+                "Employee not found in Django database",
+                extra={"employee_id": match_result['employee_id']}
             )
             logger.error(
                 "This indicates stale data in MongoDB - face embeddings exist for non-existent employee"
@@ -941,11 +949,12 @@ def check_out(request):
             )
 
         # DETAILED LOGGING for mismatch debugging
-        logger.info(f"🔍 Check-out matching debug:")
-        logger.info(f"   - Recognized employee ID: {match_result['employee_id']}")
-        logger.info(f"   - Recognized employee name: {employee.get_full_name()}")
-        logger.info(f"   - Confidence: {match_result['confidence']}")
-        logger.info(f"   - Used fallback: {used_fallback}")
+        logger.info("🔍 Check-out matching debug")
+        logger.info("Recognition result", extra={
+            "employee_id": match_result['employee_id'],
+            "confidence": match_result['confidence'],
+            "used_fallback": used_fallback
+        })
         if request.user.employees.exists():
             user_employee = request.user.employees.first()
             logger.info(f"   - Authenticated user employee ID: {user_employee.id}")
@@ -1030,9 +1039,9 @@ def check_out(request):
                     pass
 
         except Exception as worklog_error:
-            logger.exception(f"Failed to update worklog: {worklog_error}")
+            logger.exception("Failed to update worklog")
             return Response(
-                {"error": f"Failed to update work log: {str(worklog_error)}"},
+                {"error": "Failed to update work log"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

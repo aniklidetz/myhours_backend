@@ -55,7 +55,8 @@ class SunriseSunsetService:
             return results
 
         except Exception as e:
-            logger.error(f"Error fetching sunrise-sunset data: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error fetching sunrise-sunset data", extra={"err": err_tag(e)})
             return {}
 
     @classmethod
@@ -128,7 +129,8 @@ class SunriseSunsetService:
                     friday_sunset_str.replace("Z", "+00:00")
                 )
             except ValueError as e:
-                logger.error(f"Error parsing Friday sunset time: {e}")
+                from core.logging_utils import err_tag
+            logger.error("Error parsing Friday sunset time", extra={"err": err_tag(e)})
                 fallback_result = {
                     "date": date_obj.isoformat(),
                     "start": (
@@ -167,7 +169,8 @@ class SunriseSunsetService:
             cache.set(cache_key, result, cls.CACHE_TIMEOUT)
             return result
         except Exception as e:
-            logger.error(f"Error calculating Shabbat times for {date_obj}: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error calculating Shabbat times for {date_obj}", extra={"err": err_tag(e)})
             # Return approximate times in case of any error
             error_result = {
                 "date": date_obj.isoformat(),
@@ -253,5 +256,6 @@ class SunriseSunsetService:
             return start_time <= check_time <= end_time
 
         except Exception as e:
-            logger.error(f"Error checking Shabbat time: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Error checking Shabbat time", extra={"err": err_tag(e)})
             return False

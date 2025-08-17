@@ -86,7 +86,8 @@ class IsraeliHolidaysService:
                     logger.info(f"Created Independence Day for {year}")
 
             except Exception as e:
-                logger.error(f"Error syncing Independence Day for {year}: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Error syncing Independence Day", extra={"err": err_tag(e), "year": year})
 
         return created_count, updated_count
 

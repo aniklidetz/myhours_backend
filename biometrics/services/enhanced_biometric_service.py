@@ -167,7 +167,8 @@ class EnhancedBiometricService:
             return result
 
         except Exception as e:
-            logger.error(f"❌ Biometric verification failed: {str(e)}")
+            from core.logging_utils import err_tag
+            logger.error("❌ Biometric verification failed", extra={"err": err_tag(e)})
             return None
 
     def delete_biometric(self, employee_id: int) -> bool:
@@ -316,7 +317,8 @@ class EnhancedBiometricService:
             return audit_result
 
         except Exception as e:
-            logger.error(f"❌ Consistency audit failed: {str(e)}")
+            from core.logging_utils import err_tag
+            logger.error("❌ Consistency audit failed", extra={"err": err_tag(e)})
             return {
                 "timestamp": timezone.now().isoformat(),
                 "is_consistent": False,

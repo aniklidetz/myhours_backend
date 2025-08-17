@@ -52,7 +52,8 @@ class MongoDBService:
             import sys
 
             if "test" not in sys.argv:
-                logger.error(f"Failed to connect to MongoDB: {e}")
+                from core.logging_utils import err_tag
+                logger.error("Failed to connect to MongoDB", extra={"err": err_tag(e)})
             self.client = None
             self.db = None
             self.collection = None
@@ -70,7 +71,8 @@ class MongoDBService:
             )
             logger.info("MongoDB indexes created successfully")
         except Exception as e:
-            logger.error(f"Failed to create indexes: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to create indexes", extra={"err": err_tag(e)})
 
     def save_face_embeddings(
         self, employee_id: int, embeddings: List[Dict]
@@ -147,7 +149,8 @@ class MongoDBService:
                 return str(result.inserted_id)
 
         except Exception as e:
-            logger.error(f"Failed to save embeddings: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to save embeddings", extra={"err": err_tag(e), "employee_id": employee_id})
             return None
 
     def get_face_embeddings(self, employee_id: int) -> Optional[List[Dict]]:
@@ -193,7 +196,8 @@ class MongoDBService:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to retrieve embeddings: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to retrieve embeddings", extra={"err": err_tag(e), "employee_id": employee_id})
             return None
 
     def get_all_active_embeddings(self) -> List[Tuple[int, List[Dict]]]:
@@ -248,7 +252,8 @@ class MongoDBService:
             return results
 
         except Exception as e:
-            logger.error(f"Failed to retrieve all embeddings: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to retrieve all embeddings", extra={"err": err_tag(e)})
             return []
 
     def deactivate_embeddings(self, employee_id: int) -> bool:
@@ -281,7 +286,8 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to deactivate embeddings: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to deactivate embeddings", extra={"err": err_tag(e), "employee_id": employee_id})
             return False
 
     def delete_embeddings(self, employee_id: int) -> bool:
@@ -306,7 +312,8 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to delete embeddings: {e}")
+            from core.logging_utils import err_tag
+            logger.error("Failed to delete embeddings", extra={"err": err_tag(e), "employee_id": employee_id})
             return False
 
     def get_statistics(self) -> Dict:
@@ -370,7 +377,8 @@ class MongoDBService:
             self.client.admin.command("ping")
             return True
         except Exception as e:
-            logger.error(f"MongoDB health check failed: {e}")
+            from core.logging_utils import err_tag
+            logger.error("MongoDB health check failed", extra={"err": err_tag(e)})
             return False
 
 
