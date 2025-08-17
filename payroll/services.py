@@ -1575,7 +1575,10 @@ class EnhancedPayrollCalculationService:
             result["overtime_bonus"] = float(total_bonuses)
 
             import hashlib
-            def _short_hash(v): return hashlib.sha256(str(v).encode("utf-8")).hexdigest()[:8]
+
+            def _short_hash(v):
+                return hashlib.sha256(str(v).encode("utf-8")).hexdigest()[:8]
+
             logger.info(
                 "Monthly payroll computed",
                 extra={
@@ -1933,7 +1936,11 @@ class EnhancedPayrollCalculationService:
                 return self.calculate_daily_pay_hourly(work_log, save_to_db=True)
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error in calculate_daily_pay", extra={"err": err_tag(e), "worklog_id": work_log.id})
+
+            logger.error(
+                "Error in calculate_daily_pay",
+                extra={"err": err_tag(e), "worklog_id": work_log.id},
+            )
             # Return minimal result to prevent crashes
             return {
                 "date": work_log.check_in.date(),

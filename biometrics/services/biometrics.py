@@ -67,6 +67,7 @@ class BiometricService:
             return collection
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Failed to get MongoDB collection", extra={"err": err_tag(e)})
             return None
 

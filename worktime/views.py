@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from django.core.cache import cache
 from django.utils import timezone
 
-
 from .filters import WorkLogFilter
 from .models import WorkLog
 from .serializers import WorkLogSerializer
@@ -90,11 +89,17 @@ class WorkLogViewSet(viewsets.ModelViewSet):
             extra={
                 "endpoint": getattr(request.resolver_match, "view_name", None),
                 "has_employee_filter": bool(employee_filter),
-                "filter_keys": sorted(employee_filter.keys()) if isinstance(employee_filter, dict) else None,
+                "filter_keys": (
+                    sorted(employee_filter.keys())
+                    if isinstance(employee_filter, dict)
+                    else None
+                ),
                 "has_auth": auth_header != "MISSING",
                 "is_authenticated": request.user.is_authenticated,
                 "has_user_agent": user_agent != "MISSING",
-                "query_param_keys": sorted(request.query_params.keys()) if request.query_params else [],
+                "query_param_keys": (
+                    sorted(request.query_params.keys()) if request.query_params else []
+                ),
             },
         )
 
@@ -121,6 +126,7 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         """Log work session creation"""
         worklog = serializer.save()
         from hashlib import blake2b
+
         emp_corr = blake2b(str(worklog.employee.pk).encode(), digest_size=6).hexdigest()
         logger.info(
             "Work session started",
@@ -137,7 +143,10 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         worklog = serializer.save()
         if worklog.check_out:
             from hashlib import blake2b
-            emp_corr = blake2b(str(worklog.employee.pk).encode(), digest_size=6).hexdigest()
+
+            emp_corr = blake2b(
+                str(worklog.employee.pk).encode(), digest_size=6
+            ).hexdigest()
             logger.info(
                 "Work session ended",
                 extra={
@@ -153,6 +162,7 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         worklog.is_approved = True
         worklog.save()
         from hashlib import blake2b
+
         actor = "employee" if hasattr(request.user, "employee") else "user"
         actor_corr = blake2b(str(request.user.pk).encode(), digest_size=6).hexdigest()
         logger.info(

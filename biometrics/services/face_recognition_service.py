@@ -33,6 +33,7 @@ class FaceRecognitionService:
                 FACE_CASCADE = None
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Error initializing face cascade", extra={"err": err_tag(e)})
             FACE_CASCADE = None
 
@@ -60,6 +61,7 @@ class FaceRecognitionService:
             return image
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Error decoding image", extra={"err": err_tag(e)})
             return None
 
@@ -115,6 +117,7 @@ class FaceRecognitionService:
             return face_roi
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Error extracting face features", extra={"err": err_tag(e)})
             return None
 
@@ -165,6 +168,7 @@ class FaceRecognitionService:
             return document_id
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Error saving employee face", extra={"err": err_tag(e)})
             return None
 
@@ -288,5 +292,6 @@ class FaceRecognitionService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Error during face recognition", extra={"err": err_tag(e)})
             return None

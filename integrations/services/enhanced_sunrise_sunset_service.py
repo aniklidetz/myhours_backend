@@ -119,11 +119,17 @@ class EnhancedSunriseSunsetService:
 
         except requests.RequestException as e:
             from core.logging_utils import err_tag
-            logger.error("Network error fetching sunrise-sunset data", extra={"err": err_tag(e)})
+
+            logger.error(
+                "Network error fetching sunrise-sunset data", extra={"err": err_tag(e)}
+            )
             return None
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Unexpected error in sunrise-sunset service", extra={"err": err_tag(e)})
+
+            logger.error(
+                "Unexpected error in sunrise-sunset service", extra={"err": err_tag(e)}
+            )
             return None
 
     @classmethod
@@ -183,6 +189,7 @@ class EnhancedSunriseSunsetService:
 
             except ValueError as e:
                 from core.logging_utils import err_tag
+
                 logger.error("Error parsing Friday sunset", extra={"err": err_tag(e)})
                 fallback_result = cls._get_fallback_shabbat_times(date_obj, saturday)
                 if use_cache:
@@ -241,7 +248,11 @@ class EnhancedSunriseSunsetService:
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error calculating Israeli Shabbat times", extra={"err": err_tag(e), "date": str(date_obj)})
+
+            logger.error(
+                "Error calculating Israeli Shabbat times",
+                extra={"err": err_tag(e), "date": str(date_obj)},
+            )
             # Return fallback times
             fallback_result = cls._get_fallback_shabbat_times(date_obj, saturday)
             if use_cache:

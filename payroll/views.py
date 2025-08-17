@@ -880,7 +880,11 @@ def recalculate_payroll(request):
                     success_count += 1
                 except Exception as e:
                     from core.logging_utils import err_tag
-                    logger.error("Failed to recalculate", extra={"err": err_tag(e), "employee_id": employee.id})
+
+                    logger.error(
+                        "Failed to recalculate",
+                        extra={"err": err_tag(e), "employee_id": employee.id},
+                    )
 
             return Response(
                 {

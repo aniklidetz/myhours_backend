@@ -268,7 +268,7 @@ def register_face(request):
         if not (is_admin or is_self):
             logger.warning(
                 "Permission denied",
-                extra={"user_id": request.user.id, "target_employee_id": employee_id}
+                extra={"user_id": request.user.id, "target_employee_id": employee_id},
             )
             return Response(
                 {
@@ -382,7 +382,7 @@ def register_face(request):
             # Critical MongoDB failure - alert DevOps
             logger.critical(
                 "CRITICAL: Biometric registration failed",
-                extra={"employee_id": employee_id}
+                extra={"employee_id": employee_id},
             )
             return Response(
                 {
@@ -395,17 +395,27 @@ def register_face(request):
         except BiometricError as e:
             # General biometric service error
             logger.exception("Biometric service error during registration")
-            return Response({"error": "Biometric registration failed"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Biometric registration failed"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         except ValidationError as e:
             # Validation error (employee not found, etc.)
             logger.exception("Validation error during registration")
-            return Response({"error": "Invalid registration data"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid registration data"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         except Exception as e:
             # Other unexpected errors
             from core.logging_utils import err_tag
-            logger.error("Unexpected error during biometric registration", extra={"err": err_tag(e)})
+
+            logger.error(
+                "Unexpected error during biometric registration",
+                extra={"err": err_tag(e)},
+            )
             return Response(
                 {"error": "Registration failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -657,11 +667,14 @@ def check_in(request):
 
         # DETAILED LOGGING for mismatch debugging
         logger.info("Check-in matching debug")
-        logger.info("Recognition result", extra={
-            "employee_id": match_result['employee_id'],
-            "confidence": match_result['confidence'],
-            "used_fallback": used_fallback
-        })
+        logger.info(
+            "Recognition result",
+            extra={
+                "employee_id": match_result["employee_id"],
+                "confidence": match_result["confidence"],
+                "used_fallback": used_fallback,
+            },
+        )
         if request.user.employees.exists():
             user_employee = request.user.employees.first()
             logger.info(f"   - Authenticated user employee ID: {user_employee.id}")
@@ -901,7 +914,11 @@ def check_out(request):
 
             except CriticalBiometricError as e:
                 from core.logging_utils import err_tag
-                logger.error("Critical biometric error during check-out", extra={"err": err_tag(e)})
+
+                logger.error(
+                    "Critical biometric error during check-out",
+                    extra={"err": err_tag(e)},
+                )
                 return Response(
                     {
                         "success": False,
@@ -911,7 +928,10 @@ def check_out(request):
                 )
             except Exception as e:
                 from core.logging_utils import err_tag
-                logger.error("Unexpected error during check-out", extra={"err": err_tag(e)})
+
+                logger.error(
+                    "Unexpected error during check-out", extra={"err": err_tag(e)}
+                )
                 match_result = {"success": False, "error": "Face processing failed"}
 
             if not match_result["success"]:
@@ -938,7 +958,7 @@ def check_out(request):
         except Employee.DoesNotExist:
             logger.error(
                 "Employee not found in Django database",
-                extra={"employee_id": match_result['employee_id']}
+                extra={"employee_id": match_result["employee_id"]},
             )
             logger.error(
                 "This indicates stale data in MongoDB - face embeddings exist for non-existent employee"
@@ -950,11 +970,14 @@ def check_out(request):
 
         # DETAILED LOGGING for mismatch debugging
         logger.info("🔍 Check-out matching debug")
-        logger.info("Recognition result", extra={
-            "employee_id": match_result['employee_id'],
-            "confidence": match_result['confidence'],
-            "used_fallback": used_fallback
-        })
+        logger.info(
+            "Recognition result",
+            extra={
+                "employee_id": match_result["employee_id"],
+                "confidence": match_result["confidence"],
+                "used_fallback": used_fallback,
+            },
+        )
         if request.user.employees.exists():
             user_employee = request.user.employees.first()
             logger.info(f"   - Authenticated user employee ID: {user_employee.id}")

@@ -69,6 +69,7 @@ class FaceProcessor:
                 )
             except Exception as e:
                 from core.logging_utils import err_tag
+
                 logger.error("Invalid base64 format", extra={"err": err_tag(e)})
                 return None
 
@@ -118,6 +119,7 @@ class FaceProcessor:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Failed to decode base64 image", extra={"err": err_tag(e)})
             logger.debug(f"Base64 string preview: {base64_string[:100]}...")
             return None
@@ -170,6 +172,7 @@ class FaceProcessor:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Image preprocessing failed", extra={"err": err_tag(e)})
             return image  # Return original if preprocessing fails
 
@@ -794,6 +797,7 @@ class FaceProcessor:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("Failed to compare faces", extra={"err": err_tag(e)})
             return False, 0.0
 

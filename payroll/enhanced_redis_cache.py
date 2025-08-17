@@ -35,7 +35,11 @@ class EnhancedPayrollCache(PayrollRedisCache):
             holidays_dict = self.get_holidays_for_month(year, month)
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error getting holidays", extra={"err": err_tag(e), "year": year, "month": month})
+
+            logger.error(
+                "Error getting holidays",
+                extra={"err": err_tag(e), "year": year, "month": month},
+            )
             return {}
 
         # Enhance with precise Shabbat times
@@ -74,7 +78,11 @@ class EnhancedPayrollCache(PayrollRedisCache):
                         logger.debug(f"Enhanced Shabbat {date_str} with precise times")
                 except Exception as e:
                     from core.logging_utils import err_tag
-                    logger.error("Error enhancing Shabbat data", extra={"err": err_tag(e), "date": date_str})
+
+                    logger.error(
+                        "Error enhancing Shabbat data",
+                        extra={"err": err_tag(e), "date": date_str},
+                    )
                     # Continue processing other dates
 
         return holidays_dict
@@ -160,7 +168,11 @@ class EnhancedPayrollCache(PayrollRedisCache):
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error caching enhanced Shabbat times", extra={"err": err_tag(e), "year": year, "month": month})
+
+            logger.error(
+                "Error caching enhanced Shabbat times",
+                extra={"err": err_tag(e), "year": year, "month": month},
+            )
 
     def is_work_during_shabbat(self, work_start, work_end, work_date) -> Dict[str, Any]:
         """
@@ -239,7 +251,11 @@ class EnhancedPayrollCache(PayrollRedisCache):
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error calculating Shabbat overlap", extra={"err": err_tag(e), "work_date": str(work_date)})
+
+            logger.error(
+                "Error calculating Shabbat overlap",
+                extra={"err": err_tag(e), "work_date": str(work_date)},
+            )
 
         return {
             "is_shabbat_work": False,

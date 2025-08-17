@@ -168,6 +168,7 @@ class EnhancedBiometricService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("❌ Biometric verification failed", extra={"err": err_tag(e)})
             return None
 
@@ -318,6 +319,7 @@ class EnhancedBiometricService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error("❌ Consistency audit failed", extra={"err": err_tag(e)})
             return {
                 "timestamp": timezone.now().isoformat(),

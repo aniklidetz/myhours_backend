@@ -107,7 +107,10 @@ class HebcalService:
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error fetching holidays from Hebcal API", extra={"err": err_tag(e)})
+
+            logger.error(
+                "Error fetching holidays from Hebcal API", extra={"err": err_tag(e)}
+            )
             return []  # Return an empty list on failure
 
     @classmethod
@@ -136,7 +139,11 @@ class HebcalService:
                     )
                 except Exception as e:
                     from core.logging_utils import err_tag
-                    logger.error("Error generating Shabbat", extra={"err": err_tag(e), "date": str(current_date)})
+
+                    logger.error(
+                        "Error generating Shabbat",
+                        extra={"err": err_tag(e), "date": str(current_date)},
+                    )
 
             current_date += timedelta(days=1)
 
@@ -310,7 +317,11 @@ class HebcalService:
 
             except Exception as e:
                 from core.logging_utils import err_tag
-                logger.error("Error syncing weekly Shabbat", extra={"err": err_tag(e), "date": holiday_date_str})
+
+                logger.error(
+                    "Error syncing weekly Shabbat",
+                    extra={"err": err_tag(e), "date": holiday_date_str},
+                )
 
         # Add Israeli national holidays (like Independence Day)
         try:
@@ -321,7 +332,10 @@ class HebcalService:
             updated_count += nat_updated
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error syncing Israeli national holidays", extra={"err": err_tag(e)})
+
+            logger.error(
+                "Error syncing Israeli national holidays", extra={"err": err_tag(e)}
+            )
 
         return created_count, updated_count
 
@@ -363,7 +377,11 @@ class HebcalService:
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error getting holiday name", extra={"err": err_tag(e), "date": str(holiday_date)})
+
+            logger.error(
+                "Error getting holiday name",
+                extra={"err": err_tag(e), "date": str(holiday_date)},
+            )
             return None
 
     @classmethod
@@ -403,5 +421,9 @@ class HebcalService:
 
         except Exception as e:
             from core.logging_utils import err_tag
-            logger.error("Error checking if date is holiday", extra={"err": err_tag(e), "date": str(check_date)})
+
+            logger.error(
+                "Error checking if date is holiday",
+                extra={"err": err_tag(e), "date": str(check_date)},
+            )
             return False

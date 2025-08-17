@@ -263,6 +263,7 @@ def enhanced_login(request):
 
     except Exception as e:
         from core.logging_utils import err_tag
+
         logger.error("Enhanced login error", extra={"err": err_tag(e)})
         return Response(
             {
@@ -596,6 +597,7 @@ def logout_device(request):
 
     except Exception as e:
         from core.logging_utils import err_tag
+
         logger.error("Logout error", extra={"err": err_tag(e)})
         return Response(
             {

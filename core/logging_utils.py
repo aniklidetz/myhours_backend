@@ -230,10 +230,10 @@ def get_safe_logger(name: str) -> logging.Logger:
 def err_tag(exc: BaseException) -> str:
     """
     Extract safe error tag from exception for logging
-    
+
     Args:
         exc: Exception instance
-        
+
     Returns:
         Safe error tag (either safe_message attribute or exception class name)
     """
@@ -242,7 +242,7 @@ def err_tag(exc: BaseException) -> str:
         msg = getattr(exc, attr, None)
         if msg:
             return str(msg)
-    
+
     # Otherwise return only exception class name (no sensitive data)
     return exc.__class__.__name__
 
