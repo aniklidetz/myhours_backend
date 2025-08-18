@@ -137,21 +137,17 @@ def debug_worktime_auth(request):
     from core.logging_utils import redact_dict
 
     if settings.DEBUG:
-        # Create safe debug structure without sensitive data
+        # Create safe debug structure with only aggregates and boolean flags
         safe_debug = {
-            "endpoint": getattr(request.resolver_match, "view_name", None),
-            "has_employee_param": bool(employee_param),
-            "has_auth_header": "HTTP_AUTHORIZATION" in request.META,
-            "is_authenticated": bool(getattr(request.user, "is_authenticated", False)),
-            "has_user_agent": bool(request.META.get("HTTP_USER_AGENT")),
-            "query_param_keys_count": len((request.GET or {}).keys()),
-            "recommendations_count": len(debug_info.get("recommendations", [])),
-            "user_permissions": {
-                "is_staff": debug_info.get("permissions", {}).get("is_staff", False),
-                "is_superuser": debug_info.get("permissions", {}).get(
-                    "is_superuser", False
-                ),
-            },
+            "has_auth": bool(request.META.get("HTTP_AUTHORIZATION")),
+            "ua_present": bool(request.META.get("HTTP_USER_AGENT")),
+            "qp_count": len(getattr(request, "GET", {}) or {}),
+            "is_auth": bool(getattr(request.user, "is_authenticated", False)),
+            "rec_count": len(debug_info.get("recommendations", [])),
+            "has_staff_perm": debug_info.get("permissions", {}).get("is_staff", False),
+            "has_super_perm": debug_info.get("permissions", {}).get(
+                "is_superuser", False
+            ),
         }
         logger.info(
             "Worktime Auth Debug (safe)", extra={"meta": safe_debug}

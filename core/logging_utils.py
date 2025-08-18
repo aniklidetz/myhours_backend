@@ -356,6 +356,39 @@ REDACT_KEYS = {
 }
 
 
+def safe_id(v):
+    """Short stable hash for IDs"""
+    from hashlib import blake2b
+
+    d = blake2b(str(v).encode("utf-8"), digest_size=6)
+    return d.hexdigest()
+
+
+def safe_val(v):
+    """Safe value representation preserving type info"""
+    if isinstance(v, (bytes, bytearray)):
+        return f"<{len(v)} bytes>"
+    if isinstance(v, str) and len(v) > 64:
+        return f"<{len(v)} chars>"
+    return v
+
+
+def safe_extra_kwargs(**kwargs):
+    """Create safe extra dict for logging with automatic redaction from kwargs"""
+    out = {}
+    for k, v in kwargs.items():
+        if k.lower() in REDACT_KEYS:
+            out[k] = "***"
+        elif isinstance(v, dict):
+            out[k] = {
+                ik: ("***" if ik.lower() in REDACT_KEYS else safe_val(iv))
+                for ik, iv in v.items()
+            }
+        else:
+            out[k] = safe_val(v)
+    return out
+
+
 def redact_dict(value):
     """
     Recursively redact sensitive values from dictionaries and other structures

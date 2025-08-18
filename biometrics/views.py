@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.exceptions import BiometricError
-from core.logging_utils import err_tag, safe_user_hash
+from core.logging_utils import err_tag, safe_extra, safe_user_hash
 from users.models import Employee
 from users.permissions import IsEmployeeOrAbove
 from worktime.models import WorkLog
@@ -678,16 +678,11 @@ def check_in(request):
         employee = Employee.objects.get(id=match_result["employee_id"])
 
         # DETAILED LOGGING for mismatch debugging (without PII)
-        logger.info("Check-in matching debug")
-        logger.info(
-            "Biometrics: check-in match found",
-            extra={
-                "user_hash": safe_user_hash(request.user),
-                "confidence": match_result["confidence"],
-                "used_fallback": used_fallback,
-                "has_employee": request.user.employees.exists(),
-            },
-        )
+        if settings.DEBUG:
+            logger.debug(
+                "Biometrics check-in match",
+                extra={"used_fallback": bool(used_fallback), "operation": "check_in"},
+            )  # lgtm[py/clear-text-logging-sensitive-data]
         if not request.user.employees.exists():
             logger.warning("   - No employee found for authenticated user")
 

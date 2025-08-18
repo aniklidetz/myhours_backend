@@ -9,7 +9,7 @@ from pymongo.errors import ConnectionFailure, OperationFailure
 
 from django.conf import settings
 
-from core.logging_utils import err_tag, public_emp_id
+from core.logging_utils import err_tag, public_emp_id, safe_extra, safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +97,10 @@ class MongoDBService:
 
         # DETAILED LOGGING for registration debugging (sanitized)
 
-        logger.info(
-            "🔍 MongoDB save_face_embeddings",
-            extra={
-                "employee": public_emp_id(employee_id),
-                "embeddings_count": len(embeddings),
-                "collection_name": self.collection.name,
-            },
-        )  # lgtm[py/clear-text-logging-sensitive-data]
+        logger.debug(
+            "MongoDB save_face_embeddings",
+            extra=safe_extra({"emp": safe_id(employee_id), "count": len(embeddings)}),
+        )
 
         try:
             # Check if employee already has embeddings
@@ -140,8 +136,9 @@ class MongoDBService:
                 }
 
                 result = self.collection.insert_one(document)
-                logger.info(
-                    f"Face embeddings document created with ID: {result.inserted_id}"
+                logger.debug(
+                    "Face embeddings document created",
+                    extra=safe_extra({"doc_id": safe_id(str(result.inserted_id))}),
                 )
 
                 # Verify the document was saved correctly
@@ -261,8 +258,9 @@ class MongoDBService:
                     if employee_id and embeddings:
                         results.append((employee_id, embeddings))
 
-            logger.info(
-                f"Retrieved {len(results)} active embedding sets from {self.collection.name}"
+            logger.debug(
+                "Retrieved active embedding sets",
+                extra=safe_extra({"count": len(results)}),
             )
             for employee_id, embeddings in results:
                 logger.debug(

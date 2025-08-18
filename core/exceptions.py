@@ -61,13 +61,26 @@ def custom_exception_handler(exc, context):
             response = Response(custom_response_data, status=status.HTTP_404_NOT_FOUND)
 
         elif isinstance(exc, ValidationError):
+            # Log the full exception server-side
+            logger.exception(
+                f"Validation Error [{error_id}]: {method} {path}",
+                extra={"user": str(user), "error_id": error_id},
+            )
+
+            # Return safe details to client
+            safe_details = None
+            if hasattr(exc, "message_dict"):
+                safe_details = exc.message_dict
+            elif hasattr(exc, "messages"):
+                safe_details = {"validation": exc.messages}
+            else:
+                safe_details = {"validation": ["Invalid data provided"]}
+
             custom_response_data = {
                 "error": True,
                 "code": "VALIDATION_ERROR",
                 "message": "Validation failed.",
-                "details": (
-                    exc.message_dict if hasattr(exc, "message_dict") else str(exc)
-                ),
+                "details": safe_details,
                 "error_id": error_id,
                 "timestamp": None,
             }

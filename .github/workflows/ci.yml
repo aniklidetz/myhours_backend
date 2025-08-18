@@ -7,6 +7,10 @@ name: CI/CD Pipeline
   pull_request:
     branches: [main, develop]
 
+# Global permissions - minimum by default for all jobs
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "18"
@@ -19,6 +23,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     services:
       postgres:
@@ -312,6 +318,8 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -376,6 +384,10 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # For publishing security scan results
+      actions: read           # For CodeQL analysis
 
     steps:
       - name: Checkout code
@@ -479,6 +491,8 @@ jobs:
     concurrency:
       group: deploy-staging-${{ github.ref }}
       cancel-in-progress: true
+    permissions:
+      contents: read
 
     steps:
       - name: Debug deployment gates
@@ -525,6 +539,8 @@ jobs:
     concurrency:
       group: deploy-production-${{ github.ref }}
       cancel-in-progress: true
+    permissions:
+      contents: read
 
     steps:
       - name: Debug deployment gates
@@ -571,6 +587,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test]
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
 
     services:
       postgres:
@@ -676,6 +694,8 @@ jobs:
   # Database migration validation
   migration-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     services:
       postgres:

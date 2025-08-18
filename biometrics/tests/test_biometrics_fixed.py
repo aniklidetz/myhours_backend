@@ -164,17 +164,17 @@ class BiometricServiceTest(TestCase):
         mock_collection = MagicMock()
         mock_mongo_db = MagicMock()
         mock_mongo_db.__getitem__.return_value = mock_collection
-        
+
         mock_settings.MONGO_CLIENT = MagicMock()
         mock_settings.MONGO_DB = mock_mongo_db
-        
+
         # Mock getattr to ensure TESTING returns False
         def mock_getattr(obj, name, default=None):
             if name == "TESTING":
                 return False
             return default
-            
-        # Mock hasattr to ensure GITHUB_ACTIONS returns False  
+
+        # Mock hasattr to ensure GITHUB_ACTIONS returns False
         def mock_hasattr(obj, name):
             if name == "GITHUB_ACTIONS":
                 return False
@@ -183,8 +183,13 @@ class BiometricServiceTest(TestCase):
         from biometrics.services.mongodb_repository import MongoBiometricRepository
 
         # Mock all test detection mechanisms
-        with patch("biometrics.services.mongodb_repository.getattr", side_effect=mock_getattr):
-            with patch("biometrics.services.mongodb_repository.hasattr", side_effect=mock_hasattr):
+        with patch(
+            "biometrics.services.mongodb_repository.getattr", side_effect=mock_getattr
+        ):
+            with patch(
+                "biometrics.services.mongodb_repository.hasattr",
+                side_effect=mock_hasattr,
+            ):
                 with patch("os.environ.get", return_value=None):
                     with patch("sys.argv", ["manage.py", "runserver"]):
                         repo = MongoBiometricRepository()

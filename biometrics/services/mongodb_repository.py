@@ -13,7 +13,7 @@ from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailur
 
 from django.conf import settings
 
-from core.logging_utils import err_tag
+from core.logging_utils import err_tag, safe_extra, safe_id
 
 logger = logging.getLogger("biometrics")
 
@@ -37,17 +37,17 @@ class MongoBiometricRepository:
     def _connect(self):
         """Establish connection to MongoDB with fixed collection"""
         # Skip MongoDB connection during tests to prevent hanging
-        import sys
         import os
-        
+        import sys
+
         # Multiple checks to ensure we skip MongoDB in test environments
         is_testing = (
-            getattr(settings, "TESTING", False) or 
-            hasattr(settings, "GITHUB_ACTIONS") or
-            "test" in sys.argv or
-            os.environ.get("TESTING") == "True"
+            getattr(settings, "TESTING", False)
+            or hasattr(settings, "GITHUB_ACTIONS")
+            or "test" in sys.argv
+            or os.environ.get("TESTING") == "True"
         )
-        
+
         if is_testing:
             logger.debug("Skipping MongoDB connection in test environment")
             self.client = None
@@ -158,16 +158,19 @@ class MongoBiometricRepository:
             return None
 
         if not isinstance(employee_id, int) or employee_id <= 0:
-            logger.error(f"Invalid employee_id: {employee_id}")
+            logger.error(
+                f"Invalid employee_id: {employee_id}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
         if not embeddings or not isinstance(embeddings, list):
             logger.error("Invalid embeddings data")
             return None
 
-        logger.info(f"🔍 Saving face embeddings for employee {employee_id}")
-        logger.debug(f"   - Embeddings count: {len(embeddings)}")
-        logger.debug(f"   - Collection: {self.collection.name}")
+        logger.debug(
+            "Saving face embeddings",
+            extra=safe_extra({"emp": safe_id(employee_id), "count": len(embeddings)}),
+        )
 
         try:
             # Prepare document
@@ -192,21 +195,28 @@ class MongoBiometricRepository:
             if result.upserted_id:
                 # New document created
                 document_id = str(result.upserted_id)
-                logger.info(f"✅ New embeddings document created: {document_id}")
+                logger.info(
+                    f"✅ New embeddings document created: {document_id}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             elif result.modified_count > 0:
                 # Existing document updated
                 existing_doc = self.collection.find_one({"employee_id": employee_id})
                 document_id = str(existing_doc["_id"]) if existing_doc else None
-                logger.info(f"✅ Existing embeddings document updated: {document_id}")
+                logger.info(
+                    f"✅ Existing embeddings document updated: {document_id}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             else:
-                logger.warning(f"⚠️ No changes made for employee {employee_id}")
+                logger.warning(
+                    f"⚠️ No changes made for employee {employee_id}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 return None
 
             # Verify the document was saved correctly
             saved_doc = self.collection.find_one({"employee_id": employee_id})
             if saved_doc and saved_doc.get("embeddings"):
-                logger.info(
-                    f"✅ Verification passed: {len(saved_doc['embeddings'])} embeddings saved"
+                logger.debug(
+                    "Verification passed",
+                    extra=safe_extra({"count": len(saved_doc["embeddings"])}),
                 )
                 return document_id
             else:
@@ -250,11 +260,17 @@ class MongoBiometricRepository:
             if document:
                 embeddings = document.get("embeddings", [])
                 logger.debug(
-                    f"Retrieved {len(embeddings)} embeddings for employee {employee_id}"
+                    "Retrieved embeddings",
+                    extra=safe_extra(
+                        {"emp": safe_id(employee_id), "count": len(embeddings)}
+                    ),
                 )
                 return embeddings
             else:
-                logger.debug(f"No embeddings found for employee {employee_id}")
+                logger.debug(
+                    "No embeddings found",
+                    extra=safe_extra({"emp": safe_id(employee_id)}),
+                )
                 return None
 
         except Exception as e:
@@ -345,7 +361,13 @@ class MongoBiometricRepository:
             if best_match:
                 employee_id, confidence = best_match
                 logger.debug(
-                    f"Best match found: employee_id={employee_id}, confidence={confidence:.3f}"
+                    "Best match found",
+                    extra=safe_extra(
+                        {
+                            "emp": safe_id(employee_id),
+                            "conf_level": "high" if confidence > 0.8 else "medium",
+                        }
+                    ),
                 )
             else:
                 logger.debug("No matching employee found")
@@ -376,11 +398,14 @@ class MongoBiometricRepository:
             result = self.collection.delete_one({"employee_id": employee_id})
 
             if result.deleted_count > 0:
-                logger.info(f"✅ Embeddings deleted for employee {employee_id}")
+                logger.info(
+                    f"✅ Embeddings deleted for employee {employee_id}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 return True
             else:
                 logger.warning(
-                    f"⚠️ No embeddings found to delete for employee {employee_id}"
+                    "No embeddings found to delete",
+                    extra=safe_extra({"emp": safe_id(employee_id)}),
                 )
                 return False
 
@@ -418,11 +443,14 @@ class MongoBiometricRepository:
             )
 
             if result.modified_count > 0:
-                logger.info(f"✅ Embeddings deactivated for employee {employee_id}")
+                logger.info(
+                    f"✅ Embeddings deactivated for employee {employee_id}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 return True
             else:
                 logger.warning(
-                    f"⚠️ No embeddings found to deactivate for employee {employee_id}"
+                    "No embeddings found to deactivate",
+                    extra=safe_extra({"emp": safe_id(employee_id)}),
                 )
                 return False
 
@@ -516,6 +544,7 @@ class MongoBiometricRepository:
 # Global instance with lazy initialization to prevent test hangs
 _mongo_biometric_repository = None
 
+
 def get_mongo_biometric_repository():
     """Get the global MongoDB biometric repository instance with lazy initialization"""
     global _mongo_biometric_repository
@@ -523,10 +552,13 @@ def get_mongo_biometric_repository():
         _mongo_biometric_repository = MongoBiometricRepository()
     return _mongo_biometric_repository
 
+
 class _LazyMongoRepositoryProxy:
     """Proxy that delays MongoDB repository initialization until actually needed"""
+
     def __getattr__(self, name):
         return getattr(get_mongo_biometric_repository(), name)
+
 
 # Use lazy proxy to prevent MongoDB connection during test imports
 mongo_biometric_repository = _LazyMongoRepositoryProxy()

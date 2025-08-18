@@ -92,11 +92,14 @@ class BiometricServiceInitializationTest(EnhancedBiometricServiceTest):
 
     def test_global_service_instance(self):
         """Test global service instance exists and is properly proxied"""
-        from biometrics.services.enhanced_biometric_service import _LazyBiometricServiceProxy, get_enhanced_biometric_service
-        
+        from biometrics.services.enhanced_biometric_service import (
+            _LazyBiometricServiceProxy,
+            get_enhanced_biometric_service,
+        )
+
         # Check that global instance is a lazy proxy
         self.assertIsInstance(enhanced_biometric_service, _LazyBiometricServiceProxy)
-        
+
         # Check that accessing the actual service returns proper instance
         actual_service = get_enhanced_biometric_service()
         self.assertIsInstance(actual_service, EnhancedBiometricService)
