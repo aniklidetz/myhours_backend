@@ -623,5 +623,24 @@ class EnhancedBiometricService:
             }
 
 
-# Global instance
-enhanced_biometric_service = EnhancedBiometricService()
+# Global instance with lazy loading to prevent MongoDB connections during test imports
+_enhanced_biometric_service = None
+
+
+def get_enhanced_biometric_service():
+    """Get the global enhanced biometric service instance with lazy initialization"""
+    global _enhanced_biometric_service
+    if _enhanced_biometric_service is None:
+        _enhanced_biometric_service = EnhancedBiometricService()
+    return _enhanced_biometric_service
+
+
+# Backward compatibility - maintain the same interface
+class _LazyBiometricServiceProxy:
+    """Proxy that delays biometric service initialization until actually needed"""
+
+    def __getattr__(self, name):
+        return getattr(get_enhanced_biometric_service(), name)
+
+
+enhanced_biometric_service = _LazyBiometricServiceProxy()

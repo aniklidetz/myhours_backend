@@ -36,6 +36,25 @@ class MongoBiometricRepository:
 
     def _connect(self):
         """Establish connection to MongoDB with fixed collection"""
+        # Skip MongoDB connection during tests to prevent hanging
+        import sys
+        import os
+        
+        # Multiple checks to ensure we skip MongoDB in test environments
+        is_testing = (
+            getattr(settings, "TESTING", False) or 
+            hasattr(settings, "GITHUB_ACTIONS") or
+            "test" in sys.argv or
+            os.environ.get("TESTING") == "True"
+        )
+        
+        if is_testing:
+            logger.debug("Skipping MongoDB connection in test environment")
+            self.client = None
+            self.db = None
+            self.collection = None
+            return
+
         try:
             self.client = settings.MONGO_CLIENT
             self.db = settings.MONGO_DB
@@ -494,5 +513,20 @@ class MongoBiometricRepository:
             return False
 
 
-# Global instance
-mongo_biometric_repository = MongoBiometricRepository()
+# Global instance with lazy initialization to prevent test hangs
+_mongo_biometric_repository = None
+
+def get_mongo_biometric_repository():
+    """Get the global MongoDB biometric repository instance with lazy initialization"""
+    global _mongo_biometric_repository
+    if _mongo_biometric_repository is None:
+        _mongo_biometric_repository = MongoBiometricRepository()
+    return _mongo_biometric_repository
+
+class _LazyMongoRepositoryProxy:
+    """Proxy that delays MongoDB repository initialization until actually needed"""
+    def __getattr__(self, name):
+        return getattr(get_mongo_biometric_repository(), name)
+
+# Use lazy proxy to prevent MongoDB connection during test imports
+mongo_biometric_repository = _LazyMongoRepositoryProxy()

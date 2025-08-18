@@ -54,11 +54,15 @@ class MongoBiometricRepositoryConnectionTest(TestCase):
         """Test that error logging works in production when db is None"""
         mock_settings.MONGO_CLIENT = MagicMock()
         mock_settings.MONGO_DB = None
+        
+        # Mock all testing-related functions and environment variables
+        with patch("biometrics.services.mongodb_repository.getattr", return_value=False):
+            with patch("biometrics.services.mongodb_repository.hasattr", return_value=False):
+                with patch("os.environ.get", return_value=None):
+                    with patch("sys.argv", ["manage.py", "runserver"]):  # Non-test command
+                        repo = MongoBiometricRepository()
 
-        with patch("sys.argv", ["manage.py", "runserver"]):
-            repo = MongoBiometricRepository()
-
-        # Should log error in production
+        # Should log error in production (when not testing)
         mock_logger.error.assert_called_with("MongoDB database not available")
 
     @patch("biometrics.services.mongodb_repository.settings")

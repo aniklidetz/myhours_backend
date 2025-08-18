@@ -168,18 +168,21 @@ if TESTING:
 else:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
 
-try:
-    MONGO_CLIENT = MongoClient(MONGO_CONNECTION_STRING)
-    MONGO_DB = MONGO_CLIENT[MONGO_DB_NAME]
-    # Test connection
-    MONGO_CLIENT.admin.command("ping")
-    if not TESTING:
-        print("MongoDB connection established")
-except Exception as e:
-    if not TESTING:
-        print(f"MongoDB connection failed: {e}")
+# Skip MongoDB connection entirely during tests to prevent hanging
+if TESTING:
     MONGO_CLIENT = None
     MONGO_DB = None
+else:
+    try:
+        MONGO_CLIENT = MongoClient(MONGO_CONNECTION_STRING)
+        MONGO_DB = MONGO_CLIENT[MONGO_DB_NAME]
+        # Test connection
+        MONGO_CLIENT.admin.command("ping")
+        print("MongoDB connection established")
+    except Exception as e:
+        print(f"MongoDB connection failed: {e}")
+        MONGO_CLIENT = None
+        MONGO_DB = None
 
 # Redis/Cache configuration will be set up below
 
