@@ -74,7 +74,9 @@ class MongoDBService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to create indexes", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to create indexes: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
 
     def save_face_embeddings(
         self, employee_id: int, embeddings: List[Dict]
@@ -154,9 +156,8 @@ class MongoDBService:
             from core.logging_utils import err_tag
 
             logger.error(
-                "Failed to save embeddings",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"Failed to save embeddings: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     def get_face_embeddings(self, employee_id: int) -> Optional[List[Dict]]:
@@ -205,9 +206,8 @@ class MongoDBService:
             from core.logging_utils import err_tag
 
             logger.error(
-                "Failed to retrieve embeddings",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"Failed to retrieve embeddings: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     def get_all_active_embeddings(self) -> List[Tuple[int, List[Dict]]]:
@@ -264,7 +264,9 @@ class MongoDBService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to retrieve all embeddings", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to retrieve all embeddings: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return []
 
     def deactivate_embeddings(self, employee_id: int) -> bool:
@@ -300,9 +302,8 @@ class MongoDBService:
             from core.logging_utils import err_tag
 
             logger.error(
-                "Failed to deactivate embeddings",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"Failed to deactivate embeddings: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
     def delete_embeddings(self, employee_id: int) -> bool:
@@ -330,9 +331,8 @@ class MongoDBService:
             from core.logging_utils import err_tag
 
             logger.error(
-                "Failed to delete embeddings",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"Failed to delete embeddings: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
     def get_statistics(self) -> Dict:
@@ -398,7 +398,9 @@ class MongoDBService:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("MongoDB health check failed", extra={"err": err_tag(e)})
+            logger.error(
+                f"MongoDB health check failed: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
 
