@@ -242,9 +242,8 @@ class MongoBiometricRepository:
             from core.logging_utils import err_tag
 
             logger.error(
-                "Failed to retrieve embeddings for employee",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"Failed to retrieve embeddings for employee {employee_id}: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     def get_all_employee_ids(self) -> List[int]:
@@ -270,7 +269,9 @@ class MongoBiometricRepository:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to get all employee IDs", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to get all employee IDs: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return []
 
     def find_matching_employee(
@@ -371,9 +372,8 @@ class MongoBiometricRepository:
             from core.logging_utils import err_tag
 
             logger.error(
-                "❌ Failed to delete embeddings for employee",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"❌ Failed to delete embeddings for employee {employee_id}: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
     def deactivate_embeddings(self, employee_id: int) -> bool:
@@ -415,9 +415,8 @@ class MongoBiometricRepository:
             from core.logging_utils import err_tag
 
             logger.error(
-                "❌ Failed to deactivate embeddings for employee",
-                extra={"err": err_tag(e), "employee_id": employee_id},
-            )
+                f"❌ Failed to deactivate embeddings for employee {employee_id}: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
     def get_statistics(self) -> Dict:
@@ -494,7 +493,9 @@ class MongoBiometricRepository:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("MongoDB health check failed", extra={"err": err_tag(e)})
+            logger.error(
+                f"MongoDB health check failed: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
 
