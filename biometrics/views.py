@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.exceptions import BiometricError
+from core.logging_utils import err_tag, safe_user_hash
 from users.models import Employee
 from users.permissions import IsEmployeeOrAbove
 from worktime.models import WorkLog
@@ -231,21 +232,16 @@ def register_face(request):
     image = serializer.validated_data["image"]
     images = [image]  # Convert single image to list for processor
 
-    # DETAILED LOGGING for registration debugging
+    # DETAILED LOGGING for registration debugging (without PII)
     logger.info("🔍 Face registration debug:")
-    logger.info("Request employee", extra={"employee_id": employee_id})
-    # Do not log emails; keep only user_id
     logger.info(
-        "Authenticated user", extra={"user_id": getattr(request.user, "id", None)}
+        "Biometrics: registration request received",
+        extra={
+            "user_hash": safe_user_hash(request.user),
+            "has_employee": request.user.employees.exists(),
+            "path": request.path,
+        },
     )
-    if request.user.employees.exists():
-        user_employee = request.user.employees.first()
-        logger.info(f"   - Authenticated user employee_id: {user_employee.id}")
-        logger.info(
-            f"   - Authenticated user employee name: {user_employee.get_full_name()}"
-        )
-    else:
-        logger.warning(f"   - No employee found for user {request.user.id}")
 
     try:
         # Check if employee exists and user has permission
@@ -262,13 +258,22 @@ def register_face(request):
             user_employee = request.user.employees.first()
             is_self = is_self and (user_employee.id == employee_id)
             logger.info(
-                f"   - Permission check: is_admin={is_admin}, is_self={is_self}, user_employee_id={user_employee.id}"
+                "Biometrics: permission check",
+                extra={
+                    "user_hash": safe_user_hash(request.user),
+                    "is_admin": is_admin,
+                    "is_self": is_self,
+                },
             )
 
         if not (is_admin or is_self):
             logger.warning(
-                "Permission denied",
-                extra={"user_id": request.user.id, "target_employee_id": employee_id},
+                "Biometrics: permission denied",
+                extra={
+                    "user_hash": safe_user_hash(request.user),
+                    "is_admin": is_admin,
+                    "is_self": is_self,
+                },
             )
             return Response(
                 {
@@ -303,8 +308,13 @@ def register_face(request):
         else:
             # REAL biometric processing
             logger.info("Processing real biometric data for registration")
-            logger.info("Image data received", extra={"data_length": len(image)})
-            logger.info("Processing employee", extra={"employee_id": employee_id})
+            logger.info(
+                "Biometrics: image data received",
+                extra={
+                    "user_hash": safe_user_hash(request.user),
+                    "image_len": len(image) if image else 0,
+                },
+            )
 
             try:
                 if face_processor is None:
@@ -382,7 +392,10 @@ def register_face(request):
             # Critical MongoDB failure - alert DevOps
             logger.critical(
                 "CRITICAL: Biometric registration failed",
-                extra={"employee_id": employee_id},
+                extra={
+                    "user_hash": safe_user_hash(request.user),
+                    "err": err_tag(e),
+                },
             )
             return Response(
                 {
@@ -665,23 +678,18 @@ def check_in(request):
         # Get employee
         employee = Employee.objects.get(id=match_result["employee_id"])
 
-        # DETAILED LOGGING for mismatch debugging
+        # DETAILED LOGGING for mismatch debugging (without PII)
         logger.info("Check-in matching debug")
         logger.info(
-            "Recognition result",
+            "Biometrics: check-in match found",
             extra={
-                "employee_id": match_result["employee_id"],
+                "user_hash": safe_user_hash(request.user),
                 "confidence": match_result["confidence"],
                 "used_fallback": used_fallback,
+                "has_employee": request.user.employees.exists(),
             },
         )
-        if request.user.employees.exists():
-            user_employee = request.user.employees.first()
-            logger.info(f"   - Authenticated user employee ID: {user_employee.id}")
-            logger.info(
-                f"   - Authenticated user name: {user_employee.get_full_name()}"
-            )
-        else:
+        if not request.user.employees.exists():
             logger.warning("   - No employee found for authenticated user")
 
         # IMPORTANT: Verify that the recognized face belongs to the authenticated user
@@ -957,8 +965,11 @@ def check_out(request):
             employee = Employee.objects.get(id=match_result["employee_id"])
         except Employee.DoesNotExist:
             logger.error(
-                "Employee not found in Django database",
-                extra={"employee_id": match_result["employee_id"]},
+                "Biometrics: employee not found in Django database",
+                extra={
+                    "user_hash": safe_user_hash(request.user),
+                    "has_match": bool(match_result),
+                },
             )
             logger.error(
                 "This indicates stale data in MongoDB - face embeddings exist for non-existent employee"
@@ -968,24 +979,21 @@ def check_out(request):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # DETAILED LOGGING for mismatch debugging
+        # DETAILED LOGGING for mismatch debugging (without PII)
         logger.info("🔍 Check-out matching debug")
         logger.info(
-            "Recognition result",
+            "Biometrics: check-out match found",
             extra={
-                "employee_id": match_result["employee_id"],
+                "user_hash": safe_user_hash(request.user),
                 "confidence": match_result["confidence"],
                 "used_fallback": used_fallback,
             },
         )
-        if request.user.employees.exists():
-            user_employee = request.user.employees.first()
-            logger.info(f"   - Authenticated user employee ID: {user_employee.id}")
-            logger.info(
-                f"   - Authenticated user name: {user_employee.get_full_name()}"
+        if not request.user.employees.exists():
+            logger.warning(
+                "Biometrics: no employee found for authenticated user",
+                extra={"user_hash": safe_user_hash(request.user)},
             )
-        else:
-            logger.warning("   - No employee found for authenticated user")
 
         # IMPORTANT: Verify that the recognized face belongs to the authenticated user
         # This ensures multiple employees can check-out simultaneously

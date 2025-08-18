@@ -59,7 +59,18 @@ class EnhancedBiometricService:
             ValidationError: Invalid employee_id
             CriticalBiometricError: MongoDB operation failed
         """
-        logger.info(f"🔧 Starting biometric registration for employee {employee_id}")
+        from core.logging_utils import safe_biometric_subject, safe_extra
+
+        logger.info(
+            "🔧 Starting biometric registration",
+            extra=safe_extra(
+                {
+                    "subject": safe_biometric_subject({"id": employee_id}, "employee"),
+                    "operation": "registration",
+                },
+                allow={"operation"},
+            ),
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         # Use atomic transaction for consistent state
         with transaction.atomic():
@@ -68,12 +79,33 @@ class EnhancedBiometricService:
                 employee = Employee.objects.select_for_update().get(
                     id=employee_id, is_active=True
                 )
-                logger.debug(
-                    f"✅ Employee validation passed: {employee.get_full_name()}"
-                )
+                from django.conf import settings
+
+                if settings.DEBUG:
+                    logger.debug(
+                        "✅ Employee validation passed",
+                        extra=safe_extra(
+                            {
+                                "subject": safe_biometric_subject(employee, "employee"),
+                                "validation": "passed",
+                            },
+                            allow={"validation"},
+                        ),
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
             except Employee.DoesNotExist:
-                error_msg = f"Employee {employee_id} not found or inactive"
-                logger.error(f"❌ {error_msg}")
+                error_msg = "Employee not found or inactive"
+                logger.error(
+                    f"❌ {error_msg}",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "error": "not_found_or_inactive",
+                        },
+                        allow={"error"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 raise ValidationError(error_msg)
 
             # 2. MongoDB operation (source of truth)
@@ -85,27 +117,55 @@ class EnhancedBiometricService:
                 if not mongodb_result:
                     # CRITICAL: MongoDB failed silently
                     logger.critical(
-                        f"🚨 CRITICAL: MongoDB failure during registration: "
-                        f"employee_id={employee_id}, employee_name={employee.get_full_name()}"
-                    )
+                        "🚨 CRITICAL: MongoDB failure during registration",
+                        extra=safe_extra(
+                            {
+                                "subject": safe_biometric_subject(employee, "employee"),
+                                "operation": "mongodb_save",
+                                "result": "critical_failure",
+                            },
+                            allow={"operation", "result"},
+                        ),
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                     raise CriticalBiometricError(
-                        f"MongoDB operation failed for employee {employee_id}. "
+                        "MongoDB operation failed. "
                         "This requires immediate attention from DevOps team."
                     )
 
-                logger.info(f"✅ MongoDB save successful: document_id={mongodb_result}")
+                logger.info(
+                    "✅ MongoDB save successful",
+                    extra=safe_extra(
+                        {
+                            "operation": "mongodb_save",
+                            "result": "success",
+                            "has_document_id": bool(mongodb_result),
+                        },
+                        allow={"operation", "result", "has_document_id"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
 
             except Exception as e:
                 if isinstance(e, CriticalBiometricError):
                     raise  # Re-raise critical errors
 
                 # Wrap other MongoDB errors as critical
+                from core.logging_utils import err_tag
+
                 logger.critical(
-                    f"🚨 CRITICAL: MongoDB exception during registration: "
-                    f"employee_id={employee_id}, error={str(e)}"
-                )
+                    f"🚨 CRITICAL: MongoDB exception during registration: {err_tag(e)}",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "mongodb_save",
+                            "result": "critical_exception",
+                        },
+                        allow={"operation", "result"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 raise CriticalBiometricError(
-                    f"MongoDB operation exception for employee {employee_id}: {str(e)}"
+                    f"MongoDB operation exception: {err_tag(e)}"
                 ) from e
 
             # 3. PostgreSQL status update (idempotent)
@@ -122,22 +182,49 @@ class EnhancedBiometricService:
 
                 action = "created" if created else "updated"
                 logger.info(
-                    f"✅ PostgreSQL profile {action} for employee {employee_id}"
-                )
+                    f"✅ PostgreSQL profile {action}",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(employee, "employee"),
+                            "operation": "postgresql_profile",
+                            "action": action,
+                        },
+                        allow={"operation", "action"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
 
             except Exception as e:
                 # PostgreSQL failure is not critical - MongoDB data is safe
                 logger.error(
-                    f"⚠️ PostgreSQL update failed for employee {employee_id}: {str(e)}. "
-                    f"MongoDB data is safe (document_id={mongodb_result})"
-                )
+                    f"⚠️ PostgreSQL update failed: {err_tag(e)}. MongoDB data is safe",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "postgresql_update",
+                            "result": "failed",
+                            "mongodb_safe": True,
+                        },
+                        allow={"operation", "result", "mongodb_safe"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
                 # Continue - we can fix PostgreSQL later via audit
 
         # 4. Success logging for monitoring
         logger.info(
-            f"🎉 Biometric registration completed: employee_id={employee_id}, "
-            f"embeddings_count={len(face_encodings)}, mongodb_id={mongodb_result}"
-        )
+            "🎉 Biometric registration completed",
+            extra=safe_extra(
+                {
+                    "subject": safe_biometric_subject({"id": employee_id}, "employee"),
+                    "operation": "registration",
+                    "result": "completed",
+                    "embeddings_count": len(face_encodings),
+                    "has_mongodb_id": bool(mongodb_result),
+                },
+                allow={"operation", "result", "embeddings_count", "has_mongodb_id"},
+            ),
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         return profile if "profile" in locals() else None
 
@@ -153,17 +240,45 @@ class EnhancedBiometricService:
         Returns:
             Tuple of (employee_id, confidence_score) if match found, None otherwise
         """
-        logger.debug("🔍 Starting biometric verification")
+        from django.conf import settings
+
+        if settings.DEBUG:
+            logger.debug(
+                "🔍 Starting biometric verification",
+                extra=safe_extra({"operation": "verification"}, allow={"operation"}),
+            )  # lgtm[py/clear-text-logging-sensitive-data]
 
         try:
             result = self.mongo_repo.find_matching_employee(face_encoding)
             if result:
                 employee_id, confidence = result
                 logger.info(
-                    f"✅ Biometric match found: employee_id={employee_id}, confidence={confidence:.3f}"
-                )
+                    "✅ Biometric match found",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "verification",
+                            "result": "match_found",
+                            "confidence_level": (
+                                "high"
+                                if confidence >= 0.8
+                                else "medium" if confidence >= 0.6 else "low"
+                            ),
+                        },
+                        allow={"operation", "result", "confidence_level"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             else:
-                logger.debug("❌ No biometric match found")
+                if settings.DEBUG:
+                    logger.debug(
+                        "❌ No biometric match found",
+                        extra=safe_extra(
+                            {"operation": "verification", "result": "no_match"},
+                            allow={"operation", "result"},
+                        ),
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
             return result
 
         except Exception as e:
@@ -182,7 +297,16 @@ class EnhancedBiometricService:
         Returns:
             True if successful, False otherwise
         """
-        logger.info(f"🗑️ Deleting biometric data for employee {employee_id}")
+        logger.info(
+            "🗑️ Deleting biometric data",
+            extra=safe_extra(
+                {
+                    "subject": safe_biometric_subject({"id": employee_id}, "employee"),
+                    "operation": "deletion",
+                },
+                allow={"operation"},
+            ),
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         success = True
 
@@ -191,14 +315,48 @@ class EnhancedBiometricService:
             mongo_deleted = self.mongo_repo.delete_embeddings(employee_id)
             if mongo_deleted:
                 logger.info(
-                    f"✅ MongoDB deletion successful for employee {employee_id}"
-                )
+                    "✅ MongoDB deletion successful",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "mongodb_deletion",
+                            "result": "success",
+                        },
+                        allow={"operation", "result"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             else:
-                logger.warning(f"⚠️ No MongoDB data found for employee {employee_id}")
+                logger.warning(
+                    "⚠️ No MongoDB data found",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "mongodb_deletion",
+                            "result": "no_data",
+                        },
+                        allow={"operation", "result"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
         except Exception as e:
+            from core.logging_utils import err_tag
+
             logger.error(
-                f"❌ MongoDB deletion failed for employee {employee_id}: {str(e)}"
-            )
+                f"❌ MongoDB deletion failed: {err_tag(e)}",
+                extra=safe_extra(
+                    {
+                        "subject": safe_biometric_subject(
+                            {"id": employee_id}, "employee"
+                        ),
+                        "operation": "mongodb_deletion",
+                        "result": "error",
+                    },
+                    allow={"operation", "result"},
+                ),
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             success = False
 
         # 2. Update PostgreSQL status (even if MongoDB failed)
@@ -207,15 +365,47 @@ class EnhancedBiometricService:
                 is_active=False, embeddings_count=0, last_updated=timezone.now()
             )
             if updated:
-                logger.info(f"✅ PostgreSQL status updated for employee {employee_id}")
+                logger.info(
+                    "✅ PostgreSQL status updated",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "postgresql_update",
+                            "result": "success",
+                        },
+                        allow={"operation", "result"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             else:
                 logger.warning(
-                    f"⚠️ No PostgreSQL profile found for employee {employee_id}"
-                )
+                    "⚠️ No PostgreSQL profile found",
+                    extra=safe_extra(
+                        {
+                            "subject": safe_biometric_subject(
+                                {"id": employee_id}, "employee"
+                            ),
+                            "operation": "postgresql_update",
+                            "result": "not_found",
+                        },
+                        allow={"operation", "result"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
         except Exception as e:
             logger.error(
-                f"❌ PostgreSQL update failed for employee {employee_id}: {str(e)}"
-            )
+                f"❌ PostgreSQL update failed: {err_tag(e)}",
+                extra=safe_extra(
+                    {
+                        "subject": safe_biometric_subject(
+                            {"id": employee_id}, "employee"
+                        ),
+                        "operation": "postgresql_update",
+                        "result": "error",
+                    },
+                    allow={"operation", "result"},
+                ),
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             success = False
 
         return success
@@ -295,8 +485,8 @@ class EnhancedBiometricService:
                 "total_mongo_records": len(mongo_employee_ids),
                 "orphaned_mongo_count": len(orphaned_mongo),
                 "orphaned_pg_count": len(orphaned_pg),
-                "orphaned_mongo_ids": list(orphaned_mongo),
-                "orphaned_pg_ids": list(orphaned_pg),
+                "orphaned_mongo_count": len(orphaned_mongo),
+                "orphaned_pg_count": len(orphaned_pg),
                 "orphaned_pg_details": orphaned_pg_details,
                 "is_consistent": len(orphaned_mongo) == 0 and len(orphaned_pg) == 0,
                 "fix_commands": fix_commands,
@@ -309,11 +499,29 @@ class EnhancedBiometricService:
                 )
             else:
                 logger.warning(
-                    f"⚠️ Inconsistencies detected: "
-                    f"orphaned_mongo={len(orphaned_mongo)}, "
-                    f"orphaned_pg={len(orphaned_pg)}"
-                )
-                logger.info(f"🔧 Generated {len(fix_commands)} fix commands")
+                    "⚠️ Inconsistencies detected",
+                    extra=safe_extra(
+                        {
+                            "operation": "audit",
+                            "result": "inconsistent",
+                            "orphaned_mongo_count": len(orphaned_mongo),
+                            "orphaned_pg_count": len(orphaned_pg),
+                        },
+                        allow={
+                            "operation",
+                            "result",
+                            "orphaned_mongo_count",
+                            "orphaned_pg_count",
+                        },
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
+                logger.info(
+                    "🔧 Generated fix commands",
+                    extra=safe_extra(
+                        {"operation": "audit", "fix_commands_count": len(fix_commands)},
+                        allow={"operation", "fix_commands_count"},
+                    ),
+                )  # lgtm[py/clear-text-logging-sensitive-data]
 
             return audit_result
 
@@ -382,12 +590,22 @@ class EnhancedBiometricService:
 
         except Exception as e:
             logger.error(
-                f"❌ Failed to get biometric status for employee {employee_id}: {str(e)}"
-            )
+                f"❌ Failed to get biometric status: {err_tag(e)}",
+                extra=safe_extra(
+                    {
+                        "subject": safe_biometric_subject(
+                            {"id": employee_id}, "employee"
+                        ),
+                        "operation": "get_status",
+                        "result": "error",
+                    },
+                    allow={"operation", "result"},
+                ),
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return {
-                "employee_id": employee_id,
+                "has_employee_id": bool(employee_id),
                 "is_consistent": False,
-                "error": str(e),
+                "error": err_tag(e),
                 "timestamp": timezone.now().isoformat(),
             }
 

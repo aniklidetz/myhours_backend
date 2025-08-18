@@ -237,10 +237,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     logger.info(
                         "Updated monthly salary",
                         extra={
-                            "employee_corr": emp_corr,
-                            "new_monthly_salary": str(salary.base_salary),
+                            **safe_log_employee(employee, "salary_update"),
+                            "salary_changed": True,  # No actual amounts logged for security
                         },
-                    )
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                 except (ValueError, TypeError) as e:
                     from hashlib import blake2b
 
@@ -271,10 +271,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     logger.info(
                         "Updated hourly rate",
                         extra={
-                            "employee_corr": emp_corr,
-                            "new_hourly_rate": str(salary.hourly_rate),
+                            **safe_log_employee(employee, "hourly_rate_update"),
+                            "rate_changed": True,  # No actual rate logged for security
                         },
-                    )
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                 except (ValueError, TypeError) as e:
                     from hashlib import blake2b
 
@@ -305,10 +305,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                     logger.info(
                         "Updated contract project salary",
                         extra={
-                            "employee_corr": emp_corr,
-                            "new_project_salary": str(salary.base_salary),
+                            **safe_log_employee(employee, "project_salary_update"),
+                            "salary_changed": True,  # No actual amounts logged for security
                         },
-                    )
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                 except (ValueError, TypeError) as e:
                     from hashlib import blake2b
 

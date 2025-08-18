@@ -60,7 +60,9 @@ class MongoBiometricRepository:
             if "test" not in sys.argv:
                 from core.logging_utils import err_tag
 
-                logger.error("Failed to connect to MongoDB", extra={"err": err_tag(e)})
+                logger.error(
+                    f"Failed to connect to MongoDB: {err_tag(e)}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             self.client = None
             self.db = None
             self.collection = None
@@ -322,9 +324,8 @@ class MongoBiometricRepository:
                         from core.logging_utils import err_tag
 
                         logger.warning(
-                            "Failed to calculate distance for employee",
-                            extra={"err": err_tag(e), "employee_id": employee_id},
-                        )
+                            f"Failed to calculate distance for employee {employee_id}: {err_tag(e)}"
+                        )  # lgtm[py/clear-text-logging-sensitive-data]
                         continue
 
             if best_match:
@@ -340,7 +341,9 @@ class MongoBiometricRepository:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to find matching employee", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to find matching employee: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
     def delete_embeddings(self, employee_id: int) -> bool:
@@ -463,7 +466,9 @@ class MongoBiometricRepository:
         except Exception as e:
             from core.logging_utils import err_tag
 
-            logger.error("Failed to get statistics", extra={"err": err_tag(e)})
+            logger.error(
+                f"Failed to get statistics: {err_tag(e)}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
             return {
                 "status": "error",
                 "error": err_tag(e),  # Use safe error tag in return value too

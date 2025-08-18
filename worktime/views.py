@@ -84,24 +84,26 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         auth_header = request.META.get("HTTP_AUTHORIZATION", "MISSING")
         user_agent = request.META.get("HTTP_USER_AGENT", "MISSING")
 
-        logger.debug(
-            "Worktime API request",
-            extra={
-                "endpoint": getattr(request.resolver_match, "view_name", None),
-                "has_employee_filter": bool(employee_filter),
-                "filter_keys": (
-                    sorted(employee_filter.keys())
-                    if isinstance(employee_filter, dict)
-                    else None
-                ),
-                "has_auth": auth_header != "MISSING",
-                "is_authenticated": request.user.is_authenticated,
-                "has_user_agent": user_agent != "MISSING",
-                "query_param_keys": (
-                    sorted(request.query_params.keys()) if request.query_params else []
-                ),
-            },
-        )
+        # Only log sanitized debug info in DEBUG mode to avoid potential sensitive data exposure
+        from django.conf import settings
+
+        if settings.DEBUG:  # Restrict to local debugging only
+            logger.debug(
+                "Worktime API request (sanitized)",
+                extra={
+                    "endpoint": getattr(request.resolver_match, "view_name", None),
+                    "has_employee_filter": bool(employee_filter),
+                    "employee_filter_keys_count": (
+                        len(employee_filter) if isinstance(employee_filter, dict) else 0
+                    ),
+                    "has_auth_header": (auth_header != "MISSING"),
+                    "is_authenticated": bool(
+                        getattr(request.user, "is_authenticated", False)
+                    ),
+                    "has_user_agent": (user_agent != "MISSING"),
+                    "query_param_keys_count": len(request.query_params or {}),
+                },
+            )  # lgtm[py/clear-text-logging-sensitive-data]
 
         # If employee filter is present but user is not authenticated, this is the bug
         if employee_filter and not request.user.is_authenticated:

@@ -95,11 +95,17 @@ class MongoDBService:
             logger.error("MongoDB collection not available")
             return None
 
-        # DETAILED LOGGING for registration debugging
-        logger.info(f"🔍 MongoDB save_face_embeddings:")
-        logger.info(f"   - Employee ID to save: {employee_id}")
-        logger.info(f"   - Embeddings count: {len(embeddings)}")
-        logger.info(f"   - Collection name: {self.collection.name}")
+        # DETAILED LOGGING for registration debugging (sanitized)
+        from core.logging_utils import public_emp_id
+
+        logger.info(
+            "🔍 MongoDB save_face_embeddings",
+            extra={
+                "employee": public_emp_id(employee_id),
+                "embeddings_count": len(embeddings),
+                "collection_name": self.collection.name,
+            },
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         try:
             # Check if employee already has embeddings
@@ -143,8 +149,12 @@ class MongoDBService:
                 saved_doc = self.collection.find_one({"_id": result.inserted_id})
                 if saved_doc:
                     logger.info(
-                        f"✅ Verified: Document saved for employee_id {saved_doc.get('employee_id')}"
-                    )
+                        "✅ Verified: document saved",
+                        extra={
+                            "employee": public_emp_id(saved_doc.get("employee_id")),
+                            "has_embeddings": bool(saved_doc.get("embeddings")),
+                        },
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                 else:
                     logger.error(
                         f"❌ Verification failed: Document not found after insert"
@@ -258,7 +268,13 @@ class MongoDBService:
                 f"Retrieved {len(results)} active embedding sets from {self.collection.name}"
             )
             for employee_id, embeddings in results:
-                logger.debug(f"  Employee {employee_id}: {len(embeddings)} embeddings")
+                logger.debug(
+                    "Active embedding set",
+                    extra={
+                        "employee": public_emp_id(employee_id),
+                        "embeddings_count": len(embeddings),
+                    },
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             return results
 
         except Exception as e:

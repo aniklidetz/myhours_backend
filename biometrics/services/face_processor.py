@@ -844,15 +844,31 @@ class FaceProcessor:
                     known_encodings.append(np.array(embedding["vector"]))
 
             if not known_encodings:
-                logger.debug(f"   - Employee {employee_id}: No encodings found")
+                from django.conf import settings
+
+                if settings.DEBUG:
+                    logger.debug(
+                        "FaceProcessor: no encodings found",
+                        extra={"has_employee_id": bool(employee_id)},
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
                 continue
 
             # Compare with this employee's encodings
             is_match, confidence = self.compare_faces(unknown_encoding, known_encodings)
 
-            logger.info(
-                f"   - Employee {employee_id}: confidence={confidence:.3f}, match={is_match}"
-            )
+            if settings.DEBUG:
+                logger.debug(
+                    "FaceProcessor: comparison result",
+                    extra={
+                        "has_employee_id": bool(employee_id),
+                        "confidence_level": (
+                            "high"
+                            if confidence >= 0.8
+                            else "medium" if confidence >= 0.6 else "low"
+                        ),
+                        "is_match": bool(is_match),
+                    },
+                )  # lgtm[py/clear-text-logging-sensitive-data]
             all_matches.append((employee_id, confidence, is_match))
 
             if is_match and confidence > best_confidence:
@@ -863,11 +879,32 @@ class FaceProcessor:
         all_matches.sort(key=lambda x: x[1], reverse=True)
         logger.info(f"🎯 All matching results (sorted by confidence):")
         for emp_id, conf, match in all_matches[:5]:  # Top 5 results
-            logger.info(f"   - Employee {emp_id}: {conf:.3f} {'✅' if match else '❌'}")
+            if settings.DEBUG:
+                logger.debug(
+                    "FaceProcessor: top match result",
+                    extra={
+                        "has_employee_id": bool(emp_id),
+                        "confidence_level": (
+                            "high"
+                            if conf >= 0.8
+                            else "medium" if conf >= 0.6 else "low"
+                        ),
+                        "match_result": "✅" if match else "❌",
+                    },
+                )  # lgtm[py/clear-text-logging-sensitive-data]
 
         logger.info(
-            f"🏆 Best match: Employee {best_match_employee_id} with confidence {best_confidence:.3f}"
-        )
+            "🏆 Best match found",
+            extra={
+                "has_employee_id": bool(best_match_employee_id),
+                "confidence_level": (
+                    "high"
+                    if best_confidence >= 0.8
+                    else "medium" if best_confidence >= 0.6 else "low"
+                ),
+                "processing_stage": "final_result",
+            },
+        )  # lgtm[py/clear-text-logging-sensitive-data]
 
         processing_time = int((time.time() - start_time) * 1000)
 
