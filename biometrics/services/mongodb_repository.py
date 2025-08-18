@@ -13,6 +13,8 @@ from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailur
 
 from django.conf import settings
 
+from core.logging_utils import err_tag
+
 logger = logging.getLogger("biometrics")
 
 
@@ -58,7 +60,6 @@ class MongoBiometricRepository:
             import sys
 
             if "test" not in sys.argv:
-                from core.logging_utils import err_tag
 
                 logger.error(
                     f"Failed to connect to MongoDB: {err_tag(e)}"
@@ -115,7 +116,6 @@ class MongoBiometricRepository:
             logger.info("MongoDB indexes verified/created successfully")
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to create indexes: {err_tag(e)}"
@@ -197,14 +197,12 @@ class MongoBiometricRepository:
                 return None
 
         except DuplicateKeyError as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"❌ Duplicate key error for employee {employee_id}: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"❌ Failed to save embeddings for employee {employee_id}: {err_tag(e)}"
@@ -241,7 +239,6 @@ class MongoBiometricRepository:
                 return None
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to retrieve embeddings for employee {employee_id}: {err_tag(e)}"
@@ -269,7 +266,6 @@ class MongoBiometricRepository:
             return employee_ids
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to get all employee IDs: {err_tag(e)}"
@@ -321,7 +317,6 @@ class MongoBiometricRepository:
                             best_match = (employee_id, confidence)
 
                     except Exception as e:
-                        from core.logging_utils import err_tag
 
                         logger.warning(
                             f"Failed to calculate distance for employee {employee_id}: {err_tag(e)}"
@@ -339,7 +334,6 @@ class MongoBiometricRepository:
             return best_match
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to find matching employee: {err_tag(e)}"
@@ -372,7 +366,6 @@ class MongoBiometricRepository:
                 return False
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"❌ Failed to delete embeddings for employee {employee_id}: {err_tag(e)}"
@@ -415,7 +408,6 @@ class MongoBiometricRepository:
                 return False
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"❌ Failed to deactivate embeddings for employee {employee_id}: {err_tag(e)}"
@@ -464,7 +456,6 @@ class MongoBiometricRepository:
             }
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to get statistics: {err_tag(e)}"
@@ -496,7 +487,6 @@ class MongoBiometricRepository:
 
             return True
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"MongoDB health check failed: {err_tag(e)}"

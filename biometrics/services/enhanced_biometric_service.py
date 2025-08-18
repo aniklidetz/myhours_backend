@@ -195,6 +195,8 @@ class EnhancedBiometricService:
 
             except Exception as e:
                 # PostgreSQL failure is not critical - MongoDB data is safe
+                from core.logging_utils import err_tag
+
                 logger.error(
                     f"⚠️ PostgreSQL update failed: {err_tag(e)}. MongoDB data is safe",
                     extra=safe_extra(
@@ -241,6 +243,8 @@ class EnhancedBiometricService:
             Tuple of (employee_id, confidence_score) if match found, None otherwise
         """
         from django.conf import settings
+
+        from core.logging_utils import safe_biometric_subject, safe_extra
 
         if settings.DEBUG:
             logger.debug(
@@ -297,6 +301,8 @@ class EnhancedBiometricService:
         Returns:
             True if successful, False otherwise
         """
+        from core.logging_utils import safe_biometric_subject, safe_extra
+
         logger.info(
             "🗑️ Deleting biometric data",
             extra=safe_extra(
@@ -417,6 +423,8 @@ class EnhancedBiometricService:
         Returns:
             Dictionary with inconsistencies and fix commands
         """
+        from core.logging_utils import safe_extra
+
         logger.info("🔍 Starting consistency audit between MongoDB and PostgreSQL")
 
         try:
@@ -546,6 +554,8 @@ class EnhancedBiometricService:
         Returns:
             Dictionary with biometric status details
         """
+        from core.logging_utils import err_tag, safe_biometric_subject, safe_extra
+
         try:
             # Check PostgreSQL
             try:

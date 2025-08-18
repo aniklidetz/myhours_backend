@@ -10,6 +10,8 @@ from pymongo.errors import ConnectionFailure, PyMongoError
 
 from django.conf import settings
 
+from core.logging_utils import err_tag
+
 logger = logging.getLogger("biometrics")
 
 
@@ -64,9 +66,8 @@ class BiometricService:
             except Exception as e:
                 logger.warning(f"Failed to create indexes: {e}")
 
-            return collection
+            logger.error("Biometric operation failed", extra={"err": err_tag(e)})
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Failed to get MongoDB collection", extra={"err": err_tag(e)})
             return None

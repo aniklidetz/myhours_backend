@@ -9,6 +9,8 @@ from pymongo.errors import ConnectionFailure, OperationFailure
 
 from django.conf import settings
 
+from core.logging_utils import err_tag, public_emp_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +54,6 @@ class MongoDBService:
             import sys
 
             if "test" not in sys.argv:
-                from core.logging_utils import err_tag
 
                 logger.error("Failed to connect to MongoDB", extra={"err": err_tag(e)})
             self.client = None
@@ -72,7 +73,6 @@ class MongoDBService:
             )
             logger.info("MongoDB indexes created successfully")
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to create indexes: {err_tag(e)}"
@@ -96,7 +96,6 @@ class MongoDBService:
             return None
 
         # DETAILED LOGGING for registration debugging (sanitized)
-        from core.logging_utils import public_emp_id
 
         logger.info(
             "🔍 MongoDB save_face_embeddings",
@@ -163,7 +162,6 @@ class MongoDBService:
                 return str(result.inserted_id)
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to save embeddings: {err_tag(e)}"
@@ -213,7 +211,6 @@ class MongoDBService:
             return None
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to retrieve embeddings: {err_tag(e)}"
@@ -278,7 +275,6 @@ class MongoDBService:
             return results
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to retrieve all embeddings: {err_tag(e)}"
@@ -315,7 +311,6 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to deactivate embeddings: {err_tag(e)}"
@@ -344,7 +339,6 @@ class MongoDBService:
             return False
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Failed to delete embeddings: {err_tag(e)}"
@@ -412,7 +406,6 @@ class MongoDBService:
             self.client.admin.command("ping")
             return True
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"MongoDB health check failed: {err_tag(e)}"

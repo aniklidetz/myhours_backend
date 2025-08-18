@@ -11,6 +11,8 @@ from PIL import Image
 
 from django.core.cache import cache
 
+from core.logging_utils import err_tag
+
 from .biometrics import BiometricService
 
 logger = logging.getLogger("biometrics")
@@ -32,7 +34,6 @@ class FaceRecognitionService:
                 logger.error("Failed to load face cascade classifier")
                 FACE_CASCADE = None
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Error initializing face cascade", extra={"err": err_tag(e)})
             FACE_CASCADE = None
@@ -60,7 +61,6 @@ class FaceRecognitionService:
 
             return image
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Error decoding image: {err_tag(e)}"
@@ -118,7 +118,6 @@ class FaceRecognitionService:
 
             return face_roi
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Error extracting face features: {err_tag(e)}"
@@ -171,7 +170,6 @@ class FaceRecognitionService:
 
             return document_id
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error(
                 f"Error saving employee face: {err_tag(e)}"
@@ -297,7 +295,6 @@ class FaceRecognitionService:
                 return None
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Error during face recognition", extra={"err": err_tag(e)})
             return None

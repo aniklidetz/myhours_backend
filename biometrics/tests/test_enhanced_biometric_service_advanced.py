@@ -128,7 +128,7 @@ class BiometricServiceRegisterTest(EnhancedBiometricServiceTest):
         with self.assertRaises(ValidationError) as cm:
             self.service.register_biometric(99999, self.sample_face_encodings)
 
-        self.assertIn("Employee 99999 not found or inactive", str(cm.exception))
+        self.assertIn("Employee not found or inactive", str(cm.exception))
 
     def test_register_biometric_inactive_employee(self):
         """Test registration with inactive employee"""
@@ -138,7 +138,7 @@ class BiometricServiceRegisterTest(EnhancedBiometricServiceTest):
             )
 
         self.assertIn(
-            f"Employee {self.inactive_employee.id} not found or inactive",
+            "Employee not found or inactive",
             str(cm.exception),
         )
 
@@ -231,15 +231,15 @@ class BiometricServiceRegisterTest(EnhancedBiometricServiceTest):
 class BiometricServiceVerifyTest(EnhancedBiometricServiceTest):
     """Test verify_biometric method"""
 
-    @patch("biometrics.services.enhanced_biometric_service.MongoBiometricRepository")
-    def test_verify_biometric_success(self, mock_repo_class):
+    def test_verify_biometric_success(self):
         """Test successful biometric verification"""
+        # Create service and mock its mongo_repo directly
+        service = EnhancedBiometricService()
+
         # Mock MongoDB repository
         mock_repo = Mock()
         mock_repo.find_matching_employee.return_value = (self.employee.id, 0.95)
-        mock_repo_class.return_value = mock_repo
-
-        service = EnhancedBiometricService()
+        service.mongo_repo = mock_repo
 
         test_encoding = [0.1] * 128
         result = service.verify_biometric(test_encoding)

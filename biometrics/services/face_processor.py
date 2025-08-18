@@ -11,6 +11,8 @@ from PIL import Image
 
 from django.conf import settings
 
+from core.logging_utils import err_tag
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,7 +70,6 @@ class FaceProcessor:
                     f"Base64 validation passed, test decode length: {len(test_decode)}"
                 )
             except Exception as e:
-                from core.logging_utils import err_tag
 
                 logger.error("Invalid base64 format", extra={"err": err_tag(e)})
                 return None
@@ -118,7 +119,6 @@ class FaceProcessor:
                 return None
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Failed to decode base64 image", extra={"err": err_tag(e)})
             logger.debug(f"Base64 string preview: {base64_string[:100]}...")
@@ -171,7 +171,6 @@ class FaceProcessor:
             return enhanced
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Image preprocessing failed", extra={"err": err_tag(e)})
             return image  # Return original if preprocessing fails
@@ -796,7 +795,6 @@ class FaceProcessor:
             return is_match, float(confidence)
 
         except Exception as e:
-            from core.logging_utils import err_tag
 
             logger.error("Failed to compare faces", extra={"err": err_tag(e)})
             return False, 0.0

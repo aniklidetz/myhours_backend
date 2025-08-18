@@ -423,7 +423,6 @@ def register_face(request):
 
         except Exception as e:
             # Other unexpected errors
-            from core.logging_utils import err_tag
 
             logger.error(
                 "Unexpected error during biometric registration",
@@ -921,7 +920,6 @@ def check_out(request):
                     }
 
             except CriticalBiometricError as e:
-                from core.logging_utils import err_tag
 
                 logger.error(
                     "Critical biometric error during check-out",
@@ -935,7 +933,6 @@ def check_out(request):
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
             except Exception as e:
-                from core.logging_utils import err_tag
 
                 logger.error(
                     "Unexpected error during check-out", extra={"err": err_tag(e)}
