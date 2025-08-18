@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from biometrics.models import BiometricProfile
 from biometrics.services.mongodb_repository import MongoBiometricRepository
+from core.logging_utils import err_tag, safe_biometric_subject, safe_extra
 from users.models import Employee
 
 logger = logging.getLogger("biometrics")
@@ -399,6 +400,8 @@ class EnhancedBiometricService:
                     ),
                 )  # lgtm[py/clear-text-logging-sensitive-data]
         except Exception as e:
+            from core.logging_utils import err_tag
+
             logger.error(
                 f"❌ PostgreSQL update failed: {err_tag(e)}",
                 extra=safe_extra(
@@ -613,7 +616,7 @@ class EnhancedBiometricService:
                 ),
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return {
-                "has_employee_id": bool(employee_id),
+                "employee_id": employee_id,
                 "is_consistent": False,
                 "error": err_tag(e),
                 "timestamp": timezone.now().isoformat(),

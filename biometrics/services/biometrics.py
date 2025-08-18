@@ -66,7 +66,7 @@ class BiometricService:
             except Exception as e:
                 logger.warning(f"Failed to create indexes: {e}")
 
-            logger.error("Biometric operation failed", extra={"err": err_tag(e)})
+            return collection
         except Exception as e:
 
             logger.error("Failed to get MongoDB collection", extra={"err": err_tag(e)})
