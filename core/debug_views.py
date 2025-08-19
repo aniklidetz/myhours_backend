@@ -5,6 +5,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from django.conf import settings
+
+from core.logging_utils import security_debug
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,20 +140,22 @@ def debug_worktime_auth(request):
 
     from core.logging_utils import redact_dict
 
+    # Only log in DEBUG mode to prevent leakage in production
     if settings.DEBUG:
         # Create safe debug structure with only aggregates and boolean flags
         safe_debug = {
+            "endpoint": getattr(request.resolver_match, "view_name", None),
             "has_auth": bool(request.META.get("HTTP_AUTHORIZATION")),
-            "ua_present": bool(request.META.get("HTTP_USER_AGENT")),
-            "qp_count": len(getattr(request, "GET", {}) or {}),
             "is_auth": bool(getattr(request.user, "is_authenticated", False)),
-            "rec_count": len(debug_info.get("recommendations", [])),
-            "has_staff_perm": debug_info.get("permissions", {}).get("is_staff", False),
-            "has_super_perm": debug_info.get("permissions", {}).get(
-                "is_superuser", False
+            "has_ua": bool(request.META.get("HTTP_USER_AGENT")),
+            "query_keys": (
+                sorted((request.query_params or {}).keys())
+                if hasattr(request, "query_params")
+                else []
             ),
+            "reco_count": len(debug_info.get("recommendations", [])),
         }
-        logger.info(
+        security_debug.info(
             "Worktime Auth Debug (safe)", extra={"meta": safe_debug}
         )  # lgtm[py/clear-text-logging-sensitive-data]
 

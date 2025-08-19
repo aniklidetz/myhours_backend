@@ -9,7 +9,7 @@ from pymongo.errors import ConnectionFailure, OperationFailure
 
 from django.conf import settings
 
-from core.logging_utils import err_tag, public_emp_id, safe_extra, safe_id
+from core.logging_utils import err_tag, hash_id, public_emp_id, safe_extra, safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -147,8 +147,10 @@ class MongoDBService:
                     logger.info(
                         "✅ Verified: document saved",
                         extra={
-                            "employee": public_emp_id(saved_doc.get("employee_id")),
-                            "has_embeddings": bool(saved_doc.get("embeddings")),
+                            "meta": {
+                                "has_employee_id": "employee_id" in saved_doc,
+                                "has_embeddings": bool(saved_doc.get("embeddings")),
+                            }
                         },
                     )  # lgtm[py/clear-text-logging-sensitive-data]
                 else:
@@ -266,8 +268,10 @@ class MongoDBService:
                 logger.debug(
                     "Active embedding set",
                     extra={
-                        "employee": public_emp_id(employee_id),
-                        "embeddings_count": len(embeddings),
+                        "meta": {
+                            "employee_hash": hash_id(employee_id),
+                            "embeddings_count": len(embeddings),
+                        }
                     },
                 )  # lgtm[py/clear-text-logging-sensitive-data]
             return results

@@ -304,7 +304,7 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
             self.assertEqual(
                 response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            mock_logger.exception.assert_called_once()
+            mock_logger.error.assert_called_once()
 
 
 class EnhancedEarningsViewSmokeTest(PayrollViewsSmokeTest):
@@ -907,7 +907,7 @@ class PayrollViewsExceptionHandlingSmokeTest(PayrollViewsSmokeTest):
             self.assertEqual(
                 response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            self.assertIn("error", response.data)
+            self.assertIn("detail", response.data)
 
     @patch("payroll.views.logger")
     def test_enhanced_earnings_calculation_error(self, mock_logger):

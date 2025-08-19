@@ -221,9 +221,11 @@ def payroll_list(request):
         return Response(payroll_data)
 
     except Exception as e:
-        logger.exception("Error in payroll_list")
+        from core.logging_utils import err_tag
+
+        logger.error(f"Error in payroll_list: {err_tag(e)}")
         return Response(
-            {"error": "Internal server error"},
+            {"detail": "Unable to process the request"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -455,7 +457,6 @@ def enhanced_earnings(request):
                     "employee": {
                         "id": target_employee.id,
                         "name": target_employee.get_full_name(),
-                        "email": target_employee.email,
                         "role": target_employee.role,
                     },
                     "calculation_type": "not_configured",
@@ -706,9 +707,11 @@ def enhanced_earnings(request):
         return Response(response_data)
 
     except Exception as e:
-        logger.exception("Error in enhanced_earnings")
+        from core.logging_utils import err_tag
+
+        logger.error(f"Error in enhanced_earnings: {err_tag(e)}")
         return Response(
-            {"error": "Internal server error"},
+            {"detail": "Unable to process the request"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -1153,7 +1156,6 @@ def backward_compatible_earnings(request):
                     "employee": {
                         "id": target_employee.id,
                         "name": target_employee.get_full_name(),
-                        "email": target_employee.email,
                         "role": target_employee.role,
                     },
                     "calculation_type": "not_configured",
@@ -1192,7 +1194,6 @@ def backward_compatible_earnings(request):
                     "employee": {
                         "id": target_employee.id,
                         "name": target_employee.get_full_name(),
-                        "email": target_employee.email,
                         "role": target_employee.role,
                     },
                     "calculation_type": salary.calculation_type,
@@ -1295,30 +1296,10 @@ def backward_compatible_earnings(request):
                 # Возвращаем безопасный fallback
                 return Response(
                     {
-                        "employee": {
-                            "id": target_employee.id,
-                            "name": target_employee.get_full_name(),
-                            "email": target_employee.email,
-                            "role": target_employee.role,
-                        },
-                        "calculation_type": salary.calculation_type,
-                        "currency": salary.currency,
-                        "date": current_date.isoformat(),
-                        "month": current_date.month,
-                        "year": current_date.year,
-                        "period": "monthly",
-                        "total_hours": 0,
-                        "total_salary": 0,
-                        "regular_hours": 0,
-                        "overtime_hours": 0,
-                        "holiday_hours": 0,
-                        "shabbat_hours": 0,
-                        "worked_days": 0,
-                        "compensatory_days": 0,
-                        "bonus": 0,
-                        "error": "Calculation failed",
-                        "message": f"Salary calculation failed: {str(calc_error)}",
-                    }
+                        "detail": "Unable to calculate enhanced earnings",
+                        "fallback": True,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # ИСПРАВЛЕНО: Улучшенный breakdown с корректными данными
@@ -1438,29 +1419,14 @@ def backward_compatible_earnings(request):
                     },
                 )
                 # Возвращаем безопасный fallback для месячных сотрудников
+                from core.logging_utils import err_tag
+
                 return Response(
                     {
-                        "employee": {
-                            "id": target_employee.id,
-                            "name": target_employee.get_full_name(),
-                            "email": target_employee.email,
-                            "role": target_employee.role,
-                        },
-                        "base_salary": float(salary.base_salary or 0),
-                        "calculation_type": salary.calculation_type,
-                        "currency": salary.currency,
-                        "date": current_date.isoformat(),
-                        "month": current_date.month,
-                        "year": current_date.year,
-                        "period": "monthly",
-                        "total_hours": 0,
-                        "total_salary": 0,
-                        "worked_days": 0,
-                        "compensatory_days": 0,
-                        "bonus": 0,
-                        "error": "Calculation failed",
-                        "message": f"Monthly salary calculation failed: {str(calc_error)}",
-                    }
+                        "detail": "Unable to calculate monthly salary",
+                        "error": err_tag(calc_error),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # ИСПРАВЛЕНО: Вычисляем реальные отработанные часы для месячных сотрудников
@@ -1543,9 +1509,11 @@ def backward_compatible_earnings(request):
         return Response(enhanced_response)
 
     except Exception as e:
-        logger.exception("Error in backward_compatible_earnings")
+        from core.logging_utils import err_tag
+
+        logger.error(f"Error in backward_compatible_earnings: {err_tag(e)}")
         return Response(
-            {"error": "Internal server error"},
+            {"detail": "Unable to process the request"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 

@@ -13,7 +13,7 @@ from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailur
 
 from django.conf import settings
 
-from core.logging_utils import err_tag, safe_extra, safe_id
+from core.logging_utils import err_tag, hash_id, redact, safe_extra, safe_id
 
 logger = logging.getLogger("biometrics")
 
@@ -207,7 +207,8 @@ class MongoBiometricRepository:
                 )  # lgtm[py/clear-text-logging-sensitive-data]
             else:
                 logger.warning(
-                    f"⚠️ No changes made for employee {employee_id}"
+                    "⚠️ No changes made for employee",
+                    extra={"meta": {"employee_hash": hash_id(employee_id)}},
                 )  # lgtm[py/clear-text-logging-sensitive-data]
                 return None
 
@@ -228,13 +229,13 @@ class MongoBiometricRepository:
         except DuplicateKeyError as e:
 
             logger.error(
-                f"❌ Duplicate key error for employee {employee_id}: {err_tag(e)}"
+                f"❌ Duplicate key error for employee: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
         except Exception as e:
 
             logger.error(
-                f"❌ Failed to save embeddings for employee {employee_id}: {err_tag(e)}"
+                f"❌ Failed to save embeddings: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
@@ -276,7 +277,7 @@ class MongoBiometricRepository:
         except Exception as e:
 
             logger.error(
-                f"Failed to retrieve embeddings for employee {employee_id}: {err_tag(e)}"
+                f"Failed to retrieve embeddings: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return None
 
@@ -354,7 +355,7 @@ class MongoBiometricRepository:
                     except Exception as e:
 
                         logger.warning(
-                            f"Failed to calculate distance for employee {employee_id}: {err_tag(e)}"
+                            f"Failed to calculate distance: {err_tag(e)}"
                         )  # lgtm[py/clear-text-logging-sensitive-data]
                         continue
 
@@ -399,7 +400,8 @@ class MongoBiometricRepository:
 
             if result.deleted_count > 0:
                 logger.info(
-                    f"✅ Embeddings deleted for employee {employee_id}"
+                    "✅ Embeddings deleted",
+                    extra={"meta": {"employee_hash": hash_id(employee_id)}},
                 )  # lgtm[py/clear-text-logging-sensitive-data]
                 return True
             else:
@@ -412,7 +414,7 @@ class MongoBiometricRepository:
         except Exception as e:
 
             logger.error(
-                f"❌ Failed to delete embeddings for employee {employee_id}: {err_tag(e)}"
+                f"❌ Failed to delete embeddings: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 
@@ -444,7 +446,8 @@ class MongoBiometricRepository:
 
             if result.modified_count > 0:
                 logger.info(
-                    f"✅ Embeddings deactivated for employee {employee_id}"
+                    "✅ Embeddings deactivated",
+                    extra={"meta": {"employee_hash": hash_id(employee_id)}},
                 )  # lgtm[py/clear-text-logging-sensitive-data]
                 return True
             else:
@@ -457,7 +460,7 @@ class MongoBiometricRepository:
         except Exception as e:
 
             logger.error(
-                f"❌ Failed to deactivate embeddings for employee {employee_id}: {err_tag(e)}"
+                f"❌ Failed to deactivate embeddings: {err_tag(e)}"
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return False
 

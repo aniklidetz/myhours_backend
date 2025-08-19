@@ -334,7 +334,10 @@ class MongoBiometricRepositorySaveTest(TestCase):
         result = self.repo.save_face_embeddings(123, embeddings)
 
         self.assertIsNone(result)
-        mock_logger.warning.assert_called_with("⚠️ No changes made for employee 123")
+        mock_logger.warning.assert_called_with(
+            "⚠️ No changes made for employee",
+            extra={"meta": {"employee_hash": "df5d468709753429"}},
+        )
 
     @patch("biometrics.services.mongodb_repository.logger")
     def test_save_face_embeddings_verification_failed_no_doc(self, mock_logger):
@@ -394,7 +397,7 @@ class MongoBiometricRepositorySaveTest(TestCase):
 
         self.assertIsNone(result)
         mock_logger.error.assert_called_with(
-            "❌ Duplicate key error for employee 123: Duplicate key"
+            "❌ Duplicate key error for employee: Duplicate key"
         )
 
     @patch("biometrics.services.mongodb_repository.logger")
@@ -407,7 +410,7 @@ class MongoBiometricRepositorySaveTest(TestCase):
 
         self.assertIsNone(result)
         mock_logger.error.assert_called_with(
-            "❌ Failed to save embeddings for employee 123: General error"
+            "❌ Failed to save embeddings: General error"
         )
 
 
@@ -468,7 +471,7 @@ class MongoBiometricRepositoryGetTest(TestCase):
 
         self.assertIsNone(result)
         mock_logger.error.assert_called_with(
-            "Failed to retrieve embeddings for employee 123: Query error"
+            "Failed to retrieve embeddings: Query error"
         )
 
     def test_get_all_employee_ids_success(self):
@@ -528,7 +531,10 @@ class MongoBiometricRepositoryDeleteTest(TestCase):
         result = self.repo.delete_embeddings(123)
 
         self.assertTrue(result)
-        mock_logger.info.assert_called_with("✅ Embeddings deleted for employee 123")
+        mock_logger.info.assert_called_with(
+            "✅ Embeddings deleted",
+            extra={"meta": {"employee_hash": "df5d468709753429"}},
+        )
 
     def test_delete_embeddings_no_deletion(self):
         """Test when no documents deleted"""
@@ -549,7 +555,7 @@ class MongoBiometricRepositoryDeleteTest(TestCase):
 
         self.assertFalse(result)
         mock_logger.error.assert_called_with(
-            "❌ Failed to delete embeddings for employee 123: Delete failed"
+            "❌ Failed to delete embeddings: Delete failed"
         )
 
     @patch("biometrics.services.mongodb_repository.logger")
@@ -586,7 +592,8 @@ class MongoBiometricRepositoryDeleteTest(TestCase):
 
         self.assertTrue(result)
         mock_logger.info.assert_called_with(
-            "✅ Embeddings deactivated for employee 123"
+            "✅ Embeddings deactivated",
+            extra={"meta": {"employee_hash": "df5d468709753429"}},
         )
 
     def test_deactivate_embeddings_no_modification(self):
@@ -608,7 +615,7 @@ class MongoBiometricRepositoryDeleteTest(TestCase):
 
         self.assertFalse(result)
         mock_logger.error.assert_called_with(
-            "❌ Failed to deactivate embeddings for employee 123: Update failed"
+            "❌ Failed to deactivate embeddings: Update failed"
         )
 
 

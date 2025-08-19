@@ -389,6 +389,47 @@ def safe_extra_kwargs(**kwargs):
     return out
 
 
+def hash_id(value: Union[int, str]) -> str:
+    """
+    Create a safe hash for employee/user IDs using blake2b
+
+    Args:
+        value: ID to hash (int or str)
+
+    Returns:
+        Hashed ID as hex string
+    """
+    from hashlib import blake2b
+
+    h = blake2b(digest_size=8)
+    h.update(str(value).encode())
+    return h.hexdigest()
+
+
+def redact(val):
+    """
+    Recursively redact sensitive values from any data structure
+
+    Args:
+        val: Value to redact (dict, list, tuple, str, etc.)
+
+    Returns:
+        Redacted version preserving structure but hiding sensitive data
+    """
+    if isinstance(val, dict):
+        return {
+            k: ("***" if k.lower() in REDACT_KEYS else redact(v))
+            for k, v in val.items()
+        }
+    if isinstance(val, (list, tuple)):
+        return [redact(v) for v in val]
+    if isinstance(val, (bytes, bytearray)):
+        return f"<{len(val)} bytes>"
+    if isinstance(val, str) and len(val) > 64:
+        return f"<{len(val)} chars>"
+    return val
+
+
 def redact_dict(value):
     """
     Recursively redact sensitive values from dictionaries and other structures
@@ -510,6 +551,13 @@ def safe_biometric_subject(obj, role="subject") -> dict:
             return {"role": role, "has_id": False}
     except Exception:
         return {"role": role, "has_id": False}
+
+
+# Create security debug logger with NullHandler in production
+security_debug = logging.getLogger("security_debug")
+if not any(isinstance(h, logging.NullHandler) for h in security_debug.handlers):
+    # Add NullHandler by default (can be overridden in settings)
+    security_debug.addHandler(logging.NullHandler())
 
 
 # Usage examples:
