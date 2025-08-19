@@ -203,8 +203,9 @@ def payroll_list(request):
                 )
 
             except Exception as e:
+                from core.logging_utils import err_tag
                 logger.error(
-                    f"Optimized service failed, falling back to legacy calculation: {e}"
+                    f"Optimized service failed, falling back to legacy calculation: {err_tag(e)}"
                 )
                 # Fallback to legacy logic
                 payroll_data = _legacy_payroll_calculation(
@@ -1421,10 +1422,10 @@ def backward_compatible_earnings(request):
                 # Возвращаем безопасный fallback для месячных сотрудников
                 from core.logging_utils import err_tag
 
+                logger.error(f"Monthly salary calculation failed: {err_tag(calc_error)}")
                 return Response(
                     {
                         "detail": "Unable to calculate monthly salary",
-                        "error": err_tag(calc_error),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
