@@ -71,32 +71,37 @@ def payroll_list(request):
         )
 
         employee_profile = get_user_employee_profile(request.user)
-        if employee_profile:
-            user_role = employee_profile.role
-            logger.info("User role checked", extra={"role": user_role})
-
-            if user_role in ["admin", "accountant"]:
-                # Админ - получаем всех сотрудников с зарплатами
-                employees = Employee.objects.filter(
-                    salary_info__isnull=False
-                ).select_related("salary_info")
-                logger.info(
-                    "Admin payroll view", extra={"employees_count": employees.count()}
-                )
-            else:
-                # Обычный сотрудник - видит только свои данные
-                employees = Employee.objects.filter(
-                    id=employee_profile.id, salary_info__isnull=False
-                ).select_related("salary_info")
-                logger.info(
-                    "Employee payroll view", extra={"employee_id": employee_profile.id}
-                )
-
         if not employee_profile:
             logger.warning(f"User {request.user.username} has no employee profile")
             return Response(
                 {"error": "User does not have an employee profile"},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        user_role = employee_profile.role
+        logger.info("User role checked", extra={"role": user_role})
+
+        if user_role in ["admin", "accountant"]:
+            # Админ - получаем всех сотрудников с зарплатами
+            employees = (
+                Employee.objects.filter(salaries__is_active=True)
+                .prefetch_related("salaries")
+                .distinct()
+            )
+            logger.info(
+                "Admin payroll view", extra={"employees_count": employees.count()}
+            )
+        else:
+            # Обычный сотрудник - видит только свои данные
+            employees = (
+                Employee.objects.filter(
+                    id=employee_profile.id, salaries__is_active=True
+                )
+                .prefetch_related("salaries")
+                .distinct()
+            )
+            logger.info(
+                "Employee payroll view", extra={"employee_id": employee_profile.id}
             )
 
         # Получаем год и месяц из параметров
@@ -128,9 +133,13 @@ def payroll_list(request):
         from .models import MonthlyPayrollSummary
 
         # Получаем предварительно рассчитанные данные из БД
-        existing_summaries = MonthlyPayrollSummary.objects.filter(
-            employee__in=employees, year=current_date.year, month=current_date.month
-        ).select_related("employee", "employee__salary_info")
+        existing_summaries = (
+            MonthlyPayrollSummary.objects.filter(
+                employee__in=employees, year=current_date.year, month=current_date.month
+            )
+            .select_related("employee")
+            .prefetch_related("employee__salaries")
+        )
 
         # Создаем словарь для быстрого доступа
         summary_dict = {summary.employee_id: summary for summary in existing_summaries}
@@ -183,7 +192,7 @@ def payroll_list(request):
                     employee_ids = [emp.id for emp in employees]
                     employees_queryset = Employee.objects.filter(
                         id__in=employee_ids
-                    ).select_related("salary_info")
+                    ).prefetch_related("salaries")
                 else:
                     employees_queryset = employees
 
@@ -203,9 +212,8 @@ def payroll_list(request):
                 )
 
             except Exception as e:
-                from core.logging_utils import err_tag
                 logger.error(
-                    f"Optimized service failed, falling back to legacy calculation: {err_tag(e)}"
+                    f"Optimized service failed, falling back to legacy calculation: {e}"
                 )
                 # Fallback to legacy logic
                 payroll_data = _legacy_payroll_calculation(
@@ -431,10 +439,9 @@ def enhanced_earnings(request):
         else:
             current_date = date.today()
 
-        try:
-            salary = target_employee.salary_info
-        except Salary.DoesNotExist:
-            # No salary configuration - return data with zero salary but show hours
+        salary = target_employee.salary_info
+        if salary is None:
+            # No active salary configuration - return data with zero salary but show hours
             import calendar
 
             from worktime.models import WorkLog
@@ -1014,14 +1021,20 @@ def monthly_payroll_summary(request):
         # Определяем какие данные запрашиваются
         if employee_profile.role in ["accountant", "admin"] or request.user.is_staff:
             # Админ/бухгалтер может видеть всех
-            summaries = MonthlyPayrollSummary.objects.filter(
-                year=year, month=month
-            ).select_related("employee", "employee__salary_info")
+            summaries = (
+                MonthlyPayrollSummary.objects.filter(year=year, month=month)
+                .select_related("employee")
+                .prefetch_related("employee__salaries")
+            )
         else:
             # Обычный сотрудник видит только себя
-            summaries = MonthlyPayrollSummary.objects.filter(
-                employee=employee_profile, year=year, month=month
-            ).select_related("employee", "employee__salary_info")
+            summaries = (
+                MonthlyPayrollSummary.objects.filter(
+                    employee=employee_profile, year=year, month=month
+                )
+                .select_related("employee")
+                .prefetch_related("employee__salaries")
+            )
 
         # Формируем ответ
         payroll_data = []
@@ -1130,10 +1143,9 @@ def backward_compatible_earnings(request):
             # Нет параметров, используем текущую дату
             current_date = date.today()
 
-        try:
-            salary = target_employee.salary_info
-        except Salary.DoesNotExist:
-            # Нет конфигурации зарплаты - возвращаем данные с нулевой зарплатой, но показываем часы
+        salary = target_employee.salary_info
+        if salary is None:
+            # Нет активной конфигурации зарплаты - возвращаем данные с нулевой зарплатой, но показываем часы
             import calendar
 
             from worktime.models import WorkLog
@@ -1422,10 +1434,10 @@ def backward_compatible_earnings(request):
                 # Возвращаем безопасный fallback для месячных сотрудников
                 from core.logging_utils import err_tag
 
-                logger.error(f"Monthly salary calculation failed: {err_tag(calc_error)}")
                 return Response(
                     {
                         "detail": "Unable to calculate monthly salary",
+                        "error": err_tag(calc_error),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )

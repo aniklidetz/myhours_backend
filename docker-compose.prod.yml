@@ -1,0 +1,90 @@
+# Production Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  # Django Web Application - Production Configuration
+  web:
+    environment:
+      # Override development settings for production
+      - DEBUG=False
+      - DJANGO_DEBUG=False
+      
+      # HTTPS Security Settings (CRITICAL FOR PRODUCTION)
+      - SECURE_SSL_REDIRECT=true
+      - SESSION_COOKIE_SECURE=true
+      - CSRF_COOKIE_SECURE=true
+      - USE_X_FORWARDED_PROTO=true
+      
+      # Production hostnames (replace with your actual domains)
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-yourdomain.com,www.yourdomain.com,api.yourdomain.com}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-https://yourdomain.com,https://www.yourdomain.com,https://api.yourdomain.com}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://yourdomain.com,https://www.yourdomain.com,https://api.yourdomain.com}
+      
+      # Database connections (use service names for Docker network)
+      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MONGO_CONNECTION_STRING=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/biometrics_db?authSource=biometrics_db
+      
+      # Disable biometric mocking in production
+      - ENABLE_BIOMETRIC_MOCK=false
+      
+      # Production logging level
+      - DJANGO_LOG_LEVEL=INFO
+    
+    # Remove port mapping for production (handled by reverse proxy)
+    ports: []
+    
+    # Production command with Gunicorn
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn myhours.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+    
+    # Health check for production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Celery Worker - Production Configuration  
+  celery:
+    environment:
+      # Match web service environment
+      - DEBUG=False
+      - DJANGO_DEBUG=False
+      - SECURE_SSL_REDIRECT=true
+      - SESSION_COOKIE_SECURE=true
+      - CSRF_COOKIE_SECURE=true
+      - ENABLE_BIOMETRIC_MOCK=false
+      - DJANGO_LOG_LEVEL=INFO
+      
+      # Database connections
+      - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MONGO_CONNECTION_STRING=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/biometrics_db?authSource=biometrics_db
+
+  # Add a reverse proxy (Nginx) for HTTPS termination
+  nginx:
+    image: nginx:alpine
+    container_name: myhours_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro  # SSL certificates
+      - ./staticfiles:/var/www/static:ro
+      - ./media:/var/www/media:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

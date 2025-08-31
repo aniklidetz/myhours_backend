@@ -842,8 +842,6 @@ class FaceProcessor:
                     known_encodings.append(np.array(embedding["vector"]))
 
             if not known_encodings:
-                from django.conf import settings
-
                 if settings.DEBUG:
                     logger.debug(
                         "FaceProcessor: no encodings found",

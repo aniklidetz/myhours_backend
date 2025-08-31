@@ -590,7 +590,7 @@ class EmployeeQueryTest(TestCase):
                 )
 
         # Test select_related for forward foreign keys
-        employees_with_salary = Employee.objects.select_related("salary_info").filter(
+        employees_with_salary = Employee.objects.select_related("user").filter(
             is_active=True
         )
 

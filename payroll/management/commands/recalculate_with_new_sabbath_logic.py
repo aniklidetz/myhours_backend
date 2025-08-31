@@ -46,7 +46,8 @@ class Command(BaseCommand):
         # Find all daily calculations
         calculations = (
             DailyPayrollCalculation.objects.filter(**query_filter)
-            .select_related("employee", "employee__salary_info")
+            .select_related("employee")
+            .prefetch_related("employee__salaries")
             .order_by("employee", "work_date")
         )
 

@@ -14,7 +14,11 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
-import pytest
+
+try:
+    import pytest
+except ImportError:
+    pytest = None
 from pymongo.errors import ConnectionFailure, PyMongoError
 
 from django.test import TestCase
@@ -27,7 +31,6 @@ except ImportError:
     safe_log_data = lambda x, **kwargs: str(x) if x is not None else "None"
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class SafeLogDataTest(TestCase):
     """Test safe_log_data utility function"""
 
@@ -62,7 +65,6 @@ class SafeLogDataTest(TestCase):
         self.assertEqual(result, "[1, 2, 3...")
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class BiometricServiceGetCollectionTest(TestCase):
     """Test BiometricService.get_collection method"""
 
@@ -154,7 +156,6 @@ class BiometricServiceGetCollectionTest(TestCase):
         self.assertIsNone(result)
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class BiometricServiceSaveFaceEncodingTest(TestCase):
     """Test BiometricService.save_face_encoding method"""
 
@@ -258,7 +259,6 @@ class BiometricServiceSaveFaceEncodingTest(TestCase):
         self.assertIsNone(result)
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class BiometricServiceGetEmployeeFaceEncodingsTest(TestCase):
     """Test BiometricService.get_employee_face_encodings method"""
 
@@ -353,7 +353,6 @@ class BiometricServiceGetEmployeeFaceEncodingsTest(TestCase):
         self.assertEqual(result, [])
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class BiometricServiceDeleteEmployeeFaceEncodingsTest(TestCase):
     """Test BiometricService.delete_employee_face_encodings method"""
 
@@ -434,7 +433,6 @@ class BiometricServiceDeleteEmployeeFaceEncodingsTest(TestCase):
         self.assertFalse(result)
 
 
-@pytest.mark.skipif(BiometricService is None, reason="BiometricService not available")
 class BiometricServiceIntegrationTest(TestCase):
     """Integration tests for BiometricService"""
 

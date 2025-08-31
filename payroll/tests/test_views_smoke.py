@@ -270,7 +270,12 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
         mock_summary.worked_days = 22
         mock_summary.calculation_details = {"work_sessions_count": 22}
 
-        mock_filter.return_value.select_related.return_value = [mock_summary]
+        # Setup the mock chain properly
+        mock_queryset = MagicMock()
+        mock_queryset.select_related.return_value.prefetch_related.return_value = [
+            mock_summary
+        ]
+        mock_filter.return_value = mock_queryset
 
         url = reverse("payroll-list")
         response = self.admin_client.get(url)

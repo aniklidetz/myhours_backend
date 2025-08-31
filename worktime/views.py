@@ -31,7 +31,7 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         queryset = (
             WorkLog.objects.select_related("employee__user")  # Employee and linked User
             .prefetch_related(
-                "employee__salary_info",  # Salary information
+                "employee__salaries",  # Salary information (ForeignKey relation)
                 "employee__invitation",  # Employee invitation
                 "employee__biometric_profile",  # Biometric profile (OneToOneField)
             )
@@ -183,7 +183,7 @@ class WorkLogViewSet(viewsets.ModelViewSet):
         active_sessions = (
             WorkLog.objects.select_related("employee__user")  # Employee and linked User
             .prefetch_related(
-                "employee__salary_info",  # Salary information
+                "employee__salaries",  # Salary information (ForeignKey relation)
                 "employee__invitation",  # Employee invitation
                 "employee__biometric_profile",  # Biometric profile (OneToOneField)
             )

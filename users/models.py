@@ -219,11 +219,11 @@ class Employee(models.Model):
 
     @property
     def salary_info(self):
-        """Get salary information for this employee"""
+        """Get active salary information for this employee"""
         from payroll.models import Salary
 
         try:
-            return Salary.objects.get(employee=self)
+            return Salary.objects.get(employee=self, is_active=True)
         except Salary.DoesNotExist:
             return None
 

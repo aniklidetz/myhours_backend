@@ -39,14 +39,16 @@ class Command(BaseCommand):
             query_filter["employee_id"] = options["employee_id"]
 
         if options["calculation_type"] != "all":
-            query_filter["employee__salary_info__calculation_type"] = options[
+            query_filter["employee__salaries__calculation_type"] = options[
                 "calculation_type"
             ]
+            query_filter["employee__salaries__is_active"] = True
 
         # Find all daily calculations
         calculations = (
             DailyPayrollCalculation.objects.filter(**query_filter)
-            .select_related("employee", "employee__salary_info")
+            .select_related("employee")
+            .prefetch_related("employee__salaries")
             .order_by("employee", "work_date")
         )
 

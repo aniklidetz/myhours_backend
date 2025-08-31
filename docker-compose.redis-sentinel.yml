@@ -1,0 +1,196 @@
+# Redis High Availability setup with Sentinel
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.redis-sentinel.yml up
+
+services:
+  # Redis Master
+  redis-master:
+    image: redis:7-alpine
+    container_name: myhours_redis_master
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6379
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --masterauth ${REDIS_PASSWORD}
+      --replica-announce-ip redis-master
+      --replica-announce-port 6379
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_master_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+        reservations:
+          memory: 400M
+
+  # Redis Slave 1
+  redis-slave-1:
+    image: redis:7-alpine
+    container_name: myhours_redis_slave_1
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6379
+      --replicaof redis-master 6379
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --masterauth ${REDIS_PASSWORD}
+      --replica-announce-ip redis-slave-1
+      --replica-announce-port 6379
+      --slave-read-only yes
+    volumes:
+      - redis_slave_1_data:/data
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+        reservations:
+          memory: 400M
+
+  # Redis Slave 2
+  redis-slave-2:
+    image: redis:7-alpine
+    container_name: myhours_redis_slave_2
+    restart: unless-stopped
+    command: >
+      redis-server
+      --port 6379
+      --replicaof redis-master 6379
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --masterauth ${REDIS_PASSWORD}
+      --replica-announce-ip redis-slave-2
+      --replica-announce-port 6379
+      --slave-read-only yes
+    volumes:
+      - redis_slave_2_data:/data
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+        reservations:
+          memory: 400M
+
+  # Redis Sentinel 1
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: myhours_redis_sentinel_1
+    restart: unless-stopped
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis-config/sentinel.conf:/etc/redis/sentinel.conf
+    ports:
+      - "26379:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-slave-1:
+        condition: service_healthy
+      redis-slave-2:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Redis Sentinel 2
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: myhours_redis_sentinel_2
+    restart: unless-stopped
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis-config/sentinel.conf:/etc/redis/sentinel.conf
+    ports:
+      - "26380:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-slave-1:
+        condition: service_healthy
+      redis-slave-2:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Redis Sentinel 3
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: myhours_redis_sentinel_3
+    restart: unless-stopped
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis-config/sentinel.conf:/etc/redis/sentinel.conf
+    ports:
+      - "26381:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-slave-1:
+        condition: service_healthy
+      redis-slave-2:
+        condition: service_healthy
+    networks:
+      - myhours_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+# Note: The basic Redis service from docker-compose.yml is automatically 
+# overridden by the Redis HA services above when using both compose files
+
+volumes:
+  redis_master_data:
+    driver: local
+  redis_slave_1_data:
+    driver: local
+  redis_slave_2_data:
+    driver: local

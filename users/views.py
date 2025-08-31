@@ -46,7 +46,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     """Endpoints for employee management with proper security"""
 
     queryset = (
-        Employee.objects.select_related("salary_info")
+        Employee.objects.select_related("user", "invitation")
         .all()
         .order_by("last_name", "first_name")
     )

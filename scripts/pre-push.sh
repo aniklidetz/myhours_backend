@@ -51,7 +51,7 @@ fi
 # Check database connectivity and authentication
 if command -v pg_isready >/dev/null 2>&1; then
   if ! pg_isready -d "$DATABASE_URL" >/dev/null 2>&1; then
-    echo "[pre-push] ❌ PostgreSQL server not available at $DATABASE_URL"
+    echo "[pre-push]  PostgreSQL server not available at $DATABASE_URL"
     echo "           Start your database or check DATABASE_URL in .env.test"
     exit 1
   fi
@@ -60,7 +60,7 @@ if command -v pg_isready >/dev/null 2>&1; then
   # We don't test the target database since pytest --create-db will create it
   postgres_url=$(echo "$DATABASE_URL" | sed 's|/[^/]*$|/postgres|')
   if ! echo "SELECT 1;" | psql "$postgres_url" >/dev/null 2>&1; then
-    echo "[pre-push] ❌ PostgreSQL authentication failed for $postgres_url"
+    echo "[pre-push]  PostgreSQL authentication failed for $postgres_url"
     echo "           Check your database credentials in .env.test"
     echo "           Current DATABASE_URL: $DATABASE_URL"
     echo ""
@@ -69,7 +69,7 @@ if command -v pg_isready >/dev/null 2>&1; then
     echo "           - Or set up postgres user password: psql -c \"ALTER ROLE postgres WITH PASSWORD 'postgres';\""
     exit 1
   fi
-  echo "[pre-push] ✅ Database connectivity and authentication verified"
+  echo "[pre-push] Database connectivity and authentication verified"
 else
   echo "[pre-push] ⚠️ pg_isready not found - skipping database check"
 fi
@@ -82,7 +82,7 @@ if [[ -f "manage.py" ]]; then
   echo "[pre-push] Checking for missing migrations..."
   ${RUN}python manage.py makemigrations --check --dry-run --settings="$DJANGO_SETTINGS_MODULE"
   
-  echo "[pre-push] ✅ Django checks passed"
+  echo "[pre-push] Django checks passed"
 else
   echo "[pre-push] ⚠️ No manage.py found - skipping Django checks"
 fi
@@ -91,7 +91,7 @@ fi
 if [[ "${FULL:-1}" == "1" ]]; then
   # Full run with coverage
   coverage_threshold="${COV:-50}"
-  echo "[pre-push] 🧪 Running FULL test suite with coverage (threshold: ${coverage_threshold}%)"
+  echo "[pre-push] Running FULL test suite with coverage (threshold: ${coverage_threshold}%)"
   
   ${RUN}pytest \
     --cov=. \
@@ -101,7 +101,7 @@ if [[ "${FULL:-1}" == "1" ]]; then
     --tb=short \
     -q
   
-  echo "[pre-push] ✅ Full test suite passed with adequate coverage"
+  echo "[pre-push] Full test suite passed with adequate coverage"
 else
   # Quick run without coverage
   echo "[pre-push] ⚡ Running QUICK test suite (no coverage)"
@@ -112,12 +112,12 @@ else
     --maxfail=3 \
     --durations=5
   
-  echo "[pre-push] ✅ Quick test suite passed"
+  echo "[pre-push] Quick test suite passed"
 fi
 
 # Success summary
 echo ""
-echo "[pre-push] 🎉 All checks passed! Ready to push."
+echo "[pre-push] All checks passed! Ready to push."
 echo "[pre-push]"
 echo "[pre-push] Tip: Use FULL=0 for faster local testing"
 echo "[pre-push]      Use SKIP_PRE_PUSH=1 to skip checks entirely"

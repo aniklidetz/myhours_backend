@@ -6,7 +6,11 @@ Focus on achieving 70%+ coverage for critical uncovered branches
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
-import pytest
+
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 from django.test import TestCase
 

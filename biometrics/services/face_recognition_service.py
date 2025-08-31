@@ -233,7 +233,11 @@ class FaceRecognitionService:
 
             # Flatten and normalize for comparison
             input_face = face_roi.flatten().astype(np.float32)
-            input_face = input_face / np.linalg.norm(input_face)
+            norm = np.linalg.norm(input_face)
+            if norm == 0:
+                logger.error("Cannot normalize face vector - zero norm detected")
+                return None
+            input_face = input_face / norm
 
             # Get stored faces
             stored_faces = BiometricService.get_employee_face_encodings()

@@ -28,9 +28,14 @@ class Command(BaseCommand):
         self.stdout.write("Recalculating daily payroll for monthly employees...")
 
         # Find all daily calculations for monthly employees
-        query = DailyPayrollCalculation.objects.filter(
-            employee__salary_info__calculation_type="monthly"
-        ).select_related("employee", "employee__salary_info")
+        query = (
+            DailyPayrollCalculation.objects.filter(
+                employee__salaries__is_active=True,
+                employee__salaries__calculation_type="monthly",
+            )
+            .select_related("employee")
+            .prefetch_related("employee__salaries")
+        )
 
         # Filter by month and year if provided
         if options.get("month") and options.get("year"):

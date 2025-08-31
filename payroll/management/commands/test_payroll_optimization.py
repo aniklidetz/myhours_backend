@@ -60,9 +60,11 @@ class Command(BaseCommand):
             )
         )
 
-        # Get employees with salary info
-        employees = Employee.objects.filter(salary_info__isnull=False).select_related(
-            "salary_info"
+        # Get employees with salary info (active salary)
+        employees = (
+            Employee.objects.filter(salaries__is_active=True)
+            .distinct()
+            .prefetch_related("salaries")
         )
 
         if employee_limit:

@@ -167,7 +167,7 @@ class OptimizedServiceBulkCalculationTest(OptimizedPayrollServiceTest):
         }
 
         # Get employees with salary info
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id__in=[self.employee1.id, self.employee2.id]
         )
 
@@ -199,7 +199,7 @@ class OptimizedServiceBulkCalculationTest(OptimizedPayrollServiceTest):
             "Cache error"
         )
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -233,7 +233,7 @@ class OptimizedServiceBulkCalculationTest(OptimizedPayrollServiceTest):
             worked_days=20,
         )
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -270,7 +270,7 @@ class OptimizedServiceSingleEmployeeTest(OptimizedPayrollServiceTest):
 
         # This is a private method, but we can test it exists and works
         # through the public bulk calculation method
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -318,7 +318,7 @@ class OptimizedServiceHelperMethodsTest(OptimizedPayrollServiceTest):
         with patch("payroll.optimized_service.enhanced_payroll_cache") as mock_cache:
             mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
-            employees = Employee.objects.select_related("salary_info").filter(
+            employees = Employee.objects.prefetch_related("salaries").filter(
                 id=self.employee1.id
             )
 
@@ -352,7 +352,7 @@ class OptimizedServiceHelperMethodsTest(OptimizedPayrollServiceTest):
         with patch("payroll.optimized_service.enhanced_payroll_cache") as mock_cache:
             mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
-            employees = Employee.objects.select_related("salary_info").filter(
+            employees = Employee.objects.prefetch_related("salaries").filter(
                 id=employee_no_salary.id
             )
 
@@ -379,7 +379,7 @@ class OptimizedServicePerformanceTest(OptimizedPayrollServiceTest):
         mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
         # Create multiple employees
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id__in=[self.employee1.id, self.employee2.id]
         )
 
@@ -414,7 +414,7 @@ class OptimizedServicePerformanceTest(OptimizedPayrollServiceTest):
             "2025-02-01": {"name": "Test Holiday", "is_holiday": True}
         }
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -433,7 +433,7 @@ class OptimizedServicePerformanceTest(OptimizedPayrollServiceTest):
         # Mock cache miss (returns None or empty)
         mock_cache.get_holidays_with_shabbat_times.return_value = None
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -457,7 +457,7 @@ class OptimizedServiceErrorHandlingTest(OptimizedPayrollServiceTest):
         mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
         # Use employees that might cause calculation issues
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id__in=[self.employee1.id, self.employee2.id]
         )
 
@@ -487,7 +487,7 @@ class OptimizedServiceErrorHandlingTest(OptimizedPayrollServiceTest):
         # Mock summary loading to raise exception
         mock_summary_filter.side_effect = Exception("Database error")
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -525,7 +525,7 @@ class OptimizedServiceEdgeCasesTest(OptimizedPayrollServiceTest):
 
         mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -542,7 +542,7 @@ class OptimizedServiceEdgeCasesTest(OptimizedPayrollServiceTest):
 
         mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 
@@ -561,7 +561,7 @@ class OptimizedServiceEdgeCasesTest(OptimizedPayrollServiceTest):
         mock_cache.get_holidays_with_shabbat_times.return_value = {}
 
         # Multiple calculation runs
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee1.id
         )
 

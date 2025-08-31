@@ -59,7 +59,7 @@ class OptimizedPayrollService:
         3. Bulk processing of results
 
         Args:
-            employees_queryset: Employee QuerySet with select_related('salary_info')
+            employees_queryset: Employee QuerySet with prefetch_related('salaries')
             year, month: Calculation period
 
         Returns:

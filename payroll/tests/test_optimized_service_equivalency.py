@@ -252,7 +252,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
 
         # Test optimized service
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -282,7 +282,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -310,7 +310,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -338,7 +338,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -366,7 +366,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -394,7 +394,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -422,7 +422,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -450,7 +450,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -481,7 +481,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -526,7 +526,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
 
         # Test optimized service
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.hourly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -568,7 +568,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
 
         # Test optimized service
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.monthly_employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -609,7 +609,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
 
         # Test optimized bulk service
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id__in=[self.hourly_employee.id, self.monthly_employee.id]
         )
         bulk_results = optimized_service.calculate_bulk_payroll(
@@ -711,7 +711,7 @@ class OptimizedServiceEquivalencyEdgeCasesTest(TestCase):
         # No work logs created - should both return zero
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(
@@ -747,7 +747,7 @@ class OptimizedServiceEquivalencyEdgeCasesTest(TestCase):
         )
 
         optimized_service = OptimizedPayrollService(fast_mode=True)
-        employees = Employee.objects.select_related("salary_info").filter(
+        employees = Employee.objects.prefetch_related("salaries").filter(
             id=self.employee.id
         )
         optimized_results = optimized_service.calculate_bulk_payroll(

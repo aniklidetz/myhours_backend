@@ -164,9 +164,8 @@ class WorkLog(models.Model):
                     {"check_out": "Work session cannot exceed 16 hours"}
                 )
 
-        # Skip overlap validation during tests to avoid complications
-        if "test" not in sys.argv:
-            self._validate_no_overlaps()
+        # Run overlap validation (can be disabled for specific tests if needed)
+        self._validate_no_overlaps()
 
     def _validate_no_overlaps(self):
         """Ensure no overlapping work sessions for the same employee"""

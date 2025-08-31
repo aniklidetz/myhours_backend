@@ -352,7 +352,18 @@ FEATURE_FLAGS = {
 
 # Redis/Cache/Session configuration moved below
 
-# Celery configuration moved below
+# Celery Configuration
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = config(
+    "CELERY_RESULT_BACKEND", default="redis://localhost:6379/0"
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+CELERY_TASK_DEFAULT_RETRY_DELAY = 60
+CELERY_TASK_DEFAULT_MAX_RETRIES = 3
 
 # DRF Spectacular settings for OpenAPI
 SPECTACULAR_SETTINGS = {

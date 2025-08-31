@@ -195,7 +195,7 @@ def register_face(request):
     # MOCK MODE SHORT-CIRCUIT - after basic validation
     if getattr(settings, "ENABLE_BIOMETRIC_MOCK", False):
         logger.critical(
-            "🚨 USING BIOMETRIC MOCK MODE FOR REGISTRATION - NOT FOR PRODUCTION!"
+            "USING BIOMETRIC MOCK MODE FOR REGISTRATION - NOT FOR PRODUCTION!"
         )
 
         # Get employee from request data or default to authenticated user's employee
@@ -233,7 +233,7 @@ def register_face(request):
     images = [image]  # Convert single image to list for processor
 
     # DETAILED LOGGING for registration debugging (without PII)
-    logger.info("🔍 Face registration debug:")
+    logger.info("Face registration debug:")
     logger.info(
         "Biometrics: registration request received",
         extra={
@@ -286,7 +286,7 @@ def register_face(request):
         use_mock = getattr(settings, "ENABLE_BIOMETRIC_MOCK", False)
 
         if use_mock:
-            logger.critical("🚨 USING BIOMETRIC MOCK MODE - NOT FOR PRODUCTION!")
+            logger.critical("USING BIOMETRIC MOCK MODE - NOT FOR PRODUCTION!")
 
             # Create mock encodings for testing
             mock_encodings = [np.random.rand(128).tolist()]  # 128-dimensional vector

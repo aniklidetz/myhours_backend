@@ -87,6 +87,16 @@ class EnhancedPayrollCalculationService:
         self.year = year
         self.month = month
         self.salary = employee.salary_info
+
+        # Validate that employee has an active salary
+        if self.salary is None:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                f"Active salary is required for employee {employee.get_full_name()} "
+                f"(ID: {employee.id}) to calculate payroll for {year}-{month:02d}"
+            )
+
         self.calculation_errors = []
         self.warnings = []
         self.fast_mode = fast_mode

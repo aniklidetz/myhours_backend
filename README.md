@@ -1,5 +1,5 @@
 
-# 🚀 MyHours - Employee Time Tracking System
+# MyHours - Employee Time Tracking System
 
 Complete biometric-enabled time tracking system with Docker DevOps deployment.
 
@@ -17,16 +17,16 @@ That's it! This single command will:
 - Seed test data
 - Show you all service URLs
 
-## 🌐 Access Your Application
+## Access Your Application
 
 After `make setup` completes:
 
-- **🌐 Web App**: http://localhost:8000
-- **👑 Admin Panel**: http://localhost:8000/admin/ (`admin` / `admin123`)
-- **📚 API Docs**: http://localhost:8000/api/schema/swagger/
-- **💓 Health Check**: http://localhost:8000/health/
+- **Web App**: http://localhost:8000
+- **Admin Panel**: http://localhost:8000/admin/ (`admin` / `admin123`)
+- **API Docs**: http://localhost:8000/api/schema/swagger/
+- **Health Check**: http://localhost:8000/health/
 
-## 🐳 DevOps Commands
+## DevOps Commands
 
 ```bash
 make up              # Start all services
@@ -38,7 +38,7 @@ make clean           # Reset everything
 make backup          # Backup databases
 ```
 
-## 🏗️ Manual Setup (Alternative)
+## Manual Setup (Alternative)
 
 If you prefer manual setup:
 
@@ -56,22 +56,22 @@ make migrate
 make superuser
 ```
 
-### 🏗️ Architecture
+### Architecture
 
-users: Employee management  
-worktime: Time tracking with geolocation  
-payroll: Israeli labor law compliant calculations  
-biometrics: Face recognition authentication  
-integrations: Holiday calendar services  
+- **users**: Employee management  
+- **worktime**: Time tracking with geolocation  
+- **payroll**: Israeli labor law compliant calculations  
+- **biometrics**: Face recognition authentication  
+- **integrations**: Holiday calendar services  
 
-### 🛡️ Security Features
+### Security Features
 
-Environment-based configuration  
-Secure password storage  
-CORS enabled for React Native  
-Input validation and sanitization  
+- Environment-based configuration  
+- Secure password storage  
+- CORS enabled for React Native  
+- Input validation and sanitization  
 
-## 🧪 Test Data
+## Test Data
 
 ### Employee Seeder
 
@@ -138,16 +138,16 @@ ENABLE_PROJECT_PAYROLL=true
 ```
 
 **When disabled (`false`):**
-- ❌ Project calculation type hidden from Django Admin
-- ❌ API returns `400 Bad Request` for project salary creation
-- ⚠️ Existing project salaries remain accessible (legacy mode)
-- 🔄 Seeder converts project employees to hourly/monthly equivalents
+- Project calculation type hidden from Django Admin
+- API returns `400 Bad Request` for project salary creation
+- Existing project salaries remain accessible (legacy mode)
+- Seeder converts project employees to hourly/monthly equivalents
 
 **When enabled (`true`):**
-- ✅ Full project payroll functionality available
-- ✅ Admin interface shows project options
-- ✅ API accepts project salary creation
-- ✅ Seeder creates original project employees
+- Full project payroll functionality available
+- Admin interface shows project options
+- API accepts project salary creation
+- Seeder creates original project employees
 
 **Use cases:**
 - **Production**: Keep disabled until needed
@@ -156,6 +156,7 @@ ENABLE_PROJECT_PAYROLL=true
 
 This allows hiding unused functionality without database changes or code removal.
 
-### 📱 Frontend
+### Frontend
 
-React Native app located in ../myhours-app/
+React Native app located in
+https://github.com/aniklidetz/myhours_frontend

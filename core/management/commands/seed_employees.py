@@ -32,15 +32,29 @@ class Command(BaseCommand):
             action="store_true",
             help="Generate work logs for the current month",
         )
+        parser.add_argument(
+            "--employees-count",
+            type=int,
+            default=None,
+            help="Number of employees to create (uses predefined set if not specified)",
+        )
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS("Starting employee seeding..."))
+
+        # Set default options if not provided
+        if "clear" not in options:
+            options["clear"] = False
+        if "with_worklogs" not in options:
+            options["with_worklogs"] = False
+        if "employees_count" not in options:
+            options["employees_count"] = None
 
         if options["clear"]:
             self.clear_test_data()
 
         with transaction.atomic():
-            employees_created = self.create_employees()
+            employees_created = self.create_employees(options["employees_count"])
             if options["with_worklogs"]:
                 self.create_work_logs(employees_created)
 
@@ -61,7 +75,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"   Removed {count} test users")
 
-    def create_employees(self):
+    def create_employees(self, employees_count=None):
         """Create employees with hourly and monthly salary types"""
 
         employees_data = [
@@ -211,6 +225,10 @@ class Command(BaseCommand):
                     f"Project payroll disabled - converting {project_count} project employees to hourly"
                 )
             )
+
+        # Limit employees if count specified
+        if employees_count is not None:
+            employees_data = employees_data[:employees_count]
 
         total_employees = len(employees_data)
         self.stdout.write(f"Creating {total_employees} employees...")

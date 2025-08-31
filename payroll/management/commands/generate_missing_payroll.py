@@ -58,12 +58,12 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write("   DRY RUN MODE - No changes will be saved")
 
-        # Get employees with salary info
-        employees_query = Employee.objects.filter(salary_info__isnull=False)
+        # Get employees with salary info (active salary)
+        employees_query = Employee.objects.filter(salaries__is_active=True).distinct()
         if employee_id:
             employees_query = employees_query.filter(id=employee_id)
 
-        employees = list(employees_query.select_related("salary_info"))
+        employees = list(employees_query.prefetch_related("salaries"))
         self.stdout.write(f"📊 Found {len(employees)} employees with salary info")
 
         # Get work dates that need processing

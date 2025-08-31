@@ -91,12 +91,12 @@ backups/
 # Utilities (development tools)
 utilities/
 
-# Test and setup scripts (development only)
-create_*.py
-setup_*.py
-fix_*.py
-validate_*.py
-simple_*.py
+# Test and setup scripts (development only) - exclude temporary dev files
+create_temp_*.py
+fix_temp_*.py
+validate_temp_*.py
+simple_temp_*.py
+# Keep important setup scripts: setup_database.py, etc.
 # Exclude test data files but NOT unit test files
 *_test_data*.py
 *_check.py

@@ -26,8 +26,8 @@ class Salary(models.Model):
         ("project", "project"),
     ]
 
-    employee = models.OneToOneField(
-        Employee, on_delete=models.CASCADE, related_name="salary_info"
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name="salaries"
     )
 
     # Basic salary information
@@ -59,6 +59,11 @@ class Salary(models.Model):
     project_completed = models.BooleanField(default=False)
 
     currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES, default="ILS")
+
+    # Active status - only one active salary per employee allowed
+    is_active = models.BooleanField(
+        default=True, help_text="Whether this salary configuration is currently active"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -874,10 +879,13 @@ class Salary(models.Model):
                     "Project start date cannot be later than end date."
                 )
 
-    def validate_constraints(self):
+    def validate_constraints(self, exclude=None):
         """
         Validates constraints on overtime and maximum daily working hours
         Updated for 5-day work week (42 hours regular + 16 hours overtime = 58 hours max)
+
+        Args:
+            exclude: List of field names to exclude from validation (Django standard)
         """
         # Weekly constraints
         current_date = timezone.now().date()
@@ -999,6 +1007,13 @@ class Salary(models.Model):
         # Track if this is a brand new record
         is_new_record = not self.pk
 
+        # Handle active salary constraint: only one active salary per employee
+        if self.is_active:
+            # Deactivate all other active salaries for this employee
+            Salary.objects.filter(employee=self.employee, is_active=True).exclude(
+                pk=self.pk
+            ).update(is_active=False)
+
         # Only auto-set calculation type for brand new records
         if is_new_record:
             employment_type_mapping = {
@@ -1077,6 +1092,15 @@ class Salary(models.Model):
                 self.clean()
                 self.validate_constraints()
         return super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee"],
+                condition=models.Q(is_active=True),
+                name="unique_active_salary_per_employee",
+            )
+        ]
 
 
 class CompensatoryDay(models.Model):
