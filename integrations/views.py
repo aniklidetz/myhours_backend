@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from .models import Holiday
 from .serializers import HolidaySerializer
 from .services.hebcal_service import HebcalService
-from .services.sunrise_sunset_service import SunriseSunsetService
+from .services.unified_shabbat_service import get_shabbat_times
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +74,9 @@ class HolidayViewSet(viewsets.ReadOnlyModelViewSet):
                 days_until_friday = (4 - today.weekday()) % 7
                 date_obj = today.replace(day=today.day + days_until_friday)
 
-            from .services.sunrise_sunset_service import SunriseSunsetService
+            from .services.unified_shabbat_service import get_shabbat_times
 
-            times = SunriseSunsetService.get_shabbat_times(
-                date_obj, float(lat), float(lng)
-            )
+            times = get_shabbat_times(date_obj)
 
             if not times:
                 return Response(

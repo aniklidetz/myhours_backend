@@ -58,10 +58,13 @@ def get_sabbath_times(year: int, month: int) -> Dict[str, Any]:
     
     try:
         # Import here to allow mocking
-        from integrations.services.sunrise_sunset_service import SunriseSunsetService
-        
-        sunrise_sunset_service = SunriseSunsetService()
-        sabbath_times = sunrise_sunset_service.get_sabbath_times(year, month)
+        from integrations.services.unified_shabbat_service import get_shabbat_times
+        from datetime import date
+
+        # For unified service, we need a specific date, not year/month
+        # Use first day of month as reference
+        date_obj = date(year, month, 1)
+        sabbath_times = get_shabbat_times(date_obj)
         
         _api_cache[cache_key] = sabbath_times
         return sabbath_times

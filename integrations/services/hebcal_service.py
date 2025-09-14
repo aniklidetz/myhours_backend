@@ -9,7 +9,7 @@ from integrations.config.israeli_holidays import is_official_holiday
 from integrations.models import Holiday
 
 from .israeli_holidays_service import IsraeliHolidaysService
-from .sunrise_sunset_service import SunriseSunsetService
+from .unified_shabbat_service import get_shabbat_times
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +124,7 @@ class HebcalService:
         while current_date <= end_date:
             if current_date.weekday() == 4:  # Friday
                 try:
-                    shabbat_times = SunriseSunsetService.get_shabbat_times(
-                        current_date, lat, lng
-                    )
+                    shabbat_times = get_shabbat_times(current_date)
                     shabbats.append(
                         {
                             "title": "Shabbat",

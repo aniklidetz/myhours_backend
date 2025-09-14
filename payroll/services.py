@@ -22,7 +22,7 @@ from django.utils import timezone
 from core.logging_utils import safe_log_employee
 from integrations.models import Holiday
 from integrations.services.hebcal_service import HebcalService
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
+# Removed old import - now using UnifiedShabbatService via ShiftSplitter
 from payroll.models import (
     CompensatoryDay,
     DailyPayrollCalculation,
