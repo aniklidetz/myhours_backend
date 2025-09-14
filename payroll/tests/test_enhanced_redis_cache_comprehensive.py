@@ -12,6 +12,7 @@ import json
 import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 import pytz
@@ -1109,3 +1110,4 @@ class DomainPerformanceWorkflowTest(TestCase):
 
         # Verify key generation was called with correct parameters
         mock_make_key.assert_called_with("enhanced_holidays", 2025, 2)
+

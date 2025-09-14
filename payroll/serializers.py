@@ -81,6 +81,11 @@ class SalarySerializer(serializers.ModelSerializer):
         calculation_type = attrs.get("calculation_type")
         project_start_date = attrs.get("project_start_date")
         project_end_date = attrs.get("project_end_date")
+        
+        # Handle monthly_hourly field - convert 0 to None for consistency
+        monthly_hourly = attrs.get("monthly_hourly", None)
+        if monthly_hourly is not None and Decimal(str(monthly_hourly)) == 0:
+            attrs["monthly_hourly"] = None
 
         # Check if project payroll is enabled
         if calculation_type == "project":

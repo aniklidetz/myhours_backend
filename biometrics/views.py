@@ -246,7 +246,7 @@ def register_face(request):
     try:
         # Check if employee exists and user has permission
         employee = Employee.objects.get(id=employee_id)
-        logger.info(f"   - Target employee: {employee.id} ({employee.get_full_name()})")
+        logger.info(f" - Target employee: {employee.id} ({employee.get_full_name()})")
 
         # Check permission (admin or self)
         # User must be admin or registering their own biometrics

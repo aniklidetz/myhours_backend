@@ -4,6 +4,7 @@ Regression tests for the fixes applied to payroll system
 
 from datetime import date, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -33,7 +34,7 @@ class SalaryConstraintRegressionTest(TestCase):
         )
 
     def test_monthly_salary_with_null_hourly_rate(self):
-        """Test monthly salary can be created with null hourly_rate"""
+        """Test monthly salary can be created with null monthly_hourly"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="monthly",
@@ -43,7 +44,7 @@ class SalaryConstraintRegressionTest(TestCase):
         )
         self.assertEqual(salary.calculation_type, "monthly")
         self.assertEqual(salary.base_salary, Decimal("15000.00"))
-        self.assertIsNone(salary.hourly_rate)
+        self.assertIsNone(salary.monthly_hourly)
 
     def test_hourly_salary_with_null_base_salary(self):
         """Test hourly salary can be created with null base_salary"""
@@ -55,7 +56,7 @@ class SalaryConstraintRegressionTest(TestCase):
             currency="ILS",
         )
         self.assertEqual(salary.calculation_type, "hourly")
-        self.assertEqual(salary.hourly_rate, Decimal("50.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
         self.assertIsNone(salary.base_salary)
 
 
@@ -157,7 +158,7 @@ class SalarySerializerRegressionTest(TestCase):
         self.assertTrue(base_salary is None or base_salary == 0)
 
     def test_serializer_normalizes_zero_hourly_rate_to_none(self):
-        """Test serializer converts 0 hourly_rate to None"""
+        """Test serializer converts 0 monthly_hourly to None"""
         data = {
             "employee": self.employee.id,
             "calculation_type": "monthly",
@@ -168,8 +169,8 @@ class SalarySerializerRegressionTest(TestCase):
         serializer = SalarySerializer(data=data)
         self.assertTrue(serializer.is_valid())
         # Check if zero is handled properly (may stay as 0 or convert to None depending on implementation)
-        hourly_rate = serializer.validated_data["hourly_rate"]
-        self.assertTrue(hourly_rate is None or hourly_rate == 0)
+        monthly_hourly = serializer.validated_data["monthly_hourly"]
+        self.assertTrue(monthly_hourly is None or monthly_hourly == 0)
 
     def test_serializer_rejects_negative_values(self):
         """Test serializer rejects negative values"""
@@ -226,3 +227,4 @@ class ProjectPayrollAutoConversionTest(TestCase):
         # Should convert to 'monthly' based on employment_type='contract'
         # This test will pass/fail based on ENABLE_PROJECT_PAYROLL setting
         self.assertIn(salary.calculation_type, ["project", "monthly"])
+

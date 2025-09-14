@@ -6,6 +6,7 @@ Priority: authentication, permissions, error handling, and basic successful resp
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 from rest_framework import status
@@ -831,3 +832,4 @@ class PayrollViewsIntegrationTest(APITestCase):
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             ],
         )
+

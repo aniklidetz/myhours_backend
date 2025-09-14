@@ -13,6 +13,21 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+# Legacy keys for backward compatibility with existing breakdown structures
+LEGACY_KEYS = (
+    "regular_hours", "overtime_125_hours", "overtime_150_hours",
+    "sabbath_regular", "holiday_hours",
+    "base_regular_pay", "overtime_125_pay", "overtime_150_pay", "sabbath_bonus_pay", "holiday_bonus_pay",
+    "overtime_before_sabbath_1", "overtime_before_sabbath_2", "overtime_before_sabbath_3",
+)
+
+
+def create_empty_breakdown():
+    """Create empty breakdown dictionary with all legacy keys initialized to zero."""
+    from decimal import Decimal
+    return {k: Decimal("0") for k in LEGACY_KEYS}
+
+
 class ShiftSplitter:
     """Handles splitting of shifts that span across special periods (Sabbath, holidays)"""
 
@@ -32,7 +47,7 @@ class ShiftSplitter:
             check_in (datetime): Shift start time
             check_out (datetime): Shift end time
             sabbath_start_time (datetime, optional): Precise Sabbath start time
-            use_api (bool): Whether to use sunrise_sunset_service for precise times
+            use_api (bool): Whether to use UnifiedShabbatService for precise times
 
         Returns:
             dict: Split hours by period type
@@ -61,10 +76,10 @@ class ShiftSplitter:
                 sabbath_start_time = timezone.make_aware(sabbath_start_time)
             sabbath_start_israel = sabbath_start_time.astimezone(cls.ISRAEL_TZ)
         elif use_api:
-            # Try to use sunrise_sunset_service for precise Sabbath start time
+            # Try to use UnifiedShabbatService for precise Sabbath start time
             try:
-                from integrations.services.sunrise_sunset_service import (
-                    SunriseSunsetService,
+                from integrations.services.unified_shabbat_service import (
+                    get_shabbat_times,
                 )
 
                 friday_date = check_in_israel.date()
@@ -73,19 +88,19 @@ class ShiftSplitter:
                     days_to_friday = (4 - friday_date.weekday()) % 7
                     friday_date = friday_date + timedelta(days=days_to_friday)
 
-                # Get precise Sabbath times from API
-                shabbat_times = SunriseSunsetService.get_shabbat_times(friday_date)
-                sabbath_start_str = shabbat_times.get("start")
+                # Get precise Sabbath times from API using new unified service
+                shabbat_times = get_shabbat_times(friday_date)
+                sabbath_start_str = shabbat_times.get("shabbat_start")
 
                 if sabbath_start_str:
-                    # Parse the API response
+                    # Parse the API response (already in correct ISO format)
                     sabbath_start_utc = datetime.fromisoformat(
                         sabbath_start_str.replace("Z", "+00:00")
                     )
                     sabbath_start_israel = sabbath_start_utc.astimezone(cls.ISRAEL_TZ)
                     api_used = True
                     logger.info(
-                        f"🌅 Using API Sabbath start time: {sabbath_start_israel}"
+                        f"🌅 Using UnifiedShabbatService Sabbath start: {sabbath_start_israel}"
                     )
                 else:
                     raise ValueError("No Sabbath start time in API response")
@@ -203,6 +218,11 @@ class ShiftSplitter:
             "sabbath_regular": Decimal("0"),
             "sabbath_overtime_1": Decimal("0"),
             "sabbath_overtime_2": Decimal("0"),
+            # Ensure all expected keys exist with defaults
+            "total_hours": total_hours,
+            "total_regular": Decimal("0"),
+            "total_overtime": Decimal("0"),
+            "total_sabbath": Decimal("0"),
         }
 
         # First, fill hours before Sabbath
@@ -254,6 +274,14 @@ class ShiftSplitter:
                     # All remaining is 200% Sabbath overtime
                     result["sabbath_overtime_2"] = remaining_sabbath
 
+        # Calculate summary totals
+        result["total_regular"] = result["regular_hours"] + result["sabbath_regular"]
+        result["total_overtime"] = (
+            result["overtime_before_sabbath_1"] + result["overtime_before_sabbath_2"] +
+            result["sabbath_overtime_1"] + result["sabbath_overtime_2"]
+        )
+        result["total_sabbath"] = result["sabbath_regular"] + result["sabbath_overtime_1"] + result["sabbath_overtime_2"]
+
         # Round all values
         for key in result:
             result[key] = result[key].quantize(Decimal("0.01"))
@@ -261,13 +289,13 @@ class ShiftSplitter:
         return result
 
     @classmethod
-    def calculate_payment_for_split_shift(cls, breakdown, hourly_rate):
+    def calculate_payment_for_split_shift(cls, breakdown=None, hourly_rate=None):
         """
         Calculate payment based on split shift breakdown
 
         Args:
-            breakdown (dict): Hours breakdown from calculate_split_overtime
-            hourly_rate (Decimal): Base hourly rate
+            breakdown (dict, optional): Hours breakdown from calculate_split_overtime
+            hourly_rate (Decimal, optional): Base hourly rate
 
         Returns:
             dict: Payment calculation
@@ -280,13 +308,26 @@ class ShiftSplitter:
                     'details': dict  # Detailed breakdown
                 }
         """
+        from decimal import Decimal
+        
+        # Protection against None parameters
+        if breakdown is None:
+            breakdown = create_empty_breakdown()
+        else:
+            # Ensure all legacy keys exist to prevent KeyError
+            for k in LEGACY_KEYS:
+                breakdown.setdefault(k, Decimal("0"))
+        
+        if hourly_rate is None:
+            hourly_rate = Decimal("0")
+            
         details = {}
 
         # Regular hours (100%)
-        regular_pay = breakdown["regular_hours"] * hourly_rate
-        if breakdown["regular_hours"] > 0:
+        regular_pay = breakdown.get("regular_hours", Decimal("0")) * hourly_rate
+        if breakdown.get("regular_hours", 0) > 0:
             details["regular"] = {
-                "hours": breakdown["regular_hours"],
+                "hours": breakdown.get("regular_hours", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("1.0"),
                 "pay": regular_pay,
@@ -296,26 +337,26 @@ class ShiftSplitter:
         overtime_before_pay = Decimal("0")
 
         # First 2 OT hours (125%)
-        if breakdown["overtime_before_sabbath_1"] > 0:
+        if breakdown.get("overtime_before_sabbath_1", 0) > 0:
             ot1_pay = (
-                breakdown["overtime_before_sabbath_1"] * hourly_rate * Decimal("1.25")
+                breakdown.get("overtime_before_sabbath_1", Decimal("0")) * hourly_rate * Decimal("1.25")
             )
             overtime_before_pay += ot1_pay
             details["overtime_125"] = {
-                "hours": breakdown["overtime_before_sabbath_1"],
+                "hours": breakdown.get("overtime_before_sabbath_1", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("1.25"),
                 "pay": ot1_pay,
             }
 
         # Additional OT (150%)
-        if breakdown["overtime_before_sabbath_2"] > 0:
+        if breakdown.get("overtime_before_sabbath_2", 0) > 0:
             ot2_pay = (
-                breakdown["overtime_before_sabbath_2"] * hourly_rate * Decimal("1.5")
+                breakdown.get("overtime_before_sabbath_2", Decimal("0")) * hourly_rate * Decimal("1.5")
             )
             overtime_before_pay += ot2_pay
             details["overtime_150"] = {
-                "hours": breakdown["overtime_before_sabbath_2"],
+                "hours": breakdown.get("overtime_before_sabbath_2", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("1.5"),
                 "pay": ot2_pay,
@@ -324,14 +365,14 @@ class ShiftSplitter:
         # Sabbath hours
         sabbath_pay = Decimal("0")
 
-        # Sabbath within daily norm (150%)
-        if breakdown["sabbath_regular"] > 0:
+        # Sabbath within daily norm (150%) - increment sabbath_regular for sabbath pieces
+        if breakdown.get("sabbath_regular", 0) > 0:
             sabbath_reg_pay = (
-                breakdown["sabbath_regular"] * hourly_rate * Decimal("1.5")
+                breakdown.get("sabbath_regular", Decimal("0")) * hourly_rate * Decimal("1.5")
             )
             sabbath_pay += sabbath_reg_pay
             details["sabbath_150"] = {
-                "hours": breakdown["sabbath_regular"],
+                "hours": breakdown.get("sabbath_regular", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("1.5"),
                 "pay": sabbath_reg_pay,
@@ -341,26 +382,26 @@ class ShiftSplitter:
         sabbath_overtime_pay = Decimal("0")
 
         # First 2 Sabbath OT hours (175%)
-        if breakdown["sabbath_overtime_1"] > 0:
+        if breakdown.get("sabbath_overtime_1", 0) > 0:
             sabbath_ot1_pay = (
-                breakdown["sabbath_overtime_1"] * hourly_rate * Decimal("1.75")
+                breakdown.get("sabbath_overtime_1", Decimal("0")) * hourly_rate * Decimal("1.75")
             )
             sabbath_overtime_pay += sabbath_ot1_pay
             details["sabbath_overtime_175"] = {
-                "hours": breakdown["sabbath_overtime_1"],
+                "hours": breakdown.get("sabbath_overtime_1", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("1.75"),
                 "pay": sabbath_ot1_pay,
             }
 
         # Additional Sabbath OT (200%)
-        if breakdown["sabbath_overtime_2"] > 0:
+        if breakdown.get("sabbath_overtime_2", 0) > 0:
             sabbath_ot2_pay = (
-                breakdown["sabbath_overtime_2"] * hourly_rate * Decimal("2.0")
+                breakdown.get("sabbath_overtime_2", Decimal("0")) * hourly_rate * Decimal("2.0")
             )
             sabbath_overtime_pay += sabbath_ot2_pay
             details["sabbath_overtime_200"] = {
-                "hours": breakdown["sabbath_overtime_2"],
+                "hours": breakdown.get("sabbath_overtime_2", Decimal("0")),
                 "rate": hourly_rate,
                 "multiplier": Decimal("2.0"),
                 "pay": sabbath_ot2_pay,
@@ -371,6 +412,7 @@ class ShiftSplitter:
         )
 
         return {
+            # Main payment categories
             "regular_pay": regular_pay.quantize(Decimal("0.01")),
             "overtime_before_sabbath_pay": overtime_before_pay.quantize(
                 Decimal("0.01")
@@ -379,4 +421,12 @@ class ShiftSplitter:
             "sabbath_overtime_pay": sabbath_overtime_pay.quantize(Decimal("0.01")),
             "total_pay": total_pay.quantize(Decimal("0.01")),
             "details": details,
+            
+            # Legacy key aliases for backward compatibility
+            "base_regular_pay": regular_pay.quantize(Decimal("0.01")),
+            "overtime_125_pay": breakdown.get("overtime_before_sabbath_1", Decimal("0")) * hourly_rate * Decimal("1.25"),
+            "overtime_150_pay": breakdown.get("overtime_before_sabbath_2", Decimal("0")) * hourly_rate * Decimal("1.5"),
+            "sabbath_bonus_pay": sabbath_pay.quantize(Decimal("0.01")),
+            "holiday_bonus_pay": Decimal("0"),  # Not used in shift splitting
+            "total_salary": total_pay.quantize(Decimal("0.01")),  # Alias for total_pay
         }

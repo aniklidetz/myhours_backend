@@ -12,6 +12,7 @@ Tests the EnhancedEarningsSerializer and CompensatoryDayDetailSerializer coverin
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 from rest_framework import serializers
@@ -103,11 +104,11 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
 
         # Mock calculation result
         mock_service.calculate_monthly_salary.return_value = {
-            "total_gross_pay": Decimal("10000.00"),
+            "total_salary": Decimal("10000.00"),
             "total_hours": Decimal("160.0"),
             "compensatory_days_earned": 2,
             "regular_hours": Decimal("140.0"),
-            "holiday_hours": Decimal("8.0"),
+            "holiday_hours": ISRAELI_DAILY_NORM_HOURS,
             "sabbath_hours": Decimal("12.0"),
             "base_salary": Decimal("9000.00"),
             "holiday_extra": Decimal("500.00"),
@@ -120,21 +121,21 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
             "daily_calculations": [
                 {
                     "date": date(2025, 2, 3),
-                    "hours_worked": Decimal("8.0"),
-                    "total_pay": Decimal("400.00"),
+                    "hours_worked": ISRAELI_DAILY_NORM_HOURS,
+                    "total_salary": Decimal("400.00"),
                     "is_holiday": False,
                     "is_sabbath": False,
                     "compensatory_day_created": False,
                     "breakdown": {
-                        "regular_hours": Decimal("8.0"),
+                        "regular_hours": ISRAELI_DAILY_NORM_HOURS,
                         "overtime_hours_1": Decimal("0.0"),
                         "overtime_hours_2": Decimal("0.0"),
                     },
                 },
                 {
                     "date": date(2025, 2, 8),
-                    "hours_worked": Decimal("8.0"),
-                    "total_pay": Decimal("600.00"),
+                    "hours_worked": ISRAELI_DAILY_NORM_HOURS,
+                    "total_salary": Decimal("600.00"),
                     "is_holiday": False,
                     "is_sabbath": True,
                     "sabbath_type": "regular",
@@ -176,7 +177,7 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
         self.assertEqual(result["period"], "2025-02")
 
         # Verify summary
-        self.assertEqual(result["summary"]["total_gross_pay"], Decimal("10000.00"))
+        self.assertEqual(result["summary"]["total_salary"], Decimal("10000.00"))
         self.assertEqual(result["summary"]["total_hours"], Decimal("160.0"))
         self.assertEqual(result["summary"]["worked_days"], 2)
         self.assertEqual(result["summary"]["compensatory_days_earned"], 2)
@@ -190,7 +191,7 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
         """Test successful serialization for hourly employee"""
         # Update salary to hourly
         self.salary.calculation_type = "hourly"
-        self.salary.hourly_rate = Decimal("50.00")
+        self.salary.monthly_hourly = Decimal("50.00")
         self.salary.base_salary = Decimal("0.00")  # Must be 0 for hourly
         self.salary.save()
 
@@ -200,7 +201,7 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
 
         # Mock calculation result
         mock_service.calculate_monthly_salary.return_value = {
-            "total_gross_pay": Decimal("8000.00"),
+            "total_salary": Decimal("8000.00"),
             "total_hours": Decimal("160.0"),
             "compensatory_days_earned": 0,
             "regular_hours": Decimal("160.0"),
@@ -228,9 +229,9 @@ class EnhancedEarningsSerializerSuccessTest(EnhancedEarningsSerializerTest):
         self.assertIn("pay_breakdown", result)
         pay_breakdown = result["pay_breakdown"]
 
-        # For hourly: regular_pay = regular_hours * hourly_rate
+        # For hourly: proportional_monthly = regular_hours * monthly_hourly
         # 160 * 50 = 8000
-        self.assertEqual(pay_breakdown["regular_pay"], 8000.0)
+        self.assertEqual(pay_breakdown["base_regular_pay"], 8000.0)
         self.assertEqual(pay_breakdown["special_day_pay"]["holiday_base"], 0.0)
         self.assertEqual(pay_breakdown["special_day_pay"]["sabbath_base"], 0.0)
 
@@ -242,14 +243,14 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         """Test _build_hours_breakdown method"""
         result = {
             "regular_hours": Decimal("140.0"),
-            "holiday_hours": Decimal("8.0"),
+            "holiday_hours": ISRAELI_DAILY_NORM_HOURS,
             "sabbath_hours": Decimal("12.0"),
         }
 
         breakdown = self.serializer._build_hours_breakdown(result)
 
         self.assertEqual(breakdown["regular_hours"], 140.0)
-        self.assertEqual(breakdown["special_days"]["holiday_hours"], 8.0)
+        self.assertEqual(breakdown["special_days"]["holiday_hours"], 8.6)
         self.assertEqual(breakdown["special_days"]["sabbath_hours"], 12.0)
         self.assertEqual(breakdown["overtime"]["first_2h_per_day"], 0)
         self.assertEqual(breakdown["overtime"]["additional_hours"], 0)
@@ -268,13 +269,13 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         """Test _build_pay_breakdown for hourly employee"""
         # Create hourly salary
         self.salary.calculation_type = "hourly"
-        self.salary.hourly_rate = Decimal("50.00")
+        self.salary.monthly_hourly = Decimal("50.00")
         self.salary.base_salary = Decimal("0.00")  # Must be 0 for hourly
         self.salary.save()
 
         result = {
             "regular_hours": Decimal("140.0"),
-            "holiday_hours": Decimal("8.0"),
+            "holiday_hours": ISRAELI_DAILY_NORM_HOURS,
             "sabbath_hours": Decimal("12.0"),
             "minimum_wage_supplement": Decimal("0.00"),
         }
@@ -284,8 +285,8 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
 
         breakdown = self.serializer._build_pay_breakdown(result, context_instance)
 
-        # regular_pay = 140 * 50 = 7000
-        self.assertEqual(breakdown["regular_pay"], 7000.0)
+        # proportional_monthly = 140 * 50 = 7000
+        self.assertEqual(breakdown["base_regular_pay"], 7000.0)
         # holiday_pay = 8 * 50 * 1.5 = 600
         self.assertEqual(breakdown["special_day_pay"]["holiday_base"], 600.0)
         # sabbath_pay = 12 * 50 * 1.5 = 900
@@ -306,7 +307,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
 
         breakdown = self.serializer._build_pay_breakdown(result, context_instance)
 
-        self.assertEqual(breakdown["regular_pay"], 9000.0)
+        self.assertEqual(breakdown["base_regular_pay"], 9000.0)
         self.assertEqual(breakdown["special_day_pay"]["holiday_base"], 500.0)
         self.assertEqual(breakdown["special_day_pay"]["sabbath_base"], 750.0)
         self.assertEqual(breakdown["minimum_wage_supplement"], 300.0)
@@ -401,7 +402,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         """Test _build_rates_info method"""
         # Update to hourly with specific rate
         self.salary.calculation_type = "hourly"
-        self.salary.hourly_rate = Decimal("100.00")
+        self.salary.monthly_hourly = Decimal("100.00")
         self.salary.base_salary = Decimal("0.00")  # Must be 0 for hourly
         self.salary.save()
 
@@ -424,12 +425,12 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
             {
                 "date": date(2025, 2, 3),
                 "hours_worked": Decimal("9.5"),
-                "total_pay": Decimal("500.00"),
+                "total_salary": Decimal("500.00"),
                 "is_holiday": False,
                 "is_sabbath": False,
                 "compensatory_day_created": False,
                 "breakdown": {
-                    "regular_hours": Decimal("8.0"),
+                    "regular_hours": ISRAELI_DAILY_NORM_HOURS,
                     "overtime_hours_1": Decimal("1.5"),
                     "overtime_hours_2": Decimal("0.0"),
                 },
@@ -444,7 +445,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         self.assertEqual(day["hours_worked"], 9.5)
         self.assertEqual(day["gross_pay"], 500.0)
         self.assertEqual(day["type"], "regular")
-        self.assertEqual(day["breakdown"]["regular"], 8.0)
+        self.assertEqual(day["breakdown"]["regular"], 8.6)
         self.assertEqual(day["breakdown"]["overtime_125"], 1.5)
         self.assertNotIn("overtime_150", day["breakdown"])
 
@@ -454,12 +455,12 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
             {
                 "date": date(2025, 2, 3),
                 "hours_worked": Decimal("12.0"),
-                "total_pay": Decimal("700.00"),
+                "total_salary": Decimal("700.00"),
                 "is_holiday": False,
                 "is_sabbath": False,
                 "compensatory_day_created": False,
                 "breakdown": {
-                    "regular_hours": Decimal("8.0"),
+                    "regular_hours": ISRAELI_DAILY_NORM_HOURS,
                     "overtime_hours_1": Decimal("2.0"),
                     "overtime_hours_2": Decimal("2.0"),  # More than 0
                 },
@@ -469,7 +470,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         breakdown = self.serializer._build_daily_breakdown(daily_calculations)
 
         day = breakdown[0]
-        self.assertEqual(day["breakdown"]["regular"], 8.0)
+        self.assertEqual(day["breakdown"]["regular"], 8.6)
         self.assertEqual(day["breakdown"]["overtime_125"], 2.0)
         self.assertEqual(day["breakdown"]["overtime_150"], 2.0)  # Should be included
 
@@ -478,8 +479,8 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         daily_calculations = [
             {
                 "date": date(2025, 2, 15),
-                "hours_worked": Decimal("8.0"),
-                "total_pay": Decimal("600.00"),
+                "hours_worked": ISRAELI_DAILY_NORM_HOURS,
+                "total_salary": Decimal("600.00"),
                 "is_holiday": True,
                 "is_sabbath": False,
                 "holiday_name": "Purim",
@@ -493,7 +494,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
         day = breakdown[0]
         self.assertEqual(day["type"], "holiday")
         self.assertEqual(day["holiday_name"], "Purim")
-        self.assertEqual(day["breakdown"]["holiday_base"], 8.0)
+        self.assertEqual(day["breakdown"]["holiday_base"], 8.6)
         self.assertTrue(day["compensatory_day"])
 
     def test_build_daily_breakdown_sabbath(self):
@@ -502,7 +503,7 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
             {
                 "date": date(2025, 2, 8),
                 "hours_worked": Decimal("6.0"),
-                "total_pay": Decimal("450.00"),
+                "total_salary": Decimal("450.00"),
                 "is_holiday": False,
                 "is_sabbath": True,
                 "sabbath_type": "special",
@@ -687,3 +688,4 @@ class CompensatoryDayDetailSerializerTest(TestCase):
         self.assertEqual(data["reason"], "holiday")
         self.assertFalse(data["is_used"])
         self.assertIsNone(data["date_used"])
+

@@ -8,7 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from integrations.models import Holiday
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
+# Removed import to avoid circular dependency - will import lazily when needed
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -67,6 +67,16 @@ class Salary(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # --- Backward-compat: tests/старый код обращаются к monthly_hourly ---
+    @property
+    def monthly_hourly(self):
+        # alias на фактическое поле с почасовой ставкой
+        return getattr(self, "hourly_rate", None)
+
+    @monthly_hourly.setter
+    def monthly_hourly(self, value):
+        setattr(self, "hourly_rate", value)
 
     def calculate_salary(self):
         """
@@ -233,14 +243,27 @@ class Salary(models.Model):
             )
 
         try:
-            # Get worked hours for overtime calculations
-            from payroll.services import PayrollCalculationService
+            # Get worked hours for overtime calculations using new PayrollService
+            from payroll.services.payroll_service import PayrollService
+            from payroll.services.contracts import CalculationContext
+            from payroll.services.enums import CalculationStrategy, EmployeeType
 
-            # Use the service to get accurate hour calculations
-            service = PayrollCalculationService(
-                self.employee, year, month, fast_mode=True
+            # Determine employee type
+            employee_type = EmployeeType.HOURLY if self.calculation_type == 'hourly' else EmployeeType.MONTHLY
+            
+            # Create calculation context
+            context = CalculationContext(
+                employee_id=self.employee.id,
+                year=year,
+                month=month,
+                user_id=1,  # System user for model calculations
+                employee_type=employee_type,
+                fast_mode=True
             )
-            service_result = service.calculate_monthly_salary()
+            
+            # Use the new service for calculation
+            service = PayrollService()
+            service_result = service.calculate(context, CalculationStrategy.ENHANCED)
 
             # Extract total hours worked for reporting purposes
             total_hours_worked = service_result.get("total_hours", Decimal("0"))
@@ -315,25 +338,38 @@ class Salary(models.Model):
             )
 
         try:
-            from payroll.services import PayrollCalculationService
+            from payroll.services.payroll_service import PayrollService
+            from payroll.services.contracts import CalculationContext
+            from payroll.services.enums import CalculationStrategy, EmployeeType
 
-            # Use the new service for calculation
-            service = PayrollCalculationService(
-                self.employee, year, month, fast_mode=True
+            # Determine employee type
+            employee_type = EmployeeType.HOURLY if self.calculation_type == 'hourly' else EmployeeType.MONTHLY
+            
+            # Create calculation context
+            context = CalculationContext(
+                employee_id=self.employee.id,
+                year=year,
+                month=month,
+                user_id=1,  # System user for model calculations
+                employee_type=employee_type,
+                fast_mode=True
             )
-            result = service.calculate_monthly_salary()
+            
+            # Use the new service for calculation
+            service = PayrollService()
+            result = service.calculate(context, CalculationStrategy.ENHANCED)
 
             # Validate service result
-            if not result or "total_gross_pay" not in result:
+            if not result or "total_salary" not in result:
                 logger = logging.getLogger(__name__)
                 logger.error(
-                    f"PayrollCalculationService returned invalid result for employee {self.employee.id}"
+                    f"PayrollService returned invalid result for employee {self.employee.id}"
                 )
-                raise ValueError("PayrollCalculationService returned invalid result")
+                raise ValueError("PayrollService returned invalid result")
 
             # Convert to the expected format for backward compatibility
             return {
-                "total_salary": result["total_gross_pay"],
+                "total_salary": result["total_salary"],
                 "regular_hours": float(result.get("regular_hours", 0)),
                 "overtime_hours": float(result.get("overtime_hours", 0)),
                 "holiday_hours": float(result.get("holiday_hours", 0)),
@@ -350,14 +386,14 @@ class Salary(models.Model):
         except ImportError as ie:
             logger = logging.getLogger(__name__)
             logger.warning(
-                f"PayrollCalculationService not available for employee {self.employee.id}: {ie}"
+                f"PayrollService not available for employee {self.employee.id}: {ie}"
             )
             # Fallback to legacy calculation if service is not available
             return self._calculate_hourly_salary_legacy(month, year)
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(
-                f"Error in PayrollCalculationService for employee {self.employee.id}: {e}"
+                f"Error in PayrollService for employee {self.employee.id}: {e}"
             )
             # Fallback to legacy calculation if service fails
             return self._calculate_hourly_salary_legacy(month, year)
@@ -956,27 +992,28 @@ class Salary(models.Model):
             elif work_date.weekday() == 5:  # Saturday
                 return work_datetime_israel <= end_datetime_israel
 
-        # Fallback: use SunriseSunsetService for precise calculation
+        # Fallback: use UnifiedShabbatService for precise calculation
         try:
             if work_date.weekday() == 4:  # Friday
-                shabbat_times = SunriseSunsetService.get_shabbat_times(work_date)
+                # Lazy import to avoid circular dependency
+                from integrations.services.unified_shabbat_service import get_shabbat_times
+                shabbat_times = get_shabbat_times(work_date)
                 if not shabbat_times.get("is_estimated", True):
                     from datetime import datetime
 
                     import pytz
 
-                    # Parse UTC time from API
-                    shabbat_start_utc = datetime.fromisoformat(
-                        shabbat_times["start"].replace("Z", "+00:00")
+                    # Parse time from unified service (already in correct format with timezone)
+                    shabbat_start_local = datetime.fromisoformat(
+                        shabbat_times["shabbat_start"]
                     )
-
-                    # Convert to Israel timezone (UTC+2/UTC+3)
-                    israel_tz = pytz.timezone("Asia/Jerusalem")
-                    shabbat_start_local = shabbat_start_utc.astimezone(israel_tz)
 
                     # Ensure work_datetime is timezone-aware
                     if work_datetime.tzinfo is None:
                         work_datetime = timezone.make_aware(work_datetime)
+
+                    # Convert to Israel timezone for comparison
+                    israel_tz = pytz.timezone("Asia/Jerusalem")
                     work_local = work_datetime.astimezone(israel_tz)
 
                     return work_local >= shabbat_start_local
@@ -1002,8 +1039,15 @@ class Salary(models.Model):
         return f"Salary {self.employee.get_full_name()} ({self.get_calculation_type_display()})"
 
     def save(self, *args, **kwargs):
+        """
+        В тестах есть вызовы save(validate=False) — при этом тип расчёта
+        (например, 'project') не должен переписываться и валидация не запускается.
+        """
         from django.conf import settings
 
+        validate = kwargs.pop("validate", True)
+        skip_validation = kwargs.pop("skip_validation", False)
+        
         # Track if this is a brand new record
         is_new_record = not self.pk
 
@@ -1014,8 +1058,8 @@ class Salary(models.Model):
                 pk=self.pk
             ).update(is_active=False)
 
-        # Only auto-set calculation type for brand new records
-        if is_new_record:
+        # Only auto-set calculation type for brand new records and when validating
+        if validate and not skip_validation and is_new_record:
             employment_type_mapping = {
                 "hourly": "hourly",
                 "full_time": "monthly",
@@ -1077,10 +1121,16 @@ class Salary(models.Model):
                     self.employee.employment_type, "hourly"
                 )
 
+        # Sync related fields for test compatibility - только при валидации
+        if validate and not skip_validation:
+            if self.calculation_type == "hourly" and self.monthly_hourly and not self.hourly_rate:
+                self.hourly_rate = self.monthly_hourly
+            elif self.calculation_type == "hourly" and self.hourly_rate and not self.monthly_hourly:
+                self.monthly_hourly = self.hourly_rate
+
         # Validate salary fields based on calculation_type
         # Skip validation if explicitly requested (for test compatibility)
-        skip_validation = kwargs.pop("skip_validation", False)
-        if not skip_validation:
+        if validate and not skip_validation:
             # For existing project types when feature is disabled, skip validation to allow updates
             if (
                 not is_new_record
@@ -1185,28 +1235,31 @@ class DailyPayrollCalculation(models.Model):
         max_digits=5, decimal_places=2, default=Decimal("0")
     )
 
-    # Payment amounts
-    regular_pay = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0")
+    # Payment amounts - renamed to clarify relationship to base_pay and bonus_pay
+    base_regular_pay = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="Regular pay component of base_pay"
     )
-    overtime_pay_1 = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0")
+    bonus_overtime_pay_1 = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="First 2 overtime hours at 125% - component of bonus_pay"
     )
-    overtime_pay_2 = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0")
+    bonus_overtime_pay_2 = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="Additional overtime hours at 150% - component of bonus_pay"
     )
     # Sabbath-specific overtime payments
-    sabbath_overtime_pay_1 = models.DecimalField(
+    bonus_sabbath_overtime_pay_1 = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0"),
-        help_text="Payment for first 2 sabbath overtime hours at 175%",
+        help_text="Payment for first 2 sabbath overtime hours at 175% - component of bonus_pay",
     )
-    sabbath_overtime_pay_2 = models.DecimalField(
+    bonus_sabbath_overtime_pay_2 = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0"),
-        help_text="Payment for additional sabbath overtime hours at 200%",
+        help_text="Payment for additional sabbath overtime hours at 200% - component of bonus_pay",
     )
     # New unified payment structure
     base_pay = models.DecimalField(
@@ -1224,13 +1277,20 @@ class DailyPayrollCalculation(models.Model):
 
     # Legacy fields - keep for backward compatibility
     total_pay = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0")
+        max_digits=10, decimal_places=2, default=Decimal("0"),
+        help_text="DEPRECATED - use total_gross_pay instead"
     )
     total_gross_pay = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         default=Decimal("0"),
         help_text="Full gross payment including base salary for monthly employees",
+    )
+    total_salary = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Total salary amount for this calculation period",
     )
 
     # Special circumstances
@@ -1248,7 +1308,11 @@ class DailyPayrollCalculation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     calculated_by_service = models.CharField(
-        max_length=50, default="EnhancedPayrollCalculationService"
+        max_length=50, default="PayrollService"
+    )
+    proportional_monthly = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0"),
+        help_text="Proportional monthly salary portion for this calculation"
     )
 
     class Meta:
@@ -1322,6 +1386,18 @@ class MonthlyPayrollSummary(models.Model):
     )
     total_gross_pay = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal("0")
+    )
+    total_salary = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0"),
+        help_text="Total salary amount for the month"
+    )
+    proportional_monthly = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0"),
+        help_text="Proportional monthly salary based on hours worked"
+    )
+    total_bonuses_monthly = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0"),
+        help_text="Total bonus payments for monthly employees (overtime, sabbath, etc.)"
     )
 
     # Additional info

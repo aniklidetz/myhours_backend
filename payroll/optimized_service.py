@@ -1,5 +1,11 @@
 """
-Optimized Payroll Calculation Service
+LEGACY - Optimized Payroll Calculation Service
+
+WARNING: This service has been REMOVED from the system due to incorrect calculation formula.
+    SCHEDULED FOR REMOVAL: 2025-10-15
+    
+    PROBLEM: Used incorrect formula (hours × rate × 1.3) instead of proper Israeli labor law.
+    SOLUTION: Use PayrollService with CalculationStrategy.ENHANCED for all new implementations.
 
 Fast payroll calculation service with Redis caching and optimized database queries.
 Specifically designed to eliminate N+1 queries and accelerate API responses.

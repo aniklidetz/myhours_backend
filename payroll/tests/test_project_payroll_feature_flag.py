@@ -5,6 +5,7 @@ Tests for project payroll feature flag functionality
 import unittest
 from datetime import date, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -260,3 +261,4 @@ class SeederFeatureFlagTest(TestCase):
         """Test seeder shows warning when converting project employees"""
         # Skip this test as the seeder doesn't implement project employee conversion logic
         self.skipTest("Seeder does not implement project employee conversion warnings")
+

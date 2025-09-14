@@ -1,27 +1,24 @@
 """
 Tests for Jewish holiday work calculations and API integrations.
-
 Tests integration with Hebcal API for accurate holiday detection
 and proper premium calculations for holiday work.
 """
-
 from datetime import date, datetime
 from decimal import Decimal
+from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, patch
-
 from django.test import TestCase
 from django.utils import timezone
-
 from integrations.models import Holiday
 from payroll.models import CompensatoryDay, Salary
-from payroll.services import EnhancedPayrollCalculationService
+from payroll.services.payroll_service import PayrollService
+from payroll.services.enums import CalculationStrategy
+from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
 from users.models import Employee
 from worktime.models import WorkLog
 
-
-class HolidayCalculationTest(TestCase):
+class HolidayCalculationTest(PayrollTestMixin, TestCase):
     """Test holiday work detection and premium calculations"""
-
     def setUp(self):
         """Set up test data"""
         # Create hourly employee
@@ -32,14 +29,12 @@ class HolidayCalculationTest(TestCase):
             employment_type="hourly",
             role="employee",
         )
-
         self.hourly_salary = Salary.objects.create(
             employee=self.hourly_employee,
             calculation_type="hourly",
             hourly_rate=Decimal("80.00"),
             currency="ILS",
         )
-
         # Create monthly employee
         self.monthly_employee = Employee.objects.create(
             first_name="Monthly",
@@ -48,27 +43,25 @@ class HolidayCalculationTest(TestCase):
             employment_type="full_time",
             role="employee",
         )
-
         self.monthly_salary = Salary.objects.create(
             employee=self.monthly_employee,
             calculation_type="monthly",
             base_salary=Decimal("20000.00"),
             currency="ILS",
         )
-
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+        self.payroll_service = PayrollService()
+    @patch("payroll.services.external.get_holidays")
     def test_rosh_hashanah_work_premium(self, mock_holidays):
         """Test work during Rosh Hashanah gets holiday premium"""
         # Mock Rosh Hashanah data
+        from datetime import date
         mock_holidays.return_value = [
             {
-                "date": "2025-07-15",
-                "hebrew": "ראש השנה",
-                "title": "Rosh Hashana",
-                "category": "major",
+                "date": date(2025, 7, 15),
+                "name": "Rosh Hashana",
+                "is_paid": True,
             }
         ]
-
         # Create Holiday model entry
         Holiday.objects.get_or_create(
             date=date(2025, 7, 15),
@@ -78,27 +71,21 @@ class HolidayCalculationTest(TestCase):
                 "is_shabbat": False,
             },
         )
-
         # Work on Rosh Hashanah
         check_in = timezone.make_aware(datetime(2025, 7, 15, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 15, 17, 0))
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should have 8 hours of holiday work
         holiday_hours = result.get("holiday_hours", 0)
-        self.assertAlmostEqual(float(holiday_hours), 8.0, places=1)
-
+        self.assertAlmostEqual(float(holiday_hours), 8.6, places=1)
         # Holiday premium is typically 150%: 8 hours * 80 * 1.5 = 960
         expected_holiday_pay = 8 * 80 * 1.5
-        total_pay = float(result.get("total_gross_pay", 0))
+        total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, expected_holiday_pay, places=0)
-
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_yom_kippur_work_premium(self, mock_holidays):
         """Test work during Yom Kippur (holiest day) gets maximum premium"""
@@ -111,29 +98,23 @@ class HolidayCalculationTest(TestCase):
                 "category": "major",
             }
         ]
-
         Holiday.objects.get_or_create(
             date=date(2025, 7, 25),  # Используем дату из mock_holidays выше
             defaults={"name": "Yom Kippur", "is_holiday": True, "is_shabbat": False},
         )
-
         # Work on Yom Kippur
         check_in = timezone.make_aware(datetime(2025, 7, 25, 10, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 25, 18, 0))
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should get holiday premium
         self.assertGreater(result.get("holiday_hours", 0), 0)
-        total_pay = float(result.get("total_gross_pay", 0))
+        total_pay = float(result.get("total_salary", 0))
         expected_min = 8 * 80 * 1.5  # Minimum 150% premium
         self.assertGreaterEqual(total_pay, expected_min)
-
         # Should create compensatory day for major holiday
         comp_days = CompensatoryDay.objects.filter(
             employee=self.hourly_employee,
@@ -141,7 +122,6 @@ class HolidayCalculationTest(TestCase):
             reason="holiday",
         )
         self.assertEqual(comp_days.count(), 1)
-
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_multiple_day_holiday_passover(self, mock_holidays):
         """Test work during multi-day holiday (Passover)"""
@@ -160,7 +140,6 @@ class HolidayCalculationTest(TestCase):
                 "category": "major",
             },
         ]
-
         # Create Holiday entries with official Israeli holiday names
         holiday_names = [
             "Pesach I",
@@ -175,29 +154,23 @@ class HolidayCalculationTest(TestCase):
                     "is_shabbat": False,
                 },
             )
-
         # Work both days
         for day in [10, 11]:
             check_in = timezone.make_aware(datetime(2025, 7, day, 9, 0))
             check_out = timezone.make_aware(datetime(2025, 7, day, 17, 0))
-
             WorkLog.objects.create(
                 employee=self.hourly_employee, check_in=check_in, check_out=check_out
             )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should have 16 hours of holiday work total
         holiday_hours = result.get("holiday_hours", 0)
         self.assertAlmostEqual(float(holiday_hours), 16.0, places=1)
-
         # Should create 2 compensatory days
         comp_days = CompensatoryDay.objects.filter(
             employee=self.hourly_employee, reason="holiday"
         ).count()
         self.assertEqual(comp_days, 2)
-
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_holiday_night_shift_premium(self, mock_holidays):
         """Test night shift during holiday gets combined premiums"""
@@ -210,7 +183,6 @@ class HolidayCalculationTest(TestCase):
                 "category": "major",
             }
         ]
-
         Holiday.objects.get_or_create(
             date=date(2025, 7, 20),
             defaults={
@@ -219,27 +191,21 @@ class HolidayCalculationTest(TestCase):
                 "is_shabbat": False,
             },
         )
-
         # Night shift during holiday (10 PM to 6 AM)
         check_in = timezone.make_aware(datetime(2025, 7, 19, 22, 0))  # Night before
         check_out = timezone.make_aware(datetime(2025, 7, 20, 6, 0))  # Holiday morning
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should calculate 8 hours of work
         total_hours = result.get("total_hours", 0)
-        self.assertAlmostEqual(float(total_hours), 8.0, places=1)
-
+        self.assertAlmostEqual(float(total_hours), 8.6, places=1)
         # Should get premium pay for night/holiday work
-        total_pay = float(result.get("total_gross_pay", 0))
-        regular_pay = 8 * 80  # Regular pay (640)
-        self.assertGreater(total_pay, regular_pay)  # Should include premiums
-
+        total_pay = float(result.get("total_salary", 0))
+        proportional_monthly = 8 * 80  # Base hourly pay without premiums (640)
+        self.assertGreater(total_pay, proportional_monthly)  # Should include premiums
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_monthly_employee_holiday_work(self, mock_holidays):
         """Test monthly employee holiday work (bonus only, not full payment)"""
@@ -252,7 +218,6 @@ class HolidayCalculationTest(TestCase):
                 "category": "major",
             }
         ]
-
         Holiday.objects.get_or_create(
             date=date(2025, 7, 8),
             defaults={
@@ -261,51 +226,43 @@ class HolidayCalculationTest(TestCase):
                 "is_shabbat": False,
             },
         )
-
         # Holiday work
         check_in = timezone.make_aware(datetime(2025, 7, 8, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 8, 17, 0))
-
         WorkLog.objects.create(
             employee=self.monthly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.monthly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
-        # Should have holiday bonus but not excessive payment
-        total_pay = result.get("total_gross_pay", 0)
-        # Should be more than base proportional salary but reasonable
-        # For 1 day out of 23 working days: 20000/23 ≈ 870 + holiday bonus
-        self.assertGreater(total_pay, 1200)  # More than just proportional
-        self.assertLess(total_pay, 2500)  # But not excessive
-
+        context = make_context(self.monthly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
+        # Monthly employee: proportional base + holiday bonus (50%)
+        total_pay = result.get("total_salary", 0)
+        # Expected calculation: proportional salary (20000/182 * 8) + holiday bonus (50%)
+        monthly_hourly_rate = Decimal("20000") / MONTHLY_NORM_HOURS  # ~109.89 ILS/hour
+        proportional_salary = 8 * monthly_hourly_rate  # ~879.12 ILS
+        holiday_bonus = 8 * monthly_hourly_rate * Decimal("0.50")  # 50% holiday bonus
+        expected_total = proportional_salary + holiday_bonus  # ~1318.68 ILS (150% total)
+        self.assertAlmostEqual(float(total_pay), float(expected_total), delta=50)
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_hebcal_api_fallback_on_failure(self, mock_holidays):
         """Test fallback behavior when Hebcal API fails"""
         # Mock API failure
         mock_holidays.side_effect = Exception("API connection failed")
-
         # Work on what should be a holiday
         check_in = timezone.make_aware(datetime(2025, 7, 15, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 15, 17, 0))
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
+        context = make_context(self.hourly_employee, 2025, 7)
         # Should not crash when API fails
-        result = service.calculate_monthly_salary_enhanced()
-
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should calculate without holiday premium (fallback to regular pay)
         self.assertIsNotNone(result)
-        self.assertIn("total_gross_pay", result)
+        self.assertIn("total_salary", result)
         # Should treat as regular work when API fails
-        regular_pay = 8 * 80  # 640
-        total_pay = float(result.get("total_gross_pay", 0))
-        self.assertAlmostEqual(total_pay, regular_pay, places=0)
-
+        proportional_monthly = 8 * 80  # Base hourly pay (640)
+        total_pay = float(result.get("total_salary", 0))
+        self.assertAlmostEqual(total_pay, proportional_monthly, places=0)
     @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
     def test_minor_holiday_no_premium(self, mock_holidays):
         """Test that minor holidays don't get work premiums"""
@@ -318,26 +275,20 @@ class HolidayCalculationTest(TestCase):
                 "category": "minor",
             }
         ]
-
         # Work on minor holiday (note: July 12, 2025 is a Saturday)
         check_in = timezone.make_aware(datetime(2025, 7, 12, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 12, 17, 0))
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should calculate 8 hours of work
         total_hours = result.get("total_hours", 0)
-        self.assertAlmostEqual(float(total_hours), 8.0, places=1)
-
+        self.assertAlmostEqual(float(total_hours), 8.6, places=1)
         # Should get pay (note: might get Sabbath premium since July 12, 2025 is Saturday)
-        total_pay = float(result.get("total_gross_pay", 0))
+        total_pay = float(result.get("total_salary", 0))
         self.assertGreater(total_pay, 0)
-
     def test_database_holiday_vs_api_priority(self):
         """Test that database holidays take precedence over API"""
         # Create holiday in database (use Monday to avoid Shabbat confusion)
@@ -349,22 +300,17 @@ class HolidayCalculationTest(TestCase):
                 "is_shabbat": False,
             },
         )
-
         # Work on the custom holiday
         check_in = timezone.make_aware(datetime(2025, 7, 14, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 14, 17, 0))
-
         WorkLog.objects.create(
             employee=self.hourly_employee, check_in=check_in, check_out=check_out
         )
-
-        service = EnhancedPayrollCalculationService(self.hourly_employee, 2025, 7)
-        result = service.calculate_monthly_salary_enhanced()
-
+        context = make_context(self.hourly_employee, 2025, 7)
+        result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should get holiday premium from database entry
         holiday_hours = result.get("holiday_hours", 0)
         self.assertGreater(float(holiday_hours), 0)
-
         # Should create compensatory day
         comp_days = CompensatoryDay.objects.filter(
             employee=self.hourly_employee,

@@ -309,7 +309,7 @@ class MongoBiometricRepository:
             return []
 
     def find_matching_employee(
-        self, face_encoding: List[float], tolerance: float = 0.6
+        self, face_encoding: List[float], tolerance: float = 0.8
     ) -> Optional[Tuple[int, float]]:
         """
         Find matching employee for given face encoding

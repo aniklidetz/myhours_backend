@@ -3,6 +3,7 @@ Tests for Salary model database-level constraints
 """
 
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -15,8 +16,8 @@ from users.models import Employee
 class SalaryDatabaseConstraintsTest(TestCase):
     """Test database-level constraints for Salary model
     This test suite validates all critical database constraints:
-    - Positive value enforcement for hourly_rate and base_salary
-    - Calculation type validation (hourly requires hourly_rate, monthly requires base_salary)
+    - Positive value enforcement for monthly_hourly and base_salary
+    - Calculation type validation (hourly requires monthly_hourly, monthly requires base_salary)
     - Prevention of conflicting field combinations
     - Project type and date validation
     - Foreign key integrity
@@ -45,7 +46,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
         return salary
 
     def test_positive_hourly_rate_constraint(self):
-        """Test that hourly_rate must be positive when provided"""
+        """Test that monthly_hourly must be positive when provided"""
         # Valid positive hourly rate should work
         salary = Salary.objects.create(
             employee=self.employee,
@@ -113,3 +114,4 @@ class SalaryDatabaseConstraintsTest(TestCase):
         )
         # Should default to True for is_active
         self.assertTrue(salary.is_active)
+

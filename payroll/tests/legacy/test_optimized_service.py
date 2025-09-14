@@ -1,5 +1,13 @@
 """
-Smoke tests for payroll/optimized_service.py to improve coverage from 0% to 85%+
+LEGACY: Smoke tests for payroll/optimized_service.py 
+
+WARNING: This tests legacy OptimizedPayrollService which has been REMOVED from the system.
+    These tests exist only for coverage and will be deleted during legacy cleanup.
+    
+    SCHEDULED FOR REMOVAL: 2025-10-15
+    
+    DO NOT use OptimizedPayrollService in new code - it had incorrect calculation formula (hours × rate × 1.3).
+    Use PayrollService with CalculationStrategy.ENHANCED instead.
 
 Tests the OptimizedPayrollService class covering:
 - Service initialization and configuration
@@ -18,8 +26,12 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 from django.contrib.auth.models import User
 from django.test import TestCase
+
+# Mark all tests in this module as legacy
+pytestmark = [pytest.mark.legacy]
 
 from payroll.models import MonthlyPayrollSummary, Salary
 from payroll.optimized_service import OptimizedPayrollService
@@ -27,6 +39,7 @@ from users.models import Employee
 from worktime.models import WorkLog
 
 
+@pytest.mark.legacy
 class OptimizedPayrollServiceTest(TestCase):
     """Smoke tests for OptimizedPayrollService"""
 

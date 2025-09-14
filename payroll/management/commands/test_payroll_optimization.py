@@ -1,5 +1,15 @@
 """
-Django management command для тестирования оптимизации payroll API
+LEGACY - Django management command for testing the removed OptimizedPayrollService.
+
+WARNING: This targets OptimizedPayrollService which has been REMOVED from the system.
+    This command exists only for historical testing and will be deleted during legacy cleanup.
+
+    SCHEDULED FOR REMOVAL: 2025-10-15
+
+    PROBLEM: OptimizedPayrollService used incorrect calculation formula (hours × rate × 1.3).
+    SOLUTION: Use PayrollService with CalculationStrategy.ENHANCED for all new implementations.
+
+    DO NOT USE THIS COMMAND FOR NEW TESTING - it tests deprecated/incorrect logic.
 
 Usage:
     python manage.py test_payroll_optimization
@@ -9,19 +19,24 @@ Usage:
 
 import logging
 import time
+import warnings
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from payroll.optimized_service import optimized_payroll_service
 from payroll.redis_cache_service import payroll_cache
+from payroll.warnings import LegacyWarning
 from users.models import Employee
 
 logger = logging.getLogger(__name__)
 
+# Ensure LegacyWarning is always visible
+warnings.simplefilter("always", LegacyWarning)
+
 
 class Command(BaseCommand):
-    help = "Test payroll optimization and performance improvements"
+    help = "LEGACY - targets OptimizedPayrollService with incorrect calculation formula (removed from system)"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -49,6 +64,24 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Issue programmatic warning that's always visible
+        warnings.warn(
+            "LEGACY: This command targets OptimizedPayrollService; use PayrollService with CalculationStrategy.ENHANCED.",
+            LegacyWarning,
+            stacklevel=2
+        )
+
+        self.stdout.write(
+            self.style.ERROR("LEGACY WARNING: This command targets OptimizedPayrollService")
+        )
+        self.stdout.write(
+            self.style.WARNING("   Problem: Uses incorrect calculation formula (hours × rate × 1.3)")
+        )
+        self.stdout.write(
+            self.style.WARNING("   Solution: Use PayrollService with CalculationStrategy.ENHANCED instead")
+        )
+        self.stdout.write("")
+
         year = options["year"]
         month = options["month"]
         benchmark = options["benchmark"]
@@ -56,7 +89,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"🚀 Testing Payroll Optimization for {year}-{month:02d}"
+                f" Testing Payroll Optimization for {year}-{month:02d}"
             )
         )
 
@@ -74,11 +107,11 @@ class Command(BaseCommand):
 
         if employee_count == 0:
             self.stdout.write(
-                self.style.WARNING("⚠️ No employees with salary configuration found")
+                self.style.WARNING("WARNING: No employees with salary configuration found")
             )
             return
 
-        self.stdout.write(f"👥 Found {employee_count} employees to process")
+        self.stdout.write(f"Found {employee_count} employees to process")
 
         # Test Redis cache status
         self._test_redis_cache()
@@ -96,7 +129,7 @@ class Command(BaseCommand):
             cache_stats = payroll_cache.get_cache_stats()
 
             if cache_stats["status"] == "available":
-                self.stdout.write(self.style.SUCCESS(f"✅ Redis cache is available"))
+                self.stdout.write(self.style.SUCCESS(f"Redis cache is available"))
                 self.stdout.write(
                     f"   Connected clients: {cache_stats.get('connected_clients', 'unknown')}"
                 )
@@ -112,7 +145,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(
                     self.style.WARNING(
-                        f'⚠️ Redis cache not available: {cache_stats.get("error", "unknown")}'
+                        f'WARNING: Redis cache not available: {cache_stats.get("error", "unknown")}'
                     )
                 )
                 self.stdout.write("   Will use database fallback")
@@ -123,13 +156,13 @@ class Command(BaseCommand):
     def _run_optimized_test(self, employees, year, month):
         """Run optimized payroll calculation test"""
         self.stdout.write(
-            self.style.HTTP_INFO("🚀 Running Optimized Payroll Calculation...")
+            self.style.HTTP_INFO(" Running Optimized Payroll Calculation...")
         )
 
         start_time = time.time()
 
         try:
-            results = optimized_payroll_service.calculate_bulk_payroll(
+            results = optimized_self.payroll_service.calculate_bulk_payroll(
                 employees, year, month
             )
 
@@ -139,11 +172,11 @@ class Command(BaseCommand):
             # Display results
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"✅ Calculation completed in {execution_time:.2f} seconds"
+                    f"Calculation completed in {execution_time:.2f} seconds"
                 )
             )
 
-            self.stdout.write(f"📊 Results Summary:")
+            self.stdout.write(f" Results Summary:")
             self.stdout.write(f"   Total employees processed: {len(results)}")
 
             # Count by status
@@ -164,7 +197,7 @@ class Command(BaseCommand):
             self.stdout.write(f"   Total hours: {total_hours:,.1f}")
 
             # Optimization stats
-            optimization_stats = optimized_payroll_service.get_optimization_stats()
+            optimization_stats = optimized_self.payroll_service.get_optimization_stats()
             api_usage = optimization_stats["api_usage"]
 
             self.stdout.write(f"📈 Performance Stats:")
@@ -209,11 +242,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.HTTP_INFO("🏁 Running Performance Benchmark..."))
 
         # Test optimized approach
-        self.stdout.write("📊 Testing optimized approach...")
+        self.stdout.write(" Testing optimized approach...")
         start_time = time.time()
 
         try:
-            optimized_results = optimized_payroll_service.calculate_bulk_payroll(
+            optimized_results = optimized_self.payroll_service.calculate_bulk_payroll(
                 employees, year, month
             )
             optimized_time = time.time() - start_time
@@ -231,7 +264,7 @@ class Command(BaseCommand):
         if optimized_success:
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"   ✅ Optimized: {optimized_time:.2f}s ({len(optimized_results)} results)"
+                    f"   Optimized: {optimized_time:.2f}s ({len(optimized_results)} results)"
                 )
             )
 
@@ -250,10 +283,10 @@ class Command(BaseCommand):
             self.stdout.write(f"   Throughput: {throughput:.1f} employees/second")
 
             # Memory and efficiency stats
-            optimization_stats = optimized_payroll_service.get_optimization_stats()
+            optimization_stats = optimized_self.payroll_service.get_optimization_stats()
             api_usage = optimization_stats["api_usage"]
 
-            self.stdout.write(f"🔧 Optimization Features:")
+            self.stdout.write(f"Optimization Features:")
             for feature in optimization_stats["optimization_features"]:
                 self.stdout.write(f"   ✓ {feature}")
 
@@ -269,11 +302,12 @@ class Command(BaseCommand):
             )
         elif optimized_success and optimized_time < 5.0:  # Less than 5 seconds
             self.stdout.write(
-                self.style.SUCCESS("✅ GOOD: API response time under 5 seconds")
+                self.style.SUCCESS("GOOD: API response time under 5 seconds")
             )
         elif optimized_success:
             self.stdout.write(
                 self.style.WARNING(
-                    f"⚠️ SLOW: API response time {optimized_time:.1f}s - consider further optimization"
+                    f"WARNING: SLOW: API response time {optimized_time:.1f}s - consider further optimization"
                 )
             )
+

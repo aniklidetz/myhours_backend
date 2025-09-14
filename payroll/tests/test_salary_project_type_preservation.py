@@ -4,6 +4,7 @@ Unit tests specifically for project calculation_type preservation logic
 
 from datetime import date, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
@@ -73,7 +74,7 @@ class SalaryProjectTypePreservationTest(TestCase):
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": True})
     def test_project_with_hourly_rate_preserved(self):
-        """Test that project with hourly_rate is preserved when feature enabled"""
+        """Test that project with monthly_hourly is preserved when feature enabled"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="project",
@@ -82,11 +83,11 @@ class SalaryProjectTypePreservationTest(TestCase):
             project_end_date=date.today() + timedelta(days=90),
         )
         self.assertEqual(salary.calculation_type, "project")
-        self.assertEqual(salary.hourly_rate, Decimal("75.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("75.00"))
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": False})
     def test_project_with_hourly_rate_converted_to_hourly(self):
-        """Test that project with hourly_rate converts to hourly when feature disabled"""
+        """Test that project with monthly_hourly converts to hourly when feature disabled"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="project",
@@ -96,8 +97,8 @@ class SalaryProjectTypePreservationTest(TestCase):
         )
         # Should be converted based on employment_type (contract -> monthly)
         self.assertEqual(salary.calculation_type, "monthly")
-        # hourly_rate is not preserved when converting to monthly type
-        self.assertIsNone(salary.hourly_rate)
+        # monthly_hourly is not preserved when converting to monthly type
+        self.assertIsNone(salary.monthly_hourly)
 
     def test_non_project_types_unaffected(self):
         """Test that non-project calculation types are not affected by the setting"""
@@ -180,3 +181,4 @@ class SalaryProjectTypePreservationTest(TestCase):
             # Contract should convert to monthly, full_time to monthly
             self.assertEqual(contract_salary.calculation_type, "monthly")
             self.assertEqual(hourly_salary.calculation_type, "monthly")
+

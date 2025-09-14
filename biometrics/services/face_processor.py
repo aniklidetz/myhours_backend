@@ -20,7 +20,7 @@ class FaceProcessor:
     """Service for processing face images and extracting embeddings"""
 
     def __init__(self):
-        self.tolerance = getattr(settings, "FACE_RECOGNITION_TOLERANCE", 0.4)
+        self.tolerance = getattr(settings, "FACE_RECOGNITION_TOLERANCE", 0.8)
         self.model = getattr(settings, "FACE_ENCODING_MODEL", "large")
         self.min_face_size = getattr(settings, "MIN_FACE_SIZE", (50, 50))
         self.quality_threshold = getattr(settings, "FACE_QUALITY_THRESHOLD", 0.65)

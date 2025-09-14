@@ -44,19 +44,31 @@ def send_work_notifications(sender, instance, created, **kwargs):
         # If this is a check-out, trigger payroll calculation
         if instance.check_out:
             try:
-                from payroll.services import EnhancedPayrollCalculationService
+                from payroll.services.payroll_service import PayrollService
+                from payroll.services.contracts import CalculationContext
+                from payroll.services.enums import CalculationStrategy, EmployeeType
 
                 # Calculate payroll for this work session
                 year = instance.check_in.year
                 month = instance.check_in.month
 
-                payroll_service = EnhancedPayrollCalculationService(
-                    instance.employee, year, month
+                # Determine employee type
+                employee_type = EmployeeType.HOURLY if instance.employee.salaries.filter(
+                    is_active=True, calculation_type='hourly'
+                ).exists() else EmployeeType.MONTHLY
+
+                service = PayrollService()
+                context = CalculationContext(
+                    employee_id=instance.employee.id,
+                    year=year,
+                    month=month,
+                    user_id=1,  # System user for automatic calculations
+                    employee_type=employee_type,
+                    force_recalculate=True
                 )
-                payroll_service.calculate_daily_pay(instance)
+                result = service.calculate(context, CalculationStrategy.ENHANCED)
                 
-                # Also update monthly summary for regular WorkLog operations
-                payroll_service.calculate_monthly_salary_enhanced()
+                # Monthly summary is handled automatically by PayrollService
                 
                 logger.debug(f"Payroll and monthly summary calculated for WorkLog {instance.id} via notification signal")
 
@@ -156,7 +168,9 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
         
         try:
             from payroll.models import DailyPayrollCalculation
-            from payroll.services import EnhancedPayrollCalculationService
+            from payroll.services.payroll_service import PayrollService
+            from payroll.services.contracts import CalculationContext
+            from payroll.services.enums import CalculationStrategy, EmployeeType
 
             # Determine affected dates
             affected_dates = set()
@@ -182,8 +196,21 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
                 f"for {year}-{month:02d} due to WorkLog {instance.id} {operation_type}"
             )
 
-            # Initialize payroll service
-            payroll_service = EnhancedPayrollCalculationService(employee, year, month)
+            # Determine employee type
+            employee_type = EmployeeType.HOURLY if employee.salaries.filter(
+                is_active=True, calculation_type='hourly'
+            ).exists() else EmployeeType.MONTHLY
+
+            # Initialize new payroll service
+            service = PayrollService()
+            context = CalculationContext(
+                employee_id=employee.id,
+                year=year,
+                month=month,
+                user_id=1,  # System user for automatic calculations
+                employee_type=employee_type,
+                force_recalculate=True
+            )
 
             # Handle specific WorkLog soft delete - remove its calculation immediately
             if hasattr(instance, "_was_soft_deleted"):
@@ -209,10 +236,9 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
                     # Recalculate payroll for this specific date
                     logger.info(f"Recalculating payroll for {affected_date} - has {len(date_worklogs)} active WorkLogs")
                     
-                    # Calculate daily pay for each worklog
-                    for worklog in date_worklogs:
-                        if worklog.check_out:  # Only calculate if worklog is complete
-                            payroll_service.calculate_daily_pay(worklog)
+                    # Recalculate payroll for the full period using new service
+                    # (The new PayrollService handles all work logs for the period automatically)
+                    service.calculate(context, CalculationStrategy.ENHANCED)
 
                 else:
                     # No active WorkLogs for this date - remove all payroll calculations for this date
@@ -231,9 +257,9 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
 
             # Only recalculate monthly summary if we processed any dates
             if affected_dates:
-                result = payroll_service.calculate_monthly_salary_enhanced()
+                result = service.calculate(context, CalculationStrategy.ENHANCED)
                 logger.info(
-                    f"Payroll recalculation completed: total ₪{result['total_gross_pay']} for {result['total_hours']}h"
+                    f"Payroll recalculation completed: total {result.get('total_salary', 0)} ILS for {result.get('total_hours', 0)}h"
                 )
 
             # Clean up flags

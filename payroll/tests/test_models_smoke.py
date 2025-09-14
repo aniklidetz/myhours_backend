@@ -6,6 +6,7 @@ Tests core model behavior without deep integration complexity.
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
@@ -52,7 +53,7 @@ class SalaryModelSmokeTest(TestCase):
         )
 
         self.assertEqual(salary.employee, self.employee)
-        self.assertEqual(salary.hourly_rate, Decimal("50.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
         self.assertEqual(salary.calculation_type, "hourly")
         self.assertEqual(salary.currency, "ILS")
 
@@ -244,20 +245,20 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            base_pay=Decimal("8000.00"),
-            total_gross_pay=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
         )
 
         self.assertEqual(summary.employee, self.employee)
         self.assertEqual(summary.year, 2025)
         self.assertEqual(summary.month, 1)
         self.assertEqual(summary.total_hours, Decimal("160.00"))
-        self.assertEqual(summary.base_pay, Decimal("8000.00"))
+        self.assertEqual(summary.proportional_monthly, Decimal("8000.00"))
 
     def test_monthly_payroll_summary_unique_constraint(self):
         """Test unique constraint on employee/year/month"""
         MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, base_pay=Decimal("8000.00")
+            employee=self.employee, year=2025, month=1, proportional_monthly=Decimal("8000.00")
         )
 
         # Creating another summary for same employee/month should be allowed
@@ -266,7 +267,7 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             employee=self.employee,
             year=2025,
             month=2,  # Different month
-            base_pay=Decimal("7500.00"),
+            proportional_monthly=Decimal("7500.00"),
         )
 
         self.assertNotEqual(summary2.month, 1)
@@ -279,15 +280,15 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             month=1,
             regular_hours=Decimal("160.00"),
             overtime_hours=Decimal("10.00"),
-            base_pay=Decimal("8000.00"),
-            overtime_pay=Decimal("750.00"),
-            total_gross_pay=Decimal("8750.00"),
+            proportional_monthly=Decimal("8000.00"),
+            total_bonuses_monthly=Decimal("750.00"),
+            total_salary=Decimal("8750.00"),
         )
 
         # Test calculated fields
         self.assertEqual(summary.regular_hours, Decimal("160.00"))
         self.assertEqual(summary.overtime_hours, Decimal("10.00"))
-        self.assertEqual(summary.total_gross_pay, Decimal("8750.00"))
+        self.assertEqual(summary.total_salary, Decimal("8750.00"))
 
 
 class CompensatoryDayModelSmokeTest(TestCase):
@@ -426,11 +427,11 @@ class ModelIntegrationSmokeTest(TestCase):
         """Test creating multiple monthly payroll summaries for employee"""
         # Create summaries for different months
         summary1 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, base_pay=Decimal("8000.00")
+            employee=self.employee, year=2025, month=1, proportional_monthly=Decimal("8000.00")
         )
 
         summary2 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=2, base_pay=Decimal("8500.00")
+            employee=self.employee, year=2025, month=2, proportional_monthly=Decimal("8500.00")
         )
 
         # Test that both summaries exist
@@ -452,3 +453,4 @@ class ModelIntegrationSmokeTest(TestCase):
         # Test that created_at and updated_at are close
         time_diff = salary.updated_at - salary.created_at
         self.assertLess(time_diff.total_seconds(), 1)  # Less than 1 second difference
+

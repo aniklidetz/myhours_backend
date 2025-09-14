@@ -5,6 +5,7 @@ Fixes timezone issues and integrates with Redis cache for better performance
 """
 
 import logging
+import warnings
 from datetime import date, datetime, timedelta
 
 import pytz
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 class EnhancedSunriseSunsetService:
     """
     Enhanced service with proper Israeli timezone handling and Redis integration
+
+    .. deprecated:: 2024-09-14
+       EnhancedSunriseSunsetService is deprecated. Use UnifiedShabbatService instead.
+       See integrations.services.unified_shabbat_service.get_shabbat_times()
     """
 
     BASE_URL = "https://api.sunrise-sunset.org/json"
@@ -142,6 +147,12 @@ class EnhancedSunriseSunsetService:
         Returns:
             Dict with Shabbat times in Israeli timezone
         """
+        warnings.warn(
+            "EnhancedSunriseSunsetService.get_shabbat_times_israeli_timezone() is deprecated. Use integrations.services.unified_shabbat_service.get_shabbat_times() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         if lat is None:
             lat = cls.DEFAULT_LAT
         if lng is None:
@@ -339,6 +350,11 @@ def get_shabbat_times_israeli_timezone(date_obj, lat=31.7683, lon=35.2137):
     Wrapper function for test compatibility
     Maps old function signature to the class method
     """
+    warnings.warn(
+        "get_shabbat_times_israeli_timezone() is deprecated. Use integrations.services.unified_shabbat_service.get_shabbat_times() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     return enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
         date_obj=date_obj,
         lat=lat,

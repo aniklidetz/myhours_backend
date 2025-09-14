@@ -14,7 +14,7 @@ Covers CRITICAL requirements:
 Covers ALL 8 commands:
 - generate_missing_payroll.py
 - recalculate_monthly_payroll.py
-- update_total_gross_pay.py
+- update_total_salary.py
 - cleanup_test_payroll.py
 - recalculate_with_new_sabbath_logic.py
 - test_payroll_optimization.py
@@ -25,6 +25,7 @@ Covers ALL 8 commands:
 import io
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest import skip
 from unittest.mock import MagicMock, Mock, patch
 
@@ -42,6 +43,9 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.services.payroll_service import PayrollService
+from payroll.services.enums import CalculationStrategy
+from payroll.tests.helpers import PayrollTestMixin, make_context
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -54,7 +58,7 @@ from worktime.models import WorkLog
         }
     }
 )
-class ComprehensivePayrollCommandsE2ETest(TestCase):
+class ComprehensivePayrollCommandsE2ETest(PayrollTestMixin, TestCase):
     """Comprehensive E2E tests covering all critical requirements"""
 
     def setUp(self):
@@ -273,8 +277,7 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
         for calc in daily_calcs:
             key = f"{calc.employee_id}_{calc.work_date}"
             first_run_totals[key] = {
-                "total_pay": calc.total_pay,
-                "total_gross_pay": calc.total_gross_pay,
+                "total_salary": calc.total_salary,
                 "regular_hours": calc.regular_hours,
                 "overtime_hours_1": calc.overtime_hours_1,
             }
@@ -291,7 +294,7 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
         for summary in monthly_summaries:
             key = summary.employee_id
             first_run_summary_totals[key] = {
-                "total_gross_pay": summary.total_gross_pay,
+                "total_salary": summary.total_salary,
                 "total_hours": summary.total_hours,
                 "worked_days": summary.worked_days,
             }
@@ -326,14 +329,9 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
             if key in first_run_totals:
                 first_totals = first_run_totals[key]
                 self.assertEqual(
-                    calc.total_pay,
-                    first_totals["total_pay"],
-                    f"DRIFT DETECTED: total_pay changed for {key}",
-                )
-                self.assertEqual(
-                    calc.total_gross_pay,
-                    first_totals["total_gross_pay"],
-                    f"DRIFT DETECTED: total_gross_pay changed for {key}",
+                    calc.total_salary,
+                    first_totals["total_salary"],
+                    f"DRIFT DETECTED: total_salary changed for {key}",
                 )
 
         # Verify monthly summary idempotency
@@ -346,9 +344,9 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
             if key in first_run_summary_totals:
                 first_summary = first_run_summary_totals[key]
                 self.assertEqual(
-                    summary.total_gross_pay,
-                    first_summary["total_gross_pay"],
-                    f"SUMMARY DRIFT: total_gross_pay changed for employee {key}",
+                    summary.total_salary,
+                    first_summary["total_salary"],
+                    f"SUMMARY DRIFT: total_salary changed for employee {key}",
                 )
 
         # STEP 3: Test with --force flag (should recalculate)
@@ -423,12 +421,12 @@ class AllCommandsParametersTest(ComprehensivePayrollCommandsE2ETest):
         DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=date(2025, 2, 15),
-            regular_hours=Decimal("8.0"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
             overtime_hours_1=Decimal("2.0"),
-            regular_pay=Decimal("500.00"),
-            overtime_pay_1=Decimal("150.00"),
-            base_pay=Decimal("650.00"),
-            total_pay=Decimal("650.00"),
+            base_regular_pay=Decimal("500.00"),
+            bonus_overtime_pay_1=Decimal("150.00"),
+            proportional_monthly=Decimal("650.00"),
+            total_salary=Decimal("650.00"),
         )
 
         # Test all parameters
@@ -457,10 +455,10 @@ class AllCommandsParametersTest(ComprehensivePayrollCommandsE2ETest):
         DailyPayrollCalculation.objects.create(
             employee=self.hourly_employee,
             work_date=self.saturday,
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("680.00"),
-            base_pay=Decimal("680.00"),
-            total_pay=Decimal("680.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("680.00"),
+            proportional_monthly=Decimal("680.00"),
+            total_salary=Decimal("680.00"),
         )
 
         # Test valid parameters
@@ -551,11 +549,11 @@ class AllCommandsParametersTest(ComprehensivePayrollCommandsE2ETest):
         output = self.stdout.getvalue()
         self.assertIn("would delete", output.lower())
 
-    def test_update_total_gross_pay_parameters(self):
-        """Test parameters for update_total_gross_pay"""
+    def test_update_total_salary_parameters(self):
+        """Test parameters for update_total_salary"""
 
         with patch("sys.stdout", self.stdout):
-            call_command("update_total_gross_pay", stdout=self.stdout)
+            call_command("update_total_salary", stdout=self.stdout)
 
         # Should execute without error
         output = self.stdout.getvalue()
@@ -609,20 +607,13 @@ class IntegrationsAndMockingTest(ComprehensivePayrollCommandsE2ETest):
     """Test external integrations with proper mocking"""
 
     @patch("payroll.redis_cache_service.payroll_cache")
-    @patch("payroll.optimized_service.optimized_payroll_service")
-    def test_external_integrations_mocked(self, mock_optimized_service, mock_redis):
+    def test_external_integrations_mocked(self, mock_redis):
         """Test that external APIs and Redis are properly mocked"""
 
         # Mock Redis operations
         mock_redis.get.return_value = None
         mock_redis.set.return_value = True
         mock_redis.delete.return_value = True
-
-        # Mock optimized service
-        mock_optimized_service.calculate_monthly_payroll.return_value = {
-            "employees": [],
-            "total_cost": Decimal("0"),
-        }
 
         # Test optimization command with mocked dependencies
         with patch("sys.stdout", self.stdout):
@@ -634,26 +625,26 @@ class IntegrationsAndMockingTest(ComprehensivePayrollCommandsE2ETest):
         output = self.stdout.getvalue()
         self.assertIn("optimization", output.lower())
 
-    @patch("payroll.services.EnhancedPayrollCalculationService")
-    def test_payroll_service_integration_mocked(self, mock_service_class):
-        """Test payroll service integration with mocking"""
+    def test_payroll_service_integration_mocked(self):
+        """Test payroll service integration with PayrollService"""
 
-        # Mock the service
-        mock_service = Mock()
-        mock_service.calculate_daily_bonuses_monthly.return_value = {
-            "total_pay": Decimal("1000.00"),
-            "total_gross_pay": Decimal("1200.00"),
-            "breakdown": {},
-        }
-        mock_service_class.return_value = mock_service
+        # Use the new PayrollService architecture
+        from payroll.services.payroll_service import PayrollService
 
-        # Test command that uses the service
-        with patch("sys.stdout", self.stdout):
-            call_command(
-                "recalculate_monthly_payroll",
-                employee_id=self.monthly_employee.id,
-                stdout=self.stdout,
-            )
+        with patch("payroll.services.self.payroll_service.PayrollService.calculate") as mock_calculate:
+            mock_calculate.return_value = {
+                "total_salary": Decimal("1000.00"),
+                "total_hours": ISRAELI_DAILY_NORM_HOURS,
+                "breakdown": {},
+            }
+
+            # Test command that uses the service
+            with patch("sys.stdout", self.stdout):
+                call_command(
+                    "recalculate_monthly_payroll",
+                    employee_id=self.monthly_employee.id,
+                    stdout=self.stdout,
+                )
 
         # Service should be used
         output = self.stdout.getvalue()
@@ -702,9 +693,9 @@ class NegativeScenariosTest(ComprehensivePayrollCommandsE2ETest):
             employee=self.monthly_employee,
             work_date=date(2025, 2, 15),
             regular_hours=Decimal("-5.0"),  # Negative hours
-            regular_pay=Decimal("0.00"),
-            base_pay=Decimal("0.00"),
-            total_pay=Decimal("0.00"),
+            base_regular_pay=Decimal("0.00"),
+            proportional_monthly=Decimal("0.00"),
+            total_salary=Decimal("0.00"),
         )
 
         # Test recalculation with corrupted data
@@ -815,17 +806,13 @@ class PerformanceStressTest(ComprehensivePayrollCommandsE2ETest):
         start_time = timezone.now()
 
         # Mock external services to prevent hanging
-        with patch(
-            "payroll.services.EnhancedPayrollCalculationService"
-        ) as mock_service_class:
+        with patch("payroll.services.self.payroll_service.PayrollService.calculate") as mock_calculate:
             # Mock the service to return quickly
-            mock_service = Mock()
-            mock_service.calculate_daily_bonuses_monthly.return_value = {
-                "total_pay": Decimal("1000.00"),
-                "total_gross_pay": Decimal("1200.00"),
+            mock_calculate.return_value = {
+                "total_salary": Decimal("1000.00"),
+                "total_hours": ISRAELI_DAILY_NORM_HOURS,
                 "breakdown": {},
             }
-            mock_service_class.return_value = mock_service
 
             with patch(
                 "sys.stdout", io.StringIO()
@@ -856,7 +843,7 @@ class AllCommandsCoverageTest(ComprehensivePayrollCommandsE2ETest):
         commands_to_test = [
             ("generate_missing_payroll", {"year": 2025, "month": 2, "dry_run": True}),
             ("recalculate_monthly_payroll", {"dry_run": True}),
-            ("update_total_gross_pay", {}),
+            ("update_total_salary", {}),
             ("cleanup_test_payroll", {"dry_run": True}),
             ("recalculate_with_new_sabbath_logic", {"dry_run": True}),
             ("test_payroll_optimization", {"year": 2025, "month": 2}),
@@ -903,7 +890,7 @@ class AllCommandsCoverageTest(ComprehensivePayrollCommandsE2ETest):
 # ==========================================
 
 
-class E2EWorkflowTestBase(TestCase):
+class E2EWorkflowTestBase(PayrollTestMixin, TestCase):
     """Base class for E2E workflow tests with common fixtures and mocks"""
 
     def setUp(self):
@@ -1046,13 +1033,13 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
                 employee=self.monthly_employee, work_date=self.test_date1
             ).first()
             self.assertIsNotNone(monthly_calc_15)
-            self.assertGreater(monthly_calc_15.total_pay, Decimal("0"))
+            self.assertGreater(monthly_calc_15.total_salary, Decimal("0"))
 
             hourly_calc_16 = DailyPayrollCalculation.objects.filter(
                 employee=self.hourly_employee, work_date=self.test_date2
             ).first()
             self.assertIsNotNone(hourly_calc_16)
-            self.assertGreater(hourly_calc_16.total_pay, Decimal("0"))
+            self.assertGreater(hourly_calc_16.total_salary, Decimal("0"))
 
             # 5. Verify monthly summaries were created or updated
             monthly_summaries = MonthlyPayrollSummary.objects.filter(
@@ -1161,11 +1148,11 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         existing_calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("100.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("100.00"),
+            total_salary=Decimal("100.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("100.00"),
         )
-        original_total = existing_calc.total_pay
+        original_total = existing_calc.total_salary
         original_updated = existing_calc.updated_at
 
         # Mock external services
@@ -1208,9 +1195,9 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         initial_calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("50.00"),  # Intentionally low
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("50.00"),
+            total_salary=Decimal("50.00"),  # Intentionally low
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("50.00"),
         )
 
         # Mock external services
@@ -1245,17 +1232,17 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         monthly_calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("100.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("100.00"),
+            total_salary=Decimal("100.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("100.00"),
         )
 
         hourly_calc = DailyPayrollCalculation.objects.create(
             employee=self.hourly_employee,
             work_date=self.test_date2,
-            total_pay=Decimal("200.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("200.00"),
+            total_salary=Decimal("200.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("200.00"),
         )
 
         original_hourly_updated = hourly_calc.updated_at
@@ -1294,9 +1281,9 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("100.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("100.00"),
+            total_salary=Decimal("100.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("100.00"),
         )
         original_updated = calc.updated_at
 
@@ -1313,7 +1300,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
             # Verify nothing was actually updated
             unchanged_calc = DailyPayrollCalculation.objects.get(id=calc.id)
             self.assertEqual(unchanged_calc.updated_at, original_updated)
-            self.assertEqual(unchanged_calc.total_pay, Decimal("100.00"))
+            self.assertEqual(unchanged_calc.total_salary, Decimal("100.00"))
 
             # But should have output showing what would be done
             output = self.stdout.getvalue()
@@ -1341,20 +1328,17 @@ class TestCleanupTestPayrollE2E(E2EWorkflowTestBase):
         self.test_calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("100.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("100.00"),
+            total_salary=Decimal("100.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("100.00"),
         )
 
         self.real_calc = DailyPayrollCalculation.objects.create(
             employee=self.hourly_employee,
             work_date=self.test_date2,
-            total_pay=Decimal("200.00"),
-            total_gross_pay=Decimal(
-                "200.00"
-            ),  # Set this to avoid being caught by cleanup filter
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("200.00"),
+            total_salary=Decimal("200.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("200.00"),
         )
 
     def test_cleanup_test_payroll_dry_run(self):
@@ -1400,40 +1384,40 @@ class TestCleanupTestPayrollE2E(E2EWorkflowTestBase):
         )
 
 
-class TestUpdateTotalGrossPayE2E(E2EWorkflowTestBase):
-    """E2E tests for update_total_gross_pay command"""
+class TestUpdateTotalSalaryE2E(E2EWorkflowTestBase):
+    """E2E tests for update_total_salary command"""
 
-    def test_update_total_gross_pay_workflow(self):
-        """Test complete update_total_gross_pay workflow"""
+    def test_update_total_salary_workflow(self):
+        """Test complete update_total_salary workflow"""
         # Clean up any existing data first
         DailyPayrollCalculation.objects.filter(
             employee=self.monthly_employee, work_date=self.test_date1
         ).delete()
 
-        # Create calculation with incomplete total_gross_pay
+        # Create calculation with incomplete total_salary
         calc = DailyPayrollCalculation.objects.create(
             employee=self.monthly_employee,
             work_date=self.test_date1,
-            total_pay=Decimal("100.00"),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("100.00"),
-            overtime_pay_1=Decimal("25.00"),
-            overtime_pay_2=Decimal("15.00"),
-            # total_gross_pay should be sum of above, but let's make it incorrect
+            total_salary=Decimal("100.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("100.00"),
+            bonus_overtime_pay_1=Decimal("25.00"),
+            bonus_overtime_pay_2=Decimal("15.00"),
+            # total_salary should be sum of above, but let's make it incorrect
         )
 
         # Run update command
         with patch("sys.stdout", self.stdout):
-            call_command("update_total_gross_pay", stdout=self.stdout)
+            call_command("update_total_salary", stdout=self.stdout)
 
         # Verify total was recalculated
         updated_calc = DailyPayrollCalculation.objects.get(id=calc.id)
-        expected_total = calc.total_pay + calc.overtime_pay_1 + calc.overtime_pay_2
+        expected_total = calc.base_regular_pay + calc.bonus_overtime_pay_1 + calc.bonus_overtime_pay_2
 
         # The exact calculation may vary based on business logic
         # Just verify it was updated and is reasonable
         self.assertGreater(updated_calc.updated_at, calc.updated_at)
-        self.assertGreater(updated_calc.total_pay, Decimal("0"))
+        self.assertGreater(updated_calc.total_salary, Decimal("0"))
 
 
 class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
@@ -1469,7 +1453,7 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
             # 3. Update total gross pay
             with patch("sys.stdout", self.stdout):
                 call_command(
-                    "update_total_gross_pay",
+                    "update_total_salary",
                     month=f"{self.test_year}-{self.test_month:02d}",
                     stdout=self.stdout,
                 )
@@ -1477,7 +1461,7 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
             # 4. Verify consistent state after pipeline
             final_calculations = DailyPayrollCalculation.objects.all()
             for calc in final_calculations:
-                self.assertGreater(calc.total_pay, Decimal("0"))
+                self.assertGreater(calc.total_salary, Decimal("0"))
                 self.assertGreaterEqual(calc.regular_hours, Decimal("0"))
 
             # 5. Verify monthly summaries exist
@@ -1595,3 +1579,4 @@ class TestCommandRobustnessE2E(E2EWorkflowTestBase):
 
             # Clean up performance test data
             Employee.objects.filter(first_name="Perf").delete()
+

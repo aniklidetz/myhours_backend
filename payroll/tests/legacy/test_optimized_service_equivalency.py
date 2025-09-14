@@ -1,13 +1,21 @@
 """
-Approximation comparison tests for OptimizedPayrollService vs EnhancedPayrollCalculationService
+LEGACY: Approximation comparison tests for OptimizedPayrollService vs EnhancedPayrollCalculationService
+
+WARNING: OptimizedPayrollService has been REMOVED from the system due to incorrect calculation formula.
+    This test exists only for historical coverage and will be deleted during legacy cleanup.
+    
+    SCHEDULED FOR REMOVAL: 2025-10-15
+    
+    PROBLEM: OptimizedPayrollService used incorrect formula (hours × rate × 1.3) instead of proper Israeli labor law.
+    SOLUTION: Use PayrollService with CalculationStrategy.ENHANCED for all new implementations.
 
 Tests that the "fast" optimized service produces reasonable approximations compared to the base service
 on a representative set of scenarios. The OptimizedPayrollService uses estimation algorithms (1.3x coefficient)
 for performance, while the base service does exact calculations.
 
-⚠️  IMPORTANT: These services are NOT equivalent by design:
-- OptimizedPayrollService: Fast estimation with approximations (~30% overhead coefficient)
-- EnhancedPayrollCalculationService: Detailed business logic with exact calculations
+IMPORTANT: These services are NOT equivalent by design:
+- OptimizedPayrollService: Fast estimation with approximations (~30% overhead coefficient) [REMOVED - INCORRECT]
+- EnhancedPayrollCalculationService: Detailed business logic with exact calculations [LEGACY]
 
 Test scenarios:
 1. Weekdays without overtime, with 125% overtime, with 150% overtime
@@ -23,20 +31,25 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
 import pytz
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
 
+# Mark all tests in this module as legacy
+pytestmark = [pytest.mark.legacy]
+
 from integrations.models import Holiday
 from payroll.models import Salary
 from payroll.optimized_service import OptimizedPayrollService
-from payroll.services import EnhancedPayrollCalculationService
+from payroll.services.adapters import EnhancedPayrollCalculationService
 from users.models import Employee
 from worktime.models import WorkLog
 
 
+@pytest.mark.legacy
 class OptimizedServiceEquivalencyTest(TestCase):
     """Test equivalency between OptimizedPayrollService and EnhancedPayrollCalculationService"""
 
@@ -643,6 +656,7 @@ class OptimizedServiceEquivalencyTest(TestCase):
         )
 
 
+@pytest.mark.legacy
 class OptimizedServiceEquivalencyEdgeCasesTest(TestCase):
     """Test edge cases in equivalency"""
 

@@ -11,6 +11,7 @@ Tests the SalarySerializer and CompensatoryDaySerializer covering:
 
 from datetime import date, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import Mock, patch
 
 from rest_framework import serializers
@@ -359,7 +360,7 @@ class SalarySerializerIntegrationTest(SalarySerializerTest):
 
         salary = serializer.save()
         self.assertEqual(salary.calculation_type, "hourly")
-        self.assertEqual(salary.hourly_rate, Decimal("50.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": True})
     def test_serializer_with_valid_project_data(self):
@@ -604,3 +605,4 @@ class CompensatoryDaySerializerIntegrationTest(CompensatoryDaySerializerTest):
         # Should show as used
         self.assertTrue(data["is_used"])
         self.assertIsNotNone(data["date_used"])
+

@@ -168,3 +168,61 @@ The payroll database integrity issue has been **completely resolved** with:
 2. **3 Performance Indexes** - Optimize frequent query patterns 3. **Comprehensive Test Coverage** - Validate all constraint scenarios
 4. **Migration Safety** - Backwards compatible deployment
 **Risk Level: ELIMINATED** - Invalid payroll configurations are now impossible at the database level, providing bulletproof data integrity regardless of application code changes.
+
+---
+
+# OptimizedPayrollStrategy Removal - COMPLETED
+
+## Issue Status: RESOLVED
+**Problem**: OptimizedPayrollService used incorrect calculation formula (hours × rate × 1.3) instead of proper Israeli labor law compliance.
+**Impact**: Incorrect salary calculations for all employees processed through optimized strategy.
+
+## Solution Implemented
+
+### 1. Strategy Removal and Migration
+- **Removed**: OptimizedPayrollService with incorrect formula
+- **Replaced**: PayrollService with CalculationStrategy.ENHANCED
+- **Graceful Degradation**: `optimized` parameter automatically maps to `enhanced`
+
+### 2. Legacy Code Isolation
+#### A. **pytest Configuration** - `pytest.ini:18,41`
+```ini
+addopts = -m "not legacy"
+markers = legacy: deprecated tests for removed optimized_service
+```
+
+#### B. **Legacy Test Isolation** - `payroll/tests/legacy/`
+```
+payroll/tests/legacy/test_optimized_service.py
+payroll/tests/legacy/test_optimized_service_equivalency.py
+```
+
+#### C. **Protection Against Future Usage** - `payroll/tests/test_no_optimized_imports.py`
+```python
+def test_no_optimized_imports_in_non_legacy():
+    """Prevent optimized_service imports in non-legacy modules."""
+```
+
+### 3. Custom Warning System - `payroll/warnings.py`
+```python
+class LegacyWarning(Warning):
+    """Warning for deprecated legacy code usage."""
+```
+
+### 4. Sunset Schedule
+**All legacy files marked with removal date: 2025-10-15**
+- `/payroll/optimized_service.py`
+- `/payroll/management/commands/test_payroll_optimization.py`
+- `/payroll/tests/legacy/test_optimized_service.py`
+- `/payroll/tests/legacy/test_optimized_service_equivalency.py`
+
+## Resolution Summary
+| Component | Status | Solution |
+|-----------|---------|----------|
+| **Incorrect Formula Fix** | **FIXED** | PayrollService with CalculationStrategy.ENHANCED |
+| **Legacy Code Isolation** | **COMPLETE** | Moved to tests/legacy/ with pytest markers |
+| **Protection Mechanism** | **ACTIVE** | Guard tests prevent future optimized_service imports |
+| **Graceful Degradation** | **IMPLEMENTED** | optimized→enhanced automatic mapping |
+| **Documentation** | **COMPLETE** | Warnings and sunset dates added |
+
+**Risk Level: ELIMINATED** - Incorrect payroll calculations prevented, legacy code isolated with sunset schedule.

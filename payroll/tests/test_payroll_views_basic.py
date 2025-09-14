@@ -7,6 +7,7 @@ Simplified tests to avoid complex model setup and focus on view functionality
 import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import Mock, patch
 
 import pytz
@@ -20,8 +21,7 @@ from payroll.models import Salary
 from users.models import Employee
 from worktime.models import WorkLog
 
-
-class BasicPayrollViewsTest(TestCase):
+class BasicPayrollViewsTest(PayrollTestMixin, TestCase):
     """Basic tests for payroll views focusing on view logic"""
 
     def setUp(self):
@@ -64,7 +64,6 @@ class BasicPayrollViewsTest(TestCase):
             hourly_rate=Decimal("60.00"),
             currency="ILS",
         )
-
 
 class PayrollListBasicTest(BasicPayrollViewsTest):
     """Basic tests for payroll_list endpoint"""
@@ -113,7 +112,6 @@ class PayrollListBasicTest(BasicPayrollViewsTest):
         self.assertIn(
             response.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN]
         )
-
 
 class EnhancedEarningsBasicTest(BasicPayrollViewsTest):
     """Basic tests for enhanced_earnings endpoint"""
@@ -172,7 +170,6 @@ class EnhancedEarningsBasicTest(BasicPayrollViewsTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
-
 class DailyCalculationsBasicTest(BasicPayrollViewsTest):
     """Basic tests for daily calculations endpoint"""
 
@@ -214,18 +211,17 @@ class DailyCalculationsBasicTest(BasicPayrollViewsTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
-
 class RecalculatePayrollBasicTest(BasicPayrollViewsTest):
     """Basic tests for recalculate payroll endpoint"""
 
-    @patch("payroll.services.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_admin_access(self, mock_service):
         """Test admin can trigger payroll recalculation"""
         # Mock the service
         mock_instance = Mock()
         mock_instance.calculate_monthly_salary_enhanced.return_value = {
             "employee": "Test Employee",
-            "total_pay": Decimal("5000.00"),
+            "total_salary": Decimal("5000.00"),
         }
         mock_service.return_value = mock_instance
 
@@ -259,14 +255,14 @@ class RecalculatePayrollBasicTest(BasicPayrollViewsTest):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("payroll.services.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_specific_employee(self, mock_service):
         """Test recalculation for specific employee"""
         # Mock the service
         mock_instance = Mock()
         mock_instance.calculate_monthly_salary_enhanced.return_value = {
             "employee": "Specific Employee",
-            "total_pay": Decimal("3000.00"),
+            "total_salary": Decimal("3000.00"),
         }
         mock_service.return_value = mock_instance
 
@@ -290,7 +286,6 @@ class RecalculatePayrollBasicTest(BasicPayrollViewsTest):
             ],
         )
 
-
 class PayrollAnalyticsBasicTest(BasicPayrollViewsTest):
     """Basic tests for payroll analytics endpoint"""
 
@@ -313,7 +308,6 @@ class PayrollAnalyticsBasicTest(BasicPayrollViewsTest):
         response = self.client.get("/api/v1/payroll/analytics/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
 
 class MonthlyPayrollSummaryBasicTest(BasicPayrollViewsTest):
     """Basic tests for monthly payroll summary endpoint"""
@@ -354,7 +348,6 @@ class MonthlyPayrollSummaryBasicTest(BasicPayrollViewsTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
-
 class BackwardCompatibleEarningsBasicTest(BasicPayrollViewsTest):
     """Basic tests for backward compatible earnings endpoint"""
 
@@ -378,8 +371,7 @@ class BackwardCompatibleEarningsBasicTest(BasicPayrollViewsTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
-
-class HelperFunctionsBasicTest(TestCase):
+class HelperFunctionsBasicTest(PayrollTestMixin, TestCase):
     """Test helper functions in payroll views"""
 
     def setUp(self):
@@ -442,3 +434,4 @@ class HelperFunctionsBasicTest(TestCase):
             username="noprofile2", email="noprofile2@test.com", password="pass123"
         )
         self.assertFalse(check_admin_or_accountant_role(user_no_profile))
+

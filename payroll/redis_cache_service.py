@@ -24,8 +24,8 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from integrations.models import Holiday
-from integrations.services.enhanced_sunrise_sunset_service import (
-    enhanced_sunrise_sunset_service,
+from integrations.services.unified_shabbat_service import (
+    get_shabbat_times,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,7 +130,7 @@ class PayrollRedisCache:
             # ✅ NEW: Enhance Shabbat entries with precise API times
             if holiday.is_shabbat:
                 try:
-                    shabbat_times = enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
+                    shabbat_times = get_shabbat_times(
                         holiday.date, use_cache=True
                     )
 

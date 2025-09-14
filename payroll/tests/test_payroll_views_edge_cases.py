@@ -8,6 +8,7 @@ that are not covered by basic tests.
 import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 import pytz
@@ -27,8 +28,7 @@ from payroll.models import (
 from users.models import Employee
 from worktime.models import WorkLog
 
-
-class PayrollViewsEdgeCasesTest(TestCase):
+class PayrollViewsEdgeCasesTest(PayrollTestMixin, TestCase):
     """Edge case tests for payroll views"""
 
     def setUp(self):
@@ -70,7 +70,6 @@ class PayrollViewsEdgeCasesTest(TestCase):
             hourly_rate=Decimal("60.00"),
             currency="ILS",
         )
-
 
 class PayrollListEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for payroll_list function"""
@@ -128,7 +127,7 @@ class PayrollListEdgeCasesTest(PayrollViewsEdgeCasesTest):
             employee=self.employee,
             year=current_date.year,
             month=current_date.month,
-            total_gross_pay=Decimal("5000.00"),
+            total_salary=Decimal("5000.00"),
             total_hours=Decimal("160.0"),
             worked_days=20,
         )
@@ -158,7 +157,6 @@ class PayrollListEdgeCasesTest(PayrollViewsEdgeCasesTest):
             response.status_code,
             [status.HTTP_500_INTERNAL_SERVER_ERROR, status.HTTP_404_NOT_FOUND],
         )
-
 
 class EnhancedEarningsEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for enhanced_earnings function"""
@@ -197,12 +195,12 @@ class EnhancedEarningsEdgeCasesTest(PayrollViewsEdgeCasesTest):
     def test_enhanced_earnings_concurrent_calculation(self):
         """Test enhanced_earnings under concurrent calculation scenario"""
         with patch(
-            "payroll.views.EnhancedPayrollCalculationService"
+            "payroll.views.PayrollService"
         ) as mock_service_class:
             mock_service = Mock()
             # First call succeeds, second fails due to concurrent modification
             mock_service.calculate_monthly_salary_enhanced.side_effect = [
-                {"employee": "Test", "total_pay": Decimal("5000")},
+                {"employee": "Test", "total_salary": Decimal("5000")},
                 IntegrityError("Concurrent modification"),
             ]
             mock_service_class.return_value = mock_service
@@ -225,7 +223,6 @@ class EnhancedEarningsEdgeCasesTest(PayrollViewsEdgeCasesTest):
                     status.HTTP_404_NOT_FOUND,
                 ],
             )
-
 
 class DailyPayrollCalculationsEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for daily_payroll_calculations function"""
@@ -288,10 +285,10 @@ class DailyPayrollCalculationsEdgeCasesTest(PayrollViewsEdgeCasesTest):
             DailyPayrollCalculation.objects.create(
                 employee=self.employee,
                 work_date=date.today() - timedelta(days=i),
-                regular_hours=Decimal("8.0"),
-                regular_pay=Decimal("480.00"),
-                base_pay=Decimal("480.00"),
-                total_pay=Decimal("480.00"),
+                regular_hours=ISRAELI_DAILY_NORM_HOURS,
+                base_regular_pay=Decimal("480.00"),
+                proportional_monthly=Decimal("480.00"),
+                total_salary=Decimal("480.00"),
             )
 
         self.client.force_authenticate(user=self.admin_user)
@@ -300,7 +297,6 @@ class DailyPayrollCalculationsEdgeCasesTest(PayrollViewsEdgeCasesTest):
         self.assertIn(
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
-
 
 class RecalculatePayrollEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for recalculate_payroll function"""
@@ -365,7 +361,7 @@ class RecalculatePayrollEdgeCasesTest(PayrollViewsEdgeCasesTest):
             ],
         )
 
-    @patch("payroll.views.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_payroll_memory_error(self, mock_service_class):
         """Test recalculate when calculation causes memory error"""
         mock_service = Mock()
@@ -388,7 +384,6 @@ class RecalculatePayrollEdgeCasesTest(PayrollViewsEdgeCasesTest):
                 status.HTTP_404_NOT_FOUND,
             ],
         )
-
 
 class PayrollAnalyticsEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for payroll_analytics function"""
@@ -443,7 +438,6 @@ class PayrollAnalyticsEdgeCasesTest(PayrollViewsEdgeCasesTest):
         # Should be forbidden for empty role
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-
 class MonthlyPayrollSummaryEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for monthly_payroll_summary function"""
 
@@ -454,7 +448,7 @@ class MonthlyPayrollSummaryEdgeCasesTest(PayrollViewsEdgeCasesTest):
             employee=self.employee,
             year=2025,
             month=1,
-            total_gross_pay=Decimal("999999999.99"),  # Very large
+            total_salary=Decimal("999999999.99"),  # Very large
             total_hours=Decimal("0.01"),  # Very small
             worked_days=1,
         )
@@ -473,7 +467,7 @@ class MonthlyPayrollSummaryEdgeCasesTest(PayrollViewsEdgeCasesTest):
             employee=self.employee,
             year=2025,
             month=1,
-            total_gross_pay=Decimal("1000.00"),
+            total_salary=Decimal("1000.00"),
             total_hours=Decimal("40.0"),
             worked_days=5,
             overtime_hours=Decimal("0.0"),  # Required field, use 0 instead of None
@@ -486,7 +480,6 @@ class MonthlyPayrollSummaryEdgeCasesTest(PayrollViewsEdgeCasesTest):
         self.assertIn(
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
-
 
 class LegacyCalculationEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for legacy calculation functions"""
@@ -528,7 +521,6 @@ class LegacyCalculationEdgeCasesTest(PayrollViewsEdgeCasesTest):
         except Exception:
             # Function might validate dates and raise appropriate errors
             pass
-
 
 class CalculateHourlyDailyEarningsEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Edge case tests for _calculate_hourly_daily_earnings function"""
@@ -577,10 +569,9 @@ class CalculateHourlyDailyEarningsEdgeCasesTest(PayrollViewsEdgeCasesTest):
                 total_hours=Decimal("23.98"),  # Nearly 24 hours
             )
             self.assertIsInstance(result, dict)
-            self.assertGreater(result.get("total_pay", 0), 0)
+            self.assertGreater(result.get("total_salary", 0), 0)
         except Exception:
             self.skipTest("Function not accessible or has dependencies")
-
 
 class PayrollViewsSecurityEdgeCasesTest(PayrollViewsEdgeCasesTest):
     """Security-related edge case tests"""
@@ -671,3 +662,4 @@ class PayrollViewsSecurityEdgeCasesTest(PayrollViewsEdgeCasesTest):
             for item in data:
                 if "employee_id" in item:
                     self.assertEqual(item["employee_id"], self.employee.id)
+

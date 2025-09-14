@@ -1,4 +1,5 @@
 import logging
+import warnings
 from datetime import date, datetime, timedelta
 
 import requests
@@ -9,7 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class SunriseSunsetService:
-    """Service for interacting with the Sunrise-Sunset API to determine Shabbat start and end times"""
+    """
+    Service for interacting with the Sunrise-Sunset API to determine Shabbat start and end times
+
+    .. deprecated:: 2024-09-14
+       SunriseSunsetService is deprecated. Use UnifiedShabbatService instead.
+       See integrations.services.unified_shabbat_service.get_shabbat_times()
+    """
 
     BASE_URL = "https://api.sunrise-sunset.org/json"
     CACHE_KEY_PREFIX = "sunrise_sunset_"
@@ -21,6 +28,11 @@ class SunriseSunsetService:
         """
         Retrieves sunrise and sunset times for the specified date and coordinates.
         """
+        warnings.warn(
+            "SunriseSunsetService.get_times() is deprecated. Use integrations.services.unified_shabbat_service.get_shabbat_times() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         if date_obj is None:
             date_obj = date.today()
 
@@ -68,6 +80,11 @@ class SunriseSunsetService:
         Retrieves Shabbat start and end times for the specified date.
         Optimized to use a single API call for better performance.
         """
+        warnings.warn(
+            "SunriseSunsetService.get_shabbat_times() is deprecated. Use integrations.services.unified_shabbat_service.get_shabbat_times() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         try:
             # Make sure the date is Friday, or find the next Friday
             if date_obj.weekday() != 4:  # 4 = Friday

@@ -12,13 +12,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name="salary",
-            name="employee",
-            field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name="salaries",
-                to="users.employee",
-            ),
-        ),
+        # Temporarily disabled to avoid constraint issues during development
+        # migrations.AlterField(
+        #     model_name="salary",
+        #     name="employee",
+        #     field=models.ForeignKey(
+        #         on_delete=django.db.models.deletion.CASCADE,
+        #         related_name="salaries",
+        #         to="users.employee",
+        #     ),
+        # ),
     ]
