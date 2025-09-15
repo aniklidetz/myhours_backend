@@ -28,11 +28,11 @@ def get_holidays(year: int, month: int) -> Dict[str, Any]:
     
     try:
         # Import here to allow mocking
-        from integrations.services.hebcal_service import HebcalService
-        
-        hebcal_service = HebcalService()
-        holidays = hebcal_service.get_holidays(year, month)
-        
+        from integrations.services.hebcal_api_client import HebcalAPIClient
+
+        # HebcalAPIClient uses class methods, no instantiation needed
+        holidays = HebcalAPIClient.fetch_holidays(year, month)
+
         _api_cache[cache_key] = holidays
         return holidays
     except Exception as e:

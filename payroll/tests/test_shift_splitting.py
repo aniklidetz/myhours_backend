@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytz
 from django.test import TestCase
 from django.utils import timezone
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
+from integrations.services.unified_shabbat_service import get_shabbat_times
 from payroll.models import DailyPayrollCalculation, Salary
 from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy

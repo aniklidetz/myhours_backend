@@ -13,8 +13,8 @@ from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_
 from unittest.mock import MagicMock, Mock, patch
 from django.test import TestCase
 from django.utils import timezone
-from integrations.services.hebcal_service import HebcalService
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
+from integrations.services.hebcal_api_client import HebcalAPIClient
+from integrations.services.unified_shabbat_service import get_shabbat_times
 from payroll.models import Salary
 from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
@@ -93,15 +93,22 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
             api_info.get("hebcal_used", True)
         )  # Should be False on failure
     @patch(
-        "integrations.services.sunrise_sunset_service.SunriseSunsetService.get_shabbat_times"
+        "integrations.services.unified_shabbat_service.get_shabbat_times"
     )
     def test_sunrise_sunset_api_success(self, mock_sabbath_times):
-        """Test successful SunriseSunset API integration"""
+        """Test successful UnifiedShabbat API integration"""
         # Mock successful API response for Sabbath times
         mock_sabbath_times.return_value = {
-            "start": "2025-07-04T19:25:00",  # Friday 7:25 PM
-            "end": "2025-07-05T20:30:00",  # Saturday 8:30 PM
+            "shabbat_start": "2025-07-04T19:25:00+03:00",  # Friday 7:25 PM
+            "shabbat_end": "2025-07-05T20:30:00+03:00",  # Saturday 8:30 PM
+            "friday_sunset": "2025-07-04T19:43:00+03:00",
+            "saturday_sunset": "2025-07-05T19:48:00+03:00",
+            "timezone": "Asia/Jerusalem",
             "is_estimated": False,
+            "calculation_method": "api_precise",
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
+            "friday_date": "2025-07-04",
+            "saturday_date": "2025-07-05"
         }
         # Work that crosses Sabbath boundary
         check_in = timezone.make_aware(datetime(2025, 7, 4, 18, 0))  # Friday 6 PM
@@ -120,9 +127,9 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         # Should track API usage
         api_info = result.get("api_integrations", {})
         self.assertIsInstance(api_info, dict)
-    @patch("integrations.services.sunrise_sunset_service.requests.get")
+    @patch("requests.get")
     def test_sunrise_sunset_api_failure_fallback(self, mock_requests):
-        """Test fallback to estimated times when SunriseSunset API fails"""
+        """Test fallback to estimated times when UnifiedShabbat API fails"""
         # Mock API failure
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = Exception("Network Error")
@@ -143,9 +150,9 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         self.assertEqual(
             api_info.get("precise_sabbath_times", 0), 0
         )  # No precise times
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     @patch(
-        "integrations.services.sunrise_sunset_service.SunriseSunsetService.get_shabbat_times"
+        "integrations.services.unified_shabbat_service.get_shabbat_times"
     )
     def test_combined_api_usage_sabbath_holiday(
         self, mock_sabbath_times, mock_holidays
@@ -161,9 +168,16 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
             }
         ]
         mock_sabbath_times.return_value = {
-            "start": "2025-07-04T19:30:00",
-            "end": "2025-07-05T20:32:00",
+            "shabbat_start": "2025-07-04T19:30:00+03:00",
+            "shabbat_end": "2025-07-05T20:32:00+03:00",
+            "friday_sunset": "2025-07-04T19:48:00+03:00",
+            "saturday_sunset": "2025-07-05T19:50:00+03:00",
+            "timezone": "Asia/Jerusalem",
             "is_estimated": False,
+            "calculation_method": "api_precise",
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
+            "friday_date": "2025-07-04",
+            "saturday_date": "2025-07-05"
         }
         # Saturday work during holiday
         check_in = timezone.make_aware(datetime(2025, 7, 5, 10, 0))  # Saturday
@@ -207,7 +221,7 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         api_info = result.get("api_integrations", {})
         # Fast mode may skip some API calls for performance
         self.assertIsInstance(api_info, dict)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_api_response_caching(self, mock_get_holidays):
         """Test that API responses are cached appropriately"""
         # Mock API response
@@ -237,7 +251,7 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         # Should get reasonable pay
         total_pay = float(result.get("total_salary", 0))
         self.assertGreater(total_pay, 0)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_api_timeout_handling(self, mock_get_holidays):
         """Test handling of API timeouts"""
         import requests
@@ -264,15 +278,27 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         """High volume scenario should not flood external APIs thanks to caching"""
         # Patch both low-level layer (requests) and service methods:
         with patch("requests.get") as mock_get, \
-             patch("integrations.services.hebcal_service.HebcalService.fetch_holidays") as mock_hebcal_fetch, \
-             patch("integrations.services.sunrise_sunset_service.SunriseSunsetService.get_shabbat_times") as mock_get_shabbat:
+             patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays") as mock_hebcal_fetch, \
+             patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_get_shabbat:
 
             # Emulate "successful" response at requests level (if services hit network)
             mock_get.side_effect = lambda *args, **kwargs: Mock(status_code=200, json=lambda: {"ok": True})
             # Hebcal returns month calendar (should be cached)
             mock_hebcal_fetch.return_value = {"2025-07-01": "Holiday"}
             # Sabbath time precision not important in this test - important that it's one method and cacheable
-            mock_get_shabbat.return_value = {"is_sabbath": False, "sunset": None, "sabbath_start": None, "sabbath_end": None}
+            # Return a proper ShabbatTimes contract for non-Shabbat day
+            mock_get_shabbat.return_value = {
+                "shabbat_start": "2025-07-04T19:30:00+03:00",
+                "shabbat_end": "2025-07-05T20:32:00+03:00",
+                "friday_sunset": "2025-07-04T19:48:00+03:00",
+                "saturday_sunset": "2025-07-05T19:50:00+03:00",
+                "timezone": "Asia/Jerusalem",
+                "is_estimated": False,
+                "calculation_method": "api_precise",
+                "coordinates": {"lat": 31.7683, "lng": 35.2137},
+                "friday_date": "2025-07-04",
+                "saturday_date": "2025-07-05"
+            }
 
             # 15 working days of 8 hours each
             for day in range(1, 16):
@@ -291,7 +317,7 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
             # Basic result validation
             total_hours = float(result.get("total_hours", 0))
             self.assertAlmostEqual(total_hours, 15 * 8, places=1)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_invalid_api_response_handling(self, mock_get_holidays):
         """Test handling of malformed API responses"""
         # Mock invalid/malformed response

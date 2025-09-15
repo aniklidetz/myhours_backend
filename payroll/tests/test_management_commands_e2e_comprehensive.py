@@ -50,6 +50,22 @@ from users.models import Employee
 from worktime.models import WorkLog
 
 
+def create_mock_shabbat_times(friday_date_str="2025-02-14", saturday_date_str="2025-02-15"):
+    """Helper function to create mock ShabbatTimes in UnifiedShabbatService format"""
+    return {
+        "shabbat_start": f"{friday_date_str}T17:15:00+02:00",
+        "shabbat_end": f"{saturday_date_str}T18:25:00+02:00",
+        "friday_sunset": f"{friday_date_str}T17:33:00+02:00",
+        "saturday_sunset": f"{saturday_date_str}T17:43:00+02:00",
+        "timezone": "Asia/Jerusalem",
+        "is_estimated": False,
+        "calculation_method": "api_precise",
+        "coordinates": {"lat": 31.7683, "lng": 35.2137},
+        "friday_date": friday_date_str,
+        "saturday_date": saturday_date_str
+    }
+
+
 # Test with fakeredis to isolate Redis operations
 @override_settings(
     CACHES={
@@ -746,19 +762,21 @@ class PerformanceStressTest(ComprehensivePayrollCommandsE2ETest):
     @skip(
         "Hangs during execution - generate_missing_payroll command has timeout issues"
     )
-    @patch("integrations.services.enhanced_sunrise_sunset_service.requests.get")
-    @patch("integrations.services.hebcal_service.requests.get")
-    def test_large_dataset_performance(self, mock_hebcal, mock_sunrise):
+    @patch("requests.get")
+    def test_large_dataset_performance(self, mock_requests):
         """Test commands with smaller dataset (reduced to prevent hanging)"""
 
         # Mock external API responses to prevent hanging
-        mock_sunrise.return_value.json.return_value = {
+        mock_response = Mock()
+        mock_response.json.return_value = {
             "results": {
                 "sunrise": "2025-02-01T06:30:00+00:00",
                 "sunset": "2025-02-01T18:30:00+00:00",
-            }
+            },
+            "items": []  # For Hebcal requests
         }
-        mock_hebcal.return_value.json.return_value = {"items": []}
+        mock_response.raise_for_status.return_value = None
+        mock_requests.return_value = mock_response
 
         # Create smaller dataset: 10 employees, 5 days each = 50 work logs
         employees = []
@@ -979,20 +997,16 @@ class E2EWorkflowTestBase(PayrollTestMixin, TestCase):
     def _get_stable_external_mocks(self):
         """Get consistent mocks for external services"""
         holidays_mock = patch(
-            "integrations.services.hebcal_service.HebcalService.sync_holidays_to_db"
+            "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
         )
-        sunrise_mock = patch(
-            "integrations.services.enhanced_sunrise_sunset_service.enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone"
+        shabbat_mock = patch(
+            "integrations.services.unified_shabbat_service.get_shabbat_times"
         )
 
         holidays_mock.start()
-        sunrise_mock.start().return_value = {
-            "shabbat_start": "2025-02-14T17:15:00+02:00",
-            "shabbat_end": "2025-02-15T18:25:00+02:00",
-            "timezone": "Asia/Jerusalem",
-        }
+        shabbat_mock.start().return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
 
-        return holidays_mock, sunrise_mock
+        return holidays_mock, shabbat_mock
 
     def tearDown(self):
         # Clean up E2E test data
@@ -1011,7 +1025,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         initial_monthly_count = MonthlyPayrollSummary.objects.count()
 
         # 2. Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # 3. Run the command to generate missing payroll
@@ -1059,7 +1073,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
     def test_generate_missing_payroll_specific_employee(self):
         """Test generate_missing_payroll for specific employee"""
@@ -1072,7 +1086,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         ).count()
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Run command for only monthly employee
@@ -1099,7 +1113,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
     def test_generate_missing_payroll_dry_run(self):
         """Test generate_missing_payroll with dry-run"""
@@ -1108,7 +1122,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         initial_monthly_count = MonthlyPayrollSummary.objects.count()
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Run with dry-run
@@ -1135,7 +1149,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
     def test_generate_missing_payroll_force_recalculate(self):
         """Test generate_missing_payroll with force_recalculate"""
@@ -1156,7 +1170,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         original_updated = existing_calc.updated_at
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Run with force_recalculate
@@ -1178,7 +1192,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
 
 class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
@@ -1201,7 +1215,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         )
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Run recalculate command
@@ -1218,7 +1232,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
     def test_recalculate_specific_employee(self):
         """Test recalculate for specific employee only"""
@@ -1248,7 +1262,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         original_hourly_updated = hourly_calc.updated_at
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Recalculate only for monthly employee
@@ -1268,7 +1282,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
     def test_recalculate_dry_run(self):
         """Test recalculate with dry-run"""
@@ -1288,7 +1302,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
         original_updated = calc.updated_at
 
         # Mock external services
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Run with dry_run
@@ -1308,7 +1322,7 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
 
 class TestCleanupTestPayrollE2E(E2EWorkflowTestBase):
@@ -1426,7 +1440,7 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
     def test_full_payroll_pipeline(self):
         """Test complete payroll processing pipeline"""
         # Mock external services for consistent results
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # 1. Generate missing payroll
@@ -1472,7 +1486,7 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
 
 class TestCommandRobustnessE2E(E2EWorkflowTestBase):
@@ -1482,9 +1496,9 @@ class TestCommandRobustnessE2E(E2EWorkflowTestBase):
         """Test command behavior when external services fail"""
         # Test with failing external service
         with patch(
-            "integrations.services.enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone"
-        ) as mock_sunrise:
-            mock_sunrise.side_effect = Exception("API unavailable")
+            "integrations.services.unified_shabbat_service.get_shabbat_times"
+        ) as mock_shabbat:
+            mock_shabbat.side_effect = Exception("API unavailable")
 
             # Commands should handle external failures gracefully
             with patch("sys.stdout", self.stdout), patch("sys.stderr", self.stderr):
@@ -1543,7 +1557,7 @@ class TestCommandRobustnessE2E(E2EWorkflowTestBase):
                 )
 
         # Mock external services for consistent performance
-        holidays_mock, sunrise_mock = self._get_stable_external_mocks()
+        holidays_mock, shabbat_mock = self._get_stable_external_mocks()
 
         try:
             # Test command runs in reasonable time
@@ -1575,7 +1589,7 @@ class TestCommandRobustnessE2E(E2EWorkflowTestBase):
 
         finally:
             holidays_mock.stop()
-            sunrise_mock.stop()
+            shabbat_mock.stop()
 
             # Clean up performance test data
             Employee.objects.filter(first_name="Perf").delete()

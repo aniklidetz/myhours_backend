@@ -22,6 +22,22 @@ from django.test import TestCase, override_settings
 from payroll.enhanced_redis_cache import EnhancedPayrollCache, enhanced_payroll_cache
 
 
+def create_mock_shabbat_times(friday_date_str="2025-02-07", saturday_date_str="2025-02-08"):
+    """Helper function to create mock ShabbatTimes in UnifiedShabbatService format"""
+    return {
+        "shabbat_start": f"{friday_date_str}T17:00:00+02:00",
+        "shabbat_end": f"{saturday_date_str}T18:00:00+02:00",
+        "friday_sunset": f"{friday_date_str}T17:18:00+02:00",
+        "saturday_sunset": f"{saturday_date_str}T17:18:00+02:00",
+        "timezone": "Asia/Jerusalem",
+        "is_estimated": False,
+        "calculation_method": "api_precise",
+        "coordinates": {"lat": 31.7683, "lng": 35.2137},
+        "friday_date": friday_date_str,
+        "saturday_date": saturday_date_str
+    }
+
+
 class CacheMissHitWorkflowTest(TestCase):
     """Test complete cache miss → fetch → cache hit workflow"""
 
@@ -30,10 +46,10 @@ class CacheMissHitWorkflowTest(TestCase):
         self.test_year = 2025
         self.test_month = 2
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_cache_miss_then_hit_workflow(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test: cache miss → fetch from source → cache hit on second call"""
 
@@ -42,17 +58,8 @@ class CacheMissHitWorkflowTest(TestCase):
             "2025-02-08": {"name": "Shabbat", "is_shabbat": True, "is_holiday": False}
         }
 
-        # Mock sunrise service
-        shabbat_times = {
-            "shabbat_start": "2025-02-07T17:15:00+02:00",
-            "shabbat_end": "2025-02-08T18:25:00+02:00",
-            "friday_sunset": "2025-02-07T17:15:00+02:00",
-            "saturday_sunset": "2025-02-08T18:25:00+02:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
-            shabbat_times
-        )
+        # Mock unified shabbat service
+        mock_get_shabbat_times.return_value = create_mock_shabbat_times("2025-02-07", "2025-02-08")
 
         # FIRST CALL - should be cache MISS → fetch from source
         mock_get_holidays.return_value = base_holiday_data
@@ -64,19 +71,19 @@ class CacheMissHitWorkflowTest(TestCase):
         # Verify base method was called (cache miss)
         mock_get_holidays.assert_called_once_with(self.test_year, self.test_month)
 
-        # Verify sunrise service was called to enhance data
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.assert_called()
+        # Verify unified shabbat service was called to enhance data
+        mock_get_shabbat_times.assert_called()
 
         # Verify enhanced data was returned
         saturday_data = result1["2025-02-08"]
         self.assertEqual(
-            saturday_data["precise_start_time"], "2025-02-07T17:15:00+02:00"
+            saturday_data["precise_start_time"], "2025-02-07T17:00:00+02:00"
         )
         self.assertEqual(saturday_data["timezone"], "Asia/Jerusalem")
 
         # SECOND CALL - should be cache HIT (but might still call base method since we're testing enhanced cache)
         mock_get_holidays.reset_mock()  # Reset call count
-        mock_sunrise_service.reset_mock()
+        mock_get_shabbat_times.reset_mock()
 
         result2 = self.cache.get_holidays_with_shabbat_times(
             self.test_year, self.test_month
@@ -89,20 +96,16 @@ class CacheMissHitWorkflowTest(TestCase):
         # Results should be identical
         self.assertEqual(result1, result2)
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
-    def test_cache_shabbat_times_workflow(self, mock_sunrise_service):
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
+    def test_cache_shabbat_times_workflow(self, mock_get_shabbat_times):
         """Test pre-caching workflow and subsequent retrieval"""
 
         # Mock cache availability
         self.cache.cache_available = True
         self.cache.redis_client = Mock()
 
-        # Mock sunrise service
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
-            "shabbat_start": "2025-02-07T17:00:00+02:00",
-            "shabbat_end": "2025-02-08T18:00:00+02:00",
-            "timezone": "Asia/Jerusalem",
-        }
+        # Mock unified shabbat service
+        mock_get_shabbat_times.return_value = create_mock_shabbat_times("2025-02-07", "2025-02-08")
 
         # PRE-CACHE the data
         self.cache.cache_shabbat_times_for_month(self.test_year, self.test_month)
@@ -122,14 +125,11 @@ class TTLExpirationTest(TestCase):
         self.cache.cache_available = True
         self.cache.redis_client = Mock()
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
-    def test_ttl_expiration_triggers_reload(self, mock_sunrise_service):
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
+    def test_ttl_expiration_triggers_reload(self, mock_get_shabbat_times):
         """Test that expired TTL triggers data reload"""
 
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
-            "shabbat_start": "2025-02-07T17:00:00+02:00",
-            "shabbat_end": "2025-02-08T18:00:00+02:00",
-        }
+        mock_get_shabbat_times.return_value = create_mock_shabbat_times("2025-02-07", "2025-02-08")
 
         # Cache data with short TTL
         self.cache.cache_shabbat_times_for_month(2025, 2)
@@ -149,9 +149,9 @@ class TTLExpirationTest(TestCase):
         self.cache.redis_client = Mock()
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             # Cache some data
             self.cache.cache_shabbat_times_for_month(2025, 1)
@@ -169,9 +169,9 @@ class TTLExpirationTest(TestCase):
         mock_make_key.return_value = "enhanced_holidays:2025:2"
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             self.cache.cache_shabbat_times_for_month(2025, 2)
 
@@ -187,8 +187,8 @@ class SerializationTest(TestCase):
         self.cache.cache_available = True
         self.cache.redis_client = Mock()
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
-    def test_timezone_serialization(self, mock_sunrise_service):
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
+    def test_timezone_serialization(self, mock_get_shabbat_times):
         """Test that timezone information is properly serialized/deserialized"""
 
         # Mock service with timezone data
@@ -200,8 +200,11 @@ class SerializationTest(TestCase):
             "timezone": "Asia/Jerusalem",
             "is_estimated": False,
             "calculation_method": "api_precise",
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
+            "friday_date": "2025-02-07",
+            "saturday_date": "2025-02-08"
         }
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
+        mock_get_shabbat_times.return_value = (
             complex_shabbat_data
         )
 
@@ -239,9 +242,9 @@ class SerializationTest(TestCase):
         mock_serialize_decimal.side_effect = lambda x: x  # Pass through for test
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             self.cache.cache_shabbat_times_for_month(2025, 2)
 
@@ -263,10 +266,10 @@ class SerializationTest(TestCase):
         self.cache.redis_client.setex.side_effect = mock_setex
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
             # Complex nested data
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {
+            mock_service.return_value = {
                 "shabbat_start": "2025-02-07T17:15:00+02:00",
                 "shabbat_end": "2025-02-08T18:25:00+02:00",
                 "nested_info": {
@@ -312,9 +315,9 @@ class RedisExceptionHandlingTest(TestCase):
             }
 
             with patch(
-                "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+                "payroll.enhanced_redis_cache.get_shabbat_times"
             ) as mock_service:
-                mock_service.get_shabbat_times_israeli_timezone.return_value = {
+                mock_service.return_value = {
                     "shabbat_start": "2025-02-07T17:00:00+02:00",
                     "shabbat_end": "2025-02-08T18:00:00+02:00",
                 }
@@ -341,9 +344,9 @@ class RedisExceptionHandlingTest(TestCase):
         )
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             # Should not raise exception, should handle gracefully
             try:
@@ -363,9 +366,9 @@ class RedisExceptionHandlingTest(TestCase):
         self.cache.redis_client.setex.side_effect = socket.timeout("Redis timeout")
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             # Should handle timeout gracefully
             self.cache.cache_shabbat_times_for_month(2025, 2)
@@ -385,9 +388,9 @@ class RedisExceptionHandlingTest(TestCase):
         self.cache.redis_client.setex.side_effect = side_effect_setex
 
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+            mock_service.return_value = create_mock_shabbat_times()
 
             # Should handle partial failures gracefully
             self.cache.cache_shabbat_times_for_month(2025, 2)
@@ -412,9 +415,9 @@ class EmptyCorruptedCacheTest(TestCase):
 
         # Test with None return from cache
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
-            mock_service.get_shabbat_times_israeli_timezone.return_value = None
+            mock_service.return_value = None
 
             result = self.cache.get_holidays_with_shabbat_times(2025, 2)
 
@@ -434,10 +437,10 @@ class EmptyCorruptedCacheTest(TestCase):
 
         # Test with corrupted service response
         with patch(
-            "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+            "payroll.enhanced_redis_cache.get_shabbat_times"
         ) as mock_service:
             # Corrupted data structure
-            mock_service.get_shabbat_times_israeli_timezone.return_value = {
+            mock_service.return_value = {
                 "invalid_field": "corrupted_value",
                 "shabbat_start": "invalid_date_format",
                 "nested": {"deeply": {"corrupted": "data"}},
@@ -497,30 +500,28 @@ class CacheInvalidationTest(TestCase):
         self.cache.cache_available = True
         self.cache.redis_client = Mock()
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
-    def test_cache_invalidation_on_data_change(self, mock_sunrise_service):
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
+    def test_cache_invalidation_on_data_change(self, mock_get_shabbat_times):
         """Test that cache properly handles data changes"""
 
         # First set of data
-        first_data = {
-            "shabbat_start": "2025-02-07T17:00:00+02:00",
-            "shabbat_end": "2025-02-08T18:00:00+02:00",
-        }
+        first_data = create_mock_shabbat_times("2025-02-07", "2025-02-08")
 
-        # Second set of data (updated)
-        second_data = {
+        # Second set of data (updated times)
+        second_data = create_mock_shabbat_times("2025-02-07", "2025-02-08")
+        second_data.update({
             "shabbat_start": "2025-02-07T17:15:00+02:00",  # Changed time
             "shabbat_end": "2025-02-08T18:25:00+02:00",  # Changed time
-        }
+        })
 
         # First cache operation
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
+        mock_get_shabbat_times.return_value = (
             first_data
         )
         self.cache.cache_shabbat_times_for_month(2025, 2)
 
         # Second cache operation with updated data
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
+        mock_get_shabbat_times.return_value = (
             second_data
         )
         self.cache.cache_shabbat_times_for_month(2025, 2)
@@ -535,9 +536,9 @@ class CacheInvalidationTest(TestCase):
             mock_make_key.return_value = "enhanced_holidays:2025:2"
 
             with patch(
-                "payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service"
+                "payroll.enhanced_redis_cache.get_shabbat_times"
             ) as mock_service:
-                mock_service.get_shabbat_times_israeli_timezone.return_value = {}
+                mock_service.return_value = create_mock_shabbat_times()
 
                 # Multiple operations should use same key
                 self.cache.cache_shabbat_times_for_month(2025, 2)
@@ -554,10 +555,10 @@ class IntegrationCacheTest(TestCase):
     def setUp(self):
         self.cache = EnhancedPayrollCache()
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_full_cache_lifecycle_integration(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test complete cache lifecycle: miss → populate → hit → expiry → refresh"""
 
@@ -567,10 +568,7 @@ class IntegrationCacheTest(TestCase):
         }
 
         # Mock service data
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
-            "shabbat_start": "2025-02-07T17:00:00+02:00",
-            "shabbat_end": "2025-02-08T18:00:00+02:00",
-        }
+        mock_get_shabbat_times.return_value = create_mock_shabbat_times("2025-02-07", "2025-02-08")
 
         # Lifecycle test
         # 1. First call - cache miss
@@ -603,10 +601,10 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
         self.test_friday = date(2025, 2, 7)  # Friday
         self.test_saturday = date(2025, 2, 8)  # Saturday
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_get_holidays_with_shabbat_times_success(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test successful enhancement of holidays with Shabbat times"""
         # Mock base holiday data
@@ -620,16 +618,15 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
         }
 
         # Mock sunrise-sunset service
-        mock_shabbat_times = {
+        mock_shabbat_times = create_mock_shabbat_times("2025-02-07", "2025-02-08")
+        # Customize times for this test
+        mock_shabbat_times.update({
             "shabbat_start": "2025-02-07T17:15:00+02:00",
             "shabbat_end": "2025-02-08T18:25:00+02:00",
             "friday_sunset": "2025-02-07T17:15:00+02:00",
             "saturday_sunset": "2025-02-08T18:25:00+02:00",
-            "timezone": "Asia/Jerusalem",
-            "is_estimated": False,
-            "calculation_method": "api_precise",
-        }
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
+        })
+        mock_get_shabbat_times.return_value = (
             mock_shabbat_times
         )
 
@@ -642,7 +639,7 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
 
         # Verify sunrise service was called for Shabbat dates
         self.assertEqual(
-            mock_sunrise_service.get_shabbat_times_israeli_timezone.call_count, 2
+            mock_get_shabbat_times.call_count, 2
         )
 
         # Verify enhanced data structure
@@ -659,10 +656,10 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
         )
         self.assertEqual(saturday_data["precise_end_time"], "2025-02-08T18:25:00+02:00")
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_get_holidays_no_shabbat_enhancement(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test holidays without Shabbat don't get enhanced"""
         # Mock holiday data without Shabbat
@@ -679,17 +676,17 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
         )
 
         # Sunrise service should not be called
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.assert_not_called()
+        mock_get_shabbat_times.assert_not_called()
 
         # Holiday should remain unchanged
         holiday_data = result["2025-02-10"]
         self.assertNotIn("precise_start_time", holiday_data)
         self.assertNotIn("precise_end_time", holiday_data)
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_get_holidays_sunrise_service_none_response(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test when sunrise service returns None"""
         mock_get_holidays.return_value = {
@@ -701,7 +698,7 @@ class DomainShabbatHolidayWorkflowTest(TestCase):
         }
 
         # Mock sunrise service to return None
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = None
+        mock_get_shabbat_times.return_value = None
 
         result = self.cache.get_holidays_with_shabbat_times(
             self.test_year, self.test_month
@@ -732,11 +729,11 @@ class DomainShabbatCachingWorkflowTest(TestCase):
         self.test_year = 2025
         self.test_month = 2
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "_make_key")
     @patch.object(EnhancedPayrollCache, "_serialize_decimal")
     def test_cache_shabbat_times_success(
-        self, mock_serialize, mock_make_key, mock_sunrise_service
+        self, mock_serialize, mock_make_key, mock_get_shabbat_times
     ):
         """Test successful caching of Shabbat times"""
         # Mock cache availability
@@ -750,16 +747,15 @@ class DomainShabbatCachingWorkflowTest(TestCase):
         mock_serialize.return_value = "serialized_decimal"
 
         # Mock Shabbat times response
-        mock_shabbat_times = {
+        mock_shabbat_times = create_mock_shabbat_times("2025-02-07", "2025-02-08")
+        # Customize times for this test
+        mock_shabbat_times.update({
             "shabbat_start": "2025-02-07T17:15:00+02:00",
             "shabbat_end": "2025-02-08T18:25:00+02:00",
             "friday_sunset": "2025-02-07T17:15:00+02:00",
             "saturday_sunset": "2025-02-08T18:25:00+02:00",
-            "timezone": "Asia/Jerusalem",
-            "is_estimated": False,
-            "calculation_method": "api_precise",
-        }
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = (
+        })
+        mock_get_shabbat_times.return_value = (
             mock_shabbat_times
         )
 
@@ -785,15 +781,15 @@ class DomainShabbatCachingWorkflowTest(TestCase):
         # Should not raise exception
         self.cache.cache_shabbat_times_for_month(self.test_year, self.test_month)
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "_make_key")
-    def test_cache_shabbat_times_december(self, mock_make_key, mock_sunrise_service):
+    def test_cache_shabbat_times_december(self, mock_make_key, mock_get_shabbat_times):
         """Test caching for December (year boundary)"""
         self.cache.cache_available = True
         self.cache.redis_client = Mock()
         mock_make_key.return_value = "enhanced_holidays:2025:12"
 
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
+        mock_get_shabbat_times.return_value = {
             "shabbat_start": "2025-12-05T16:10:00+02:00",  # Earlier sunset in winter
             "shabbat_end": "2025-12-06T17:15:00+02:00",
         }
@@ -804,10 +800,10 @@ class DomainShabbatCachingWorkflowTest(TestCase):
         self.cache.redis_client.setex.assert_called_once()
         mock_make_key.assert_called_with("enhanced_holidays", 2025, 12)
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "_make_key")
     def test_cache_shabbat_times_service_exception(
-        self, mock_make_key, mock_sunrise_service
+        self, mock_make_key, mock_get_shabbat_times
     ):
         """Test handling of sunrise service exceptions"""
         self.cache.cache_available = True
@@ -815,7 +811,7 @@ class DomainShabbatCachingWorkflowTest(TestCase):
         mock_make_key.return_value = "enhanced_holidays:2025:2"
 
         # Mock service exception
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.side_effect = Exception(
+        mock_get_shabbat_times.side_effect = Exception(
             "API Error"
         )
 
@@ -973,10 +969,10 @@ class DomainWorkflowIntegrationTest(TestCase):
         self.cache = EnhancedPayrollCache()
         self.israel_tz = pytz.timezone("Asia/Jerusalem")
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_full_workflow_cache_and_check(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test complete workflow: get holidays → enhance → check work overlap"""
         # Mock base holiday data
@@ -985,7 +981,7 @@ class DomainWorkflowIntegrationTest(TestCase):
         }
 
         # Mock sunrise service
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
+        mock_get_shabbat_times.return_value = {
             "shabbat_start": "2025-02-07T17:15:00+02:00",
             "shabbat_end": "2025-02-08T18:25:00+02:00",
             "timezone": "Asia/Jerusalem",
@@ -1068,10 +1064,10 @@ class DomainPerformanceWorkflowTest(TestCase):
     def setUp(self):
         self.cache = EnhancedPayrollCache()
 
-    @patch("payroll.enhanced_redis_cache.enhanced_sunrise_sunset_service")
+    @patch("payroll.enhanced_redis_cache.get_shabbat_times")
     @patch.object(EnhancedPayrollCache, "get_holidays_for_month")
     def test_multiple_shabbat_dates_in_month(
-        self, mock_get_holidays, mock_sunrise_service
+        self, mock_get_holidays, mock_get_shabbat_times
     ):
         """Test handling multiple Shabbat dates in a month"""
         # Mock multiple Shabbat dates
@@ -1084,7 +1080,7 @@ class DomainPerformanceWorkflowTest(TestCase):
             "2025-02-22": {"name": "Shabbat", "is_shabbat": True},
         }
 
-        mock_sunrise_service.get_shabbat_times_israeli_timezone.return_value = {
+        mock_get_shabbat_times.return_value = {
             "shabbat_start": "2025-02-07T17:15:00+02:00",
             "shabbat_end": "2025-02-08T18:25:00+02:00",
         }
@@ -1095,7 +1091,7 @@ class DomainPerformanceWorkflowTest(TestCase):
         self.assertEqual(len(result), 6)
         # Service should be called for each Shabbat date
         self.assertEqual(
-            mock_sunrise_service.get_shabbat_times_israeli_timezone.call_count, 6
+            mock_get_shabbat_times.call_count, 6
         )
 
     @patch.object(EnhancedPayrollCache, "_make_key")

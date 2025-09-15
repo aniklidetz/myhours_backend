@@ -4,11 +4,37 @@ This directory contains tests for all integration services.
 
 ## Test Files
 
-1. **test_unified_shabbat_service.py** - Comprehensive tests for UnifiedShabbatService (18 tests)
-2. **test_external_apis.py** - Tests for external API integrations: Hebcal, Sunrise/Sunset (25 tests)
-3. **test_utils.py** - Tests for utility functions, specifically safe_to_json (27 tests)
-4. **test_shabbat_service_reliability.py** - Performance and reliability tests
-5. **test_unified_shabbat_service_no_db.py** - Database-free logic tests
+### Core Service Tests
+1. **test_hebcal_api_client.py** - Tests for HebcalAPIClient service (11 tests)
+   - API communication and response parsing
+   - Caching mechanisms and cache invalidation
+   - Error handling and retries
+   - Parameter validation
+
+2. **test_holiday_sync_service.py** - Tests for HolidaySyncService (12 tests)
+   - Holiday synchronization orchestration
+   - Database operations and data preservation
+   - Special Shabbat and weekly Shabbat syncing
+   - Error recovery and transaction handling
+
+3. **test_holiday_utility_service.py** - Tests for HolidayUtilityService (30 tests)
+   - Holiday query utilities
+   - Database lookups with API fallback
+   - Holiday type checking (is_holiday, is_shabbat, is_special_shabbat)
+   - Comprehensive error handling
+
+### Integration Tests
+4. **test_integration_apis.py** - Cross-service integration tests (17 tests)
+   - Cache behavior across services
+   - Error handling in service interactions
+   - Performance with real-world scenarios
+   - API rate limiting and fallback mechanisms
+
+5. **test_unified_shabbat_service.py** - Comprehensive tests for UnifiedShabbatService (18 tests)
+6. **test_external_apis.py** - Tests for external API integrations: Hebcal, Sunrise/Sunset (25 tests)
+7. **test_utils.py** - Tests for utility functions, specifically safe_to_json (27 tests)
+8. **test_shabbat_service_reliability.py** - Performance and reliability tests
+9. **test_unified_shabbat_service_no_db.py** - Database-free logic tests
 
 ## Running Tests
 
@@ -67,12 +93,19 @@ python -m pytest integrations/tests/test_utils.py::SafeToJsonTest::test_dict_inp
 - **Performance Tests** - Check response times and caching
 - **Edge Cases** - API failures, invalid dates, fallback behavior
 
+### Holiday Service Tests (test_hebcal_api_client.py, test_holiday_sync_service.py, test_holiday_utility_service.py)
+- **HebcalAPIClient** - 11 tests for API communication and caching
+- **HolidaySyncService** - 12 tests for synchronization orchestration
+- **HolidayUtilityService** - 30 tests for utility functions and queries
+
 ### External API Tests (test_external_apis.py)
 - **HebcalServiceTest** - 9 tests for Jewish holiday API integration
-- **SunriseSunsetServiceTest** - 7 tests for sunset/sunrise API
-- **IntegrationCacheTest** - 3 tests for caching mechanisms
-- **IntegrationErrorHandlingTest** - 4 tests for error scenarios
-- **IntegrationPerformanceTest** - 2 tests for performance validation
+- **SunriseSunsetServiceTest** - Tests for sunrise/sunset API
+
+### Integration Tests (test_integration_apis.py)
+- **IntegrationCacheTest** - 2 tests for caching mechanisms
+- **IntegrationErrorHandlingTest** - 5 tests for error scenarios
+- **IntegrationPerformanceTest** - 2 tests for performance monitoring
 
 ### Utility Tests (test_utils.py)
 - **SafeToJsonTest** - 27 tests covering all edge cases of JSON parsing
@@ -115,24 +148,33 @@ chmod +x scripts/test_shabbat_with_db.sh
 
 ## Test Status
 
-✅ **All tests passing** (95+ tests total)
-- UnifiedShabbatService: 18/18 ✅
-- External APIs: 25/25 ✅
-- Utils: 27/27 ✅
-- Reliability: 15/15 ✅ (includes 1 slow performance test)
-- No-DB tests: 11/11 ✅
+**All tests passing** (140+ tests total)
+- HebcalAPIClient: 11/11
+- HolidaySyncService: 12/12
+- HolidayUtilityService: 30/30
+- Integration APIs: 17/17
+- UnifiedShabbatService: 18/18
+- External APIs: 25/25
+- Utils: 27/27
+- Reliability: 15/15 (includes 1 slow performance test)
+- No-DB tests: 11/11
 
 **Performance Note:**
 - Fast tests: ~70 tests in ~50s
 - Slow tests: 1 test (~90s) - makes ~104 real API calls for comprehensive testing 
 
 **Current Coverage Areas:**
+- Holiday API communication and response parsing
+- Holiday synchronization and database operations
+- Holiday query utilities with fallback mechanisms
 - Shabbat time calculations with Jewish law compliance
 - External API integrations (Hebcal, Sunrise/Sunset)
 - JSON parsing utilities
-- Caching mechanisms
+- Caching mechanisms across services
 - Error handling and fallbacks
 - Performance validation
 
 **Migration Status:**
- UnifiedShabbatService ready for production migration
+- HebcalService refactored into specialized services (HebcalAPIClient, HolidaySyncService, HolidayUtilityService)
+- UnifiedShabbatService ready for production migration
+- All legacy service calls migrated to new architecture

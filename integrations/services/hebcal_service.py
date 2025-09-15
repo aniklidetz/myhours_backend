@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 
 class HebcalService:
     """
+    DEPRECATED: HebcalService has been refactored into specialized services.
+
+    This class remains for backward compatibility only.
+
+    Use instead:
+    - HebcalAPIClient for API communication
+    - HolidaySyncService for orchestrating holiday synchronization
+    - HolidayUtilityService for utility functions
+    """
+    """
     Service for working with Hebcal API to retrieve information about Jewish holidays.
 
     Features automatic synchronization on app startup with 7-day caching to prevent
@@ -131,8 +141,8 @@ class HebcalService:
                             "date": current_date.isoformat(),
                             "category": "holiday",
                             "subcat": "shabbat",
-                            "start_time": shabbat_times["start"],
-                            "end_time": shabbat_times["end"],
+                            "start_time": shabbat_times["shabbat_start"],
+                            "end_time": shabbat_times["shabbat_end"],
                         }
                     )
                 except Exception as e:
@@ -425,3 +435,70 @@ class HebcalService:
                 extra={"err": err_tag(e), "date": str(check_date)},
             )
             return False
+
+    # BACKWARD COMPATIBILITY METHODS
+    # These methods delegate to the new services for backward compatibility
+
+    @classmethod
+    def sync_holidays_to_db(cls, year=None, include_weekly_shabbats=True):
+        """
+        DEPRECATED: Use HolidaySyncService.sync_year() instead.
+        Kept for backward compatibility.
+        """
+        import warnings
+        warnings.warn(
+            "HebcalService.sync_holidays_to_db is deprecated. Use HolidaySyncService.sync_year() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        from .holiday_sync_service import HolidaySyncService
+        return HolidaySyncService.sync_year(year, include_weekly_shabbats)
+
+    @classmethod
+    def fetch_holidays(cls, year=None, month=None, use_cache=True):
+        """
+        DEPRECATED: Use HebcalAPIClient.fetch_holidays() instead.
+        Kept for backward compatibility.
+        """
+        import warnings
+        warnings.warn(
+            "HebcalService.fetch_holidays is deprecated. Use HebcalAPIClient.fetch_holidays() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        from .hebcal_api_client import HebcalAPIClient
+        return HebcalAPIClient.fetch_holidays(year, month, use_cache)
+
+    @classmethod
+    def get_holiday_name(cls, holiday_date):
+        """
+        DEPRECATED: Use HolidayUtilityService.get_holiday_name() instead.
+        Kept for backward compatibility.
+        """
+        import warnings
+        warnings.warn(
+            "HebcalService.get_holiday_name is deprecated. Use HolidayUtilityService.get_holiday_name() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        from .holiday_utility_service import HolidayUtilityService
+        return HolidayUtilityService.get_holiday_name(holiday_date)
+
+    @classmethod
+    def is_holiday(cls, check_date):
+        """
+        DEPRECATED: Use HolidayUtilityService.is_holiday() instead.
+        Kept for backward compatibility.
+        """
+        import warnings
+        warnings.warn(
+            "HebcalService.is_holiday is deprecated. Use HolidayUtilityService.is_holiday() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        from .holiday_utility_service import HolidayUtilityService
+        return HolidayUtilityService.is_holiday(check_date)

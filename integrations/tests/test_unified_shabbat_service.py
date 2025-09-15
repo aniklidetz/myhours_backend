@@ -20,8 +20,7 @@ from integrations.services.unified_shabbat_service import (
     get_shabbat_times,
     is_shabbat_time
 )
-from integrations.services.sunrise_sunset_service import SunriseSunsetService
-from integrations.services.enhanced_sunrise_sunset_service import EnhancedSunriseSunsetService
+# Removed imports of old deprecated services - now using UnifiedShabbatService only
 from payroll.services.contracts import ShabbatTimes, validate_shabbat_times, ValidationError
 
 
@@ -149,72 +148,6 @@ class TestShabbatCalculationCorrectness:
         assert 16 <= winter_sunset.hour <= 17, \
             f"Winter sunset hour {winter_sunset.hour} seems unreasonable for Israel"
 
-
-class TestComparisonWithOldServices:
-    """Compare new service with old ones - focus on reasonableness, not exact match"""
-
-    def test_times_within_reasonable_range_of_old_service(self):
-        """Test that new service results are within reasonable range of old service"""
-        new_service = UnifiedShabbatService()
-
-        # Use Friday dates to avoid Friday-finding logic differences
-        test_dates = [
-            date(2024, 6, 14),   # Summer Friday
-            date(2024, 12, 13),  # Winter Friday
-            date(2024, 3, 15),   # Spring Friday
-            date(2024, 9, 13),   # Fall Friday
-        ]
-
-        for test_date in test_dates:
-            # Get results from both services
-            new_result = new_service.get_shabbat_times(test_date)
-            old_result = SunriseSunsetService.get_shabbat_times(test_date)
-
-            # Parse times (handle different key formats)
-            new_start = datetime.fromisoformat(new_result["shabbat_start"])
-            old_start = datetime.fromisoformat(old_result["start"].replace("Z", "+00:00"))
-
-            new_end = datetime.fromisoformat(new_result["shabbat_end"])
-            old_end = datetime.fromisoformat(old_result["end"].replace("Z", "+00:00"))
-
-            # Convert to same timezone for comparison (Israeli)
-            israel_tz = pytz.timezone("Asia/Jerusalem")
-            if old_start.tzinfo is None:
-                old_start = pytz.UTC.localize(old_start).astimezone(israel_tz)
-            if old_end.tzinfo is None:
-                old_end = pytz.UTC.localize(old_end).astimezone(israel_tz)
-
-            new_start = new_start.astimezone(israel_tz)
-            new_end = new_end.astimezone(israel_tz)
-
-            # Times should be within 10 minutes of each other (allowing for precision differences)
-            start_diff = abs(new_start - old_start)
-            end_diff = abs(new_end - old_end)
-
-            assert start_diff < timedelta(minutes=10), \
-                f"Shabbat start times differ by {start_diff} for {test_date} - too much variation"
-            assert end_diff < timedelta(minutes=10), \
-                f"Shabbat end times differ by {end_diff} for {test_date} - too much variation"
-
-    def test_enhanced_service_compatibility(self):
-        """Test compatibility with EnhancedSunriseSunsetService results"""
-        new_service = UnifiedShabbatService()
-        enhanced_service = EnhancedSunriseSunsetService()
-
-        test_date = date(2024, 6, 14)  # Use Friday to avoid date mapping differences
-
-        # Get results from both
-        new_result = new_service.get_shabbat_times(test_date)
-        enhanced_result = enhanced_service.get_shabbat_times_israeli_timezone(test_date)
-
-        # Both should have similar precision since they use similar logic
-        new_start = datetime.fromisoformat(new_result["shabbat_start"])
-        enhanced_start = datetime.fromisoformat(enhanced_result["shabbat_start"])
-
-        # Should be very close (within 2 minutes) since both use precise calculation
-        start_diff = abs(new_start - enhanced_start)
-        assert start_diff < timedelta(minutes=2), \
-            f"UnifiedShabbatService should be close to EnhancedSunriseSunsetService, diff: {start_diff}"
 
 
 class TestEdgeCases:

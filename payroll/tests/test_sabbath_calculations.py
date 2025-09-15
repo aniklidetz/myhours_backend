@@ -87,7 +87,7 @@ class SabbathCalculationTest(PayrollTestMixin, TestCase):
         expected_total = proportional_salary + sabbath_bonus  # ~1648.3 ILS (150% total)
         self.assertAlmostEqual(float(total_pay), expected_total, delta=100)
     @patch(
-        "integrations.services.sunrise_sunset_service.SunriseSunsetService.get_shabbat_times"
+        "integrations.services.unified_shabbat_service.get_shabbat_times"
     )
     def test_friday_evening_sabbath_start(self, mock_sabbath_times):
         """Test work that starts before Sabbath and continues into Sabbath"""
@@ -132,7 +132,7 @@ class SabbathCalculationTest(PayrollTestMixin, TestCase):
         # Just verify the calculation works without error
         self.assertIsNotNone(result)
         self.assertGreater(result.get("total_salary", 0), 0)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_sabbath_during_holiday(self, mock_holidays):
         """Test Sabbath work during a Jewish holiday"""
         # Mock holiday data - Shabbat during Passover
@@ -261,7 +261,7 @@ class SabbathCalculationTest(PayrollTestMixin, TestCase):
         total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, expected_total_pay, places=1)
     @patch(
-        "integrations.services.sunrise_sunset_service.SunriseSunsetService.get_shabbat_times"
+        "integrations.services.unified_shabbat_service.get_shabbat_times"
     )
     def test_api_integration_with_precise_times(self, mock_sabbath_times):
         """Test API integration provides more precise Sabbath times than defaults"""
