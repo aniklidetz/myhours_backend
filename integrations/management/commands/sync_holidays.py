@@ -4,7 +4,7 @@ from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from integrations.services.hebcal_service import HebcalService
+from integrations.services.holiday_sync_service import HolidaySyncService
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Syncing holidays for year {year}")
         try:
-            created, updated = HebcalService.sync_holidays_to_db(year)
+            created, updated = HolidaySyncService.sync_year(year)
             self.stdout.write(f"Year {year}: Created {created}, Updated {updated}")
             total_created += created
             total_updated += updated
@@ -62,7 +62,7 @@ class Command(BaseCommand):
             future_year = year + i
             self.stdout.write(f"Syncing holidays for year {future_year}")
             try:
-                created, updated = HebcalService.sync_holidays_to_db(future_year)
+                created, updated = HolidaySyncService.sync_year(future_year)
                 self.stdout.write(
                     f"Year {future_year}: Created {created}, Updated {updated}"
                 )

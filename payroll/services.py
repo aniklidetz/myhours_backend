@@ -4,7 +4,7 @@ Enhanced payroll calculation service with external API integration
 Combines:
 1. Current working logic of PayrollCalculationService
 2. Integration with SunriseSunsetService for precise Sabbath times
-3. Integration with HebcalService for Jewish holidays
+3. Integration with HolidayUtilityService for Jewish holidays
 4. API integration monitoring and fallback mechanisms
 5. FIXED: Proper calculation logic for monthly vs hourly employees
 """
@@ -21,7 +21,8 @@ from django.utils import timezone
 
 from core.logging_utils import safe_log_employee
 from integrations.models import Holiday
-from integrations.services.hebcal_service import HebcalService
+from integrations.services.holiday_utility_service import HolidayUtilityService
+from integrations.services.holiday_sync_service import HolidaySyncService
 # Removed old import - now using UnifiedShabbatService via ShiftSplitter
 from payroll.models import (
     CompensatoryDay,
@@ -429,7 +430,7 @@ class EnhancedPayrollCalculationService:
 
         # Check if shift spans into Sabbath (for Friday shifts that end after Sabbath starts)
         if work_end_datetime and work_date.weekday() == 4:  # Friday shift
-            # Use ShiftSplitter with sunrise_sunset_service for precise Sabbath detection
+            # Use ShiftSplitter with unified_shabbat_service for precise Sabbath detection
             try:
                 split_result = ShiftSplitter.split_shift_for_sabbath(
                     work_datetime,
@@ -546,15 +547,25 @@ class EnhancedPayrollCalculationService:
                 )
                 # Continue to check via API or return None
 
-        # 2. Check via HebcalService (not in fast mode)
+        # 2. Check via HolidayUtilityService (not in fast mode)
         if not self.fast_mode:
             logger.info(
-                f"🚀 Using HebcalService for holiday lookup (fast_mode={self.fast_mode})"
+                f"🚀 Using HolidayUtilityService for holiday lookup (fast_mode={self.fast_mode})"
             )
             try:
-                self.api_usage["hebcal_calls"] += 1
+                # Use utility service for direct holiday checking
+                holiday_name = HolidayUtilityService.get_holiday_name(work_date)
+                if holiday_name:
+                    logger.debug(
+                        f"📅 Found official holiday via HolidayUtilityService: {holiday_name} on {work_date}"
+                    )
+                    return holiday_name
 
-                holidays_data = HebcalService.fetch_holidays(
+                # If not found, also try API fallback
+                self.api_usage["hebcal_calls"] += 1
+                from integrations.services.hebcal_api_client import HebcalAPIClient
+
+                holidays_data = HebcalAPIClient.fetch_holidays(
                     year=work_date.year, month=work_date.month, use_cache=True
                 )
 
@@ -581,7 +592,7 @@ class EnhancedPayrollCalculationService:
 
                                 self.api_usage["api_holidays_found"] += 1
                                 logger.info(
-                                    f"📅 Found official holiday via HebcalService: {title} on {work_date}"
+                                    f"📅 Found official holiday via HebcalAPIClient: {title} on {work_date}"
                                 )
 
                                 # Create temporary Holiday object
@@ -602,7 +613,7 @@ class EnhancedPayrollCalculationService:
                             continue
 
             except Exception as api_error:
-                logger.warning(f"HebcalService error for {work_date}: {api_error}")
+                logger.warning(f"HolidayUtilityService error for {work_date}: {api_error}")
 
         return None
 
@@ -625,9 +636,9 @@ class EnhancedPayrollCalculationService:
 
             if existing_holidays == 0:
                 logger.info(
-                    "Holidays not found in database, synchronizing from HebcalService..."
+                    "Holidays not found in database, synchronizing from HolidaySyncService..."
                 )
-                created_count, updated_count = HebcalService.sync_holidays_to_db(
+                created_count, updated_count = HolidaySyncService.sync_year(
                     self.year
                 )
 
@@ -934,7 +945,7 @@ class EnhancedPayrollCalculationService:
 
             # Check if shift spans into Sabbath and needs splitting
             if sabbath_type == "friday_shift_spanning_sabbath":
-                # Use ShiftSplitter for precise calculation with sunrise_sunset_service
+                # Use ShiftSplitter for precise calculation with unified_shabbat_service
                 split_result = ShiftSplitter.split_shift_for_sabbath(
                     work_log.check_in,
                     work_log.check_out,
@@ -1186,7 +1197,7 @@ class EnhancedPayrollCalculationService:
         # STEP 5: Calculate pay based on shift type
         # Check if shift spans into Sabbath and needs splitting
         if is_sabbath and sabbath_type == "friday_shift_spanning_sabbath":
-            # Use ShiftSplitter for precise calculation with sunrise_sunset_service
+            # Use ShiftSplitter for precise calculation with unified_shabbat_service
             split_result = ShiftSplitter.split_shift_for_sabbath(
                 work_log.check_in,
                 work_log.check_out,

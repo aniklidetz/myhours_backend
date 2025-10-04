@@ -21,7 +21,6 @@ from django.utils import timezone
 
 from core.logging_utils import safe_log_employee
 from integrations.models import Holiday
-from integrations.services.hebcal_service import HebcalService
 from integrations.services.unified_shabbat_service import get_shabbat_times
 from payroll.enhanced_redis_cache import enhanced_payroll_cache
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary, CompensatoryDay
@@ -284,7 +283,6 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         try:
             # UnifiedShabbatService uses module-level function - no instance needed
             self._unified_shabbat_enabled = True
-            self._hebcal_service = HebcalService()
             logger.debug(
                 f"Initialized API services for employee {self._employee_id}",
                 extra={

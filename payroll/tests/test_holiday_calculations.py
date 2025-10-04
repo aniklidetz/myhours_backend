@@ -86,7 +86,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         expected_holiday_pay = 8 * 80 * 1.5
         total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, expected_holiday_pay, places=0)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_yom_kippur_work_premium(self, mock_holidays):
         """Test work during Yom Kippur (holiest day) gets maximum premium"""
         # Mock Yom Kippur data
@@ -122,7 +122,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
             reason="holiday",
         )
         self.assertEqual(comp_days.count(), 1)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_multiple_day_holiday_passover(self, mock_holidays):
         """Test work during multi-day holiday (Passover)"""
         # Mock Passover data (first and seventh days - official paid holidays)
@@ -171,7 +171,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
             employee=self.hourly_employee, reason="holiday"
         ).count()
         self.assertEqual(comp_days, 2)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_holiday_night_shift_premium(self, mock_holidays):
         """Test night shift during holiday gets combined premiums"""
         # Mock holiday
@@ -206,7 +206,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         total_pay = float(result.get("total_salary", 0))
         proportional_monthly = 8 * 80  # Base hourly pay without premiums (640)
         self.assertGreater(total_pay, proportional_monthly)  # Should include premiums
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_monthly_employee_holiday_work(self, mock_holidays):
         """Test monthly employee holiday work (bonus only, not full payment)"""
         # Mock holiday
@@ -242,7 +242,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         holiday_bonus = 8 * monthly_hourly_rate * Decimal("0.50")  # 50% holiday bonus
         expected_total = proportional_salary + holiday_bonus  # ~1318.68 ILS (150% total)
         self.assertAlmostEqual(float(total_pay), float(expected_total), delta=50)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_hebcal_api_fallback_on_failure(self, mock_holidays):
         """Test fallback behavior when Hebcal API fails"""
         # Mock API failure
@@ -263,7 +263,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         proportional_monthly = 8 * 80  # Base hourly pay (640)
         total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, proportional_monthly, places=0)
-    @patch("integrations.services.hebcal_service.HebcalService.fetch_holidays")
+    @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_minor_holiday_no_premium(self, mock_holidays):
         """Test that minor holidays don't get work premiums"""
         # Mock minor holiday

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from .models import Holiday
 from .serializers import HolidaySerializer
-from .services.hebcal_service import HebcalService
+from .services.holiday_sync_service import HolidaySyncService
 from .services.unified_shabbat_service import get_shabbat_times
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class HolidayViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             year = datetime.now().year
 
-        created, updated = HebcalService.sync_holidays_to_db(year)
+        created, updated = HolidaySyncService.sync_year(year)
 
         return Response(
             {
