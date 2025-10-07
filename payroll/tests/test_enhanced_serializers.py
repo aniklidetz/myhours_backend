@@ -50,6 +50,7 @@ class EnhancedEarningsSerializerTest(TestCase):
             calculation_type="monthly",
             base_salary=Decimal("10000.00"),
             currency="ILS",
+            is_active=True,
         )
 
         self.serializer = EnhancedEarningsSerializer()

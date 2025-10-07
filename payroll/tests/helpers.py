@@ -7,17 +7,46 @@ to support migration from pytest fixtures to unittest setUp patterns.
 
 from decimal import Decimal
 from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from django.utils import timezone
 
 # Re-export from conftest.py to maintain compatibility during migration
 from payroll.tests.conftest import (
     make_context,
     ISRAELI_DAILY_NORM_HOURS,
-    NIGHT_NORM_HOURS, 
+    NIGHT_NORM_HOURS,
     MONTHLY_NORM_HOURS,
     OVERTIME_RATES,
     assert_result_structure,
     legacy_to_new_result_mapping,
 )
+
+
+def create_mock_shabbat_times(friday_date):
+    """Creates a valid ShabbatTimes dictionary for mocking."""
+    # Убедимся, что время aware
+    if isinstance(friday_date, datetime):
+        if friday_date.tzinfo is None:
+            friday_date = timezone.make_aware(friday_date)
+    else:
+        # Если передана дата, создаем datetime
+        friday_date = timezone.make_aware(datetime.combine(friday_date, datetime.min.time()))
+
+    friday_sunset = friday_date.replace(hour=17, minute=30, second=0, microsecond=0)
+    saturday_sunset = friday_sunset + timedelta(days=1)
+
+    return {
+        "shabbat_start": (friday_sunset - timedelta(minutes=18)).isoformat(),
+        "shabbat_end": (saturday_sunset + timedelta(minutes=42)).isoformat(),
+        "friday_sunset": friday_sunset.isoformat(),
+        "saturday_sunset": saturday_sunset.isoformat(),
+        "timezone": "Asia/Jerusalem",
+        "is_estimated": False,
+        "calculation_method": "api_precise",
+        "coordinates": {"lat": 31.7683, "lng": 35.2137},
+        "friday_date": friday_date.date().isoformat(),
+        "saturday_date": (friday_date.date() + timedelta(days=1)).isoformat()
+    }
 
 
 class PayrollTestMixin:

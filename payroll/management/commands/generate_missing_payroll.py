@@ -147,8 +147,8 @@ class Command(BaseCommand):
                             month=work_date.month,
                             user_id=1,  # System user for commands
                             employee_type=employee_type,
-                            force_recalculate=force,
-                            fast_mode=True  # Skip external API calls for speed
+                            force_recalculate=force
+                            # Remove fast_mode=True to enable database persistence
                         )
 
                         work_logs = WorkLog.objects.filter(
@@ -160,19 +160,38 @@ class Command(BaseCommand):
                         try:
                             # Calculate using new unified service
                             result = service.calculate(context, CalculationStrategy.ENHANCED)
-                            
-                            if result and result.get('status') == 'success':
-                                # The new service automatically saves to DB
 
-                                if existing_daily:
-                                    daily_updated += 1
-                                    self.stdout.write(
-                                        f"   Updated daily calc for {work_date}"
-                                    )
-                                else:
+                            if result and result.get('total_salary', 0) > 0:
+                                # Create or update DailyPayrollCalculation record
+                                daily_defaults = {
+                                    'regular_hours': result.get('regular_hours', 0),
+                                    'overtime_hours_1': result.get('overtime_hours', 0),
+                                    'overtime_hours_2': result.get('overtime_hours_2', 0),
+                                    'night_hours': result.get('night_hours', 0),
+                                    'shabbat_hours': result.get('shabbat_hours', 0),
+                                    'holiday_hours': result.get('holiday_hours', 0),
+                                    # Don't set total_hours - it's a computed property
+                                    'total_salary': result.get('total_salary', 0),
+                                    'compensatory_days_earned': result.get('compensatory_days_earned', 0),
+                                    'daily_calculation_breakdown': result.get('breakdown', {}),
+                                    'updated_at': timezone.now(),
+                                }
+
+                                daily_calc, created = DailyPayrollCalculation.objects.update_or_create(
+                                    employee=employee,
+                                    work_date=work_date,
+                                    defaults=daily_defaults
+                                )
+
+                                if created:
                                     daily_created += 1
                                     self.stdout.write(
-                                        f"   Created daily calc for {work_date}"
+                                        f"   Created daily calc for {work_date} - salary: {result['total_salary']}"
+                                    )
+                                else:
+                                    daily_updated += 1
+                                    self.stdout.write(
+                                        f"   Updated daily calc for {work_date} - salary: {result['total_salary']}"
                                     )
                             else:
                                 self.stdout.write(f"  ERROR: No result from calculation for {work_date}")
@@ -226,7 +245,7 @@ class Command(BaseCommand):
                             user_id=1,  # System user for commands
                             employee_type=employee_type,
                             force_recalculate=force,
-                            fast_mode=True
+                            fast_mode=False
                         )
                         
                         try:

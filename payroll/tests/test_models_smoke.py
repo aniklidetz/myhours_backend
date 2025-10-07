@@ -50,6 +50,7 @@ class SalaryModelSmokeTest(TestCase):
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
             currency="ILS",
+            is_active=True,
         )
 
         self.assertEqual(salary.employee, self.employee)
@@ -64,6 +65,7 @@ class SalaryModelSmokeTest(TestCase):
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.assertEqual(salary.base_salary, Decimal("10000.00"))
@@ -78,6 +80,7 @@ class SalaryModelSmokeTest(TestCase):
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
             currency="USD",
+            is_active=True,
         )
 
         # Project type may convert to monthly based on feature flags
@@ -91,6 +94,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
@@ -107,6 +111,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
@@ -123,6 +128,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock no holidays
@@ -142,6 +148,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock that some holidays exist but not all days are holidays
@@ -162,6 +169,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock exception in holiday check
@@ -178,6 +186,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         worked_days = salary.get_worked_days_in_month(2025, 1)
@@ -190,6 +199,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         # Create some work logs with timezone-aware datetimes
@@ -214,6 +224,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         str_repr = str(salary)
@@ -418,6 +429,7 @@ class ModelIntegrationSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("12000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Test reverse relationship
@@ -444,6 +456,7 @@ class ModelIntegrationSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("45.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         # Test that timestamps are set

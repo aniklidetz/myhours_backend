@@ -364,3 +364,63 @@ def is_shabbat_time(
         lat=lat,
         lng=lng
     )
+
+
+def get_sunset_time(
+    date_obj: date,
+    lat: float = 31.7683,
+    lng: float = 35.2137
+) -> Optional[datetime]:
+    """
+    Get sunset time for a specific date.
+
+    Args:
+        date_obj: Date to get sunset for
+        lat: Latitude (defaults to Jerusalem)
+        lng: Longitude (defaults to Jerusalem)
+
+    Returns:
+        Sunset time as timezone-aware datetime or None if unavailable
+    """
+    try:
+        service = UnifiedShabbatService()
+        # Get API times for the given date
+        api_data = service._get_api_times(date_obj, lat, lng)
+        if api_data and "sunset" in api_data:
+            sunset_str = api_data["sunset"]
+            # Parse and convert to Israeli timezone
+            sunset = service._parse_and_convert_to_israel_tz(sunset_str)
+            return sunset
+        return None
+    except Exception as e:
+        logger.error(f"Error getting sunset time: {e}")
+        return None
+
+
+def get_nightfall_time(
+    date_obj: date,
+    lat: float = 31.7683,
+    lng: float = 35.2137
+) -> Optional[datetime]:
+    """
+    Get nightfall (3 stars) time for a specific date.
+
+    Nightfall is calculated as sunset + 42 minutes (when 3 stars appear).
+
+    Args:
+        date_obj: Date to get nightfall for
+        lat: Latitude (defaults to Jerusalem)
+        lng: Longitude (defaults to Jerusalem)
+
+    Returns:
+        Nightfall time as timezone-aware datetime or None if unavailable
+    """
+    try:
+        sunset = get_sunset_time(date_obj, lat, lng)
+        if sunset:
+            # Add 42 minutes for nightfall (3 stars)
+            return sunset + timedelta(minutes=42)
+        return None
+    except Exception as e:
+        logger.error(f"Error getting nightfall time: {e}")
+        return None

@@ -209,6 +209,29 @@ class HolidayUtilityService:
         return None
 
     @classmethod
+    def get_holidays_in_range(cls, start_date, end_date):
+        """
+        Get all holidays in a date range.
+
+        Args:
+            start_date (date): Start of the range
+            end_date (date): End of the range
+
+        Returns:
+            list: List of Holiday objects in the range
+        """
+        try:
+            holidays = Holiday.objects.filter(
+                date__gte=start_date,
+                date__lte=end_date,
+                is_holiday=True
+            )
+            return list(holidays)
+        except Exception as e:
+            logger.warning(f"Failed to get holidays in range {start_date} to {end_date}: {e}")
+            return []
+
+    @classmethod
     def _is_holiday_from_api(cls, check_date):
         """Fallback method to check if date is holiday via API."""
         year = check_date.year

@@ -8,7 +8,13 @@ error handling, caching, and comprehensive logging.
 
 import logging
 import time
-from typing import Optional, Dict, Any
+from decimal import Decimal
+from typing import Optional, Dict, Any, List
+
+from payroll.models import MonthlyPayrollSummary, DailyPayrollCalculation, CompensatoryDay
+from users.models import Employee
+from worktime.models import WorkLog
+from integrations.models import Holiday
 
 from .enums import CalculationStrategy, PayrollStatus, CacheSource
 from .contracts import PayrollResult, CalculationContext, create_empty_payroll_result
@@ -79,11 +85,16 @@ class PayrollService:
             
             # Validate the result
             self._validate_result(result, context, strategy)
-            
+
+            # Persist the result if not in fast mode
+            if not context.get('fast_mode', False):
+                work_logs = self._get_work_logs_for_context(context)
+                self._persist_results(context, result, work_logs)
+
             # Cache the result if caching is enabled
             if self.enable_caching:
                 self._cache_result(context, result)
-            
+
             return result
             
         except Exception as e:
@@ -425,8 +436,118 @@ class PayrollService:
         
         return fallback_result
 
+    def _get_work_logs_for_context(self, context: CalculationContext) -> List[WorkLog]:
+        """Helper to fetch work logs based on the calculation context."""
+        return list(WorkLog.objects.filter(
+            employee_id=context['employee_id'],
+            check_in__year=context['year'],
+            check_in__month=context['month'],
+            check_out__isnull=False
+        ).order_by('check_in'))
 
-# Global service instance  
+    def _persist_results(self, context: CalculationContext, result: PayrollResult, work_logs: List[WorkLog]) -> None:
+        """
+        Save calculation results to database for audit and caching.
+        This logic was moved from the Strategy to the Service to maintain proper separation of concerns.
+        """
+        try:
+            employee = Employee.objects.get(id=context['employee_id'])
+            breakdown = result.get('breakdown', {})
+
+            # Create or update monthly summary
+            MonthlyPayrollSummary.objects.update_or_create(
+                employee=employee,
+                year=context['year'],
+                month=context['month'],
+                defaults={
+                    # 'total_salary': result['total_salary'],  # TEMPORARILY DISABLED - field missing
+                    'total_gross_pay': result['total_salary'],
+                    'total_hours': result['total_hours'],
+                    'regular_hours': result['regular_hours'],
+                    'overtime_hours': result['overtime_hours'],
+                    'holiday_hours': result['holiday_hours'],
+                    'sabbath_hours': result['shabbat_hours'],
+                    'base_pay': Decimal(str(breakdown.get('regular_pay', 0))),
+                    'overtime_pay': Decimal(str(breakdown.get('overtime_125_pay', 0))) + Decimal(str(breakdown.get('overtime_150_pay', 0))),
+                    'holiday_pay': Decimal(str(breakdown.get('holiday_pay', 0))),
+                    'sabbath_pay': Decimal(str(breakdown.get('sabbath_regular_pay', 0))) + Decimal(str(breakdown.get('sabbath_overtime_175_pay', 0))) + Decimal(str(breakdown.get('sabbath_overtime_200_pay', 0))),
+                    'proportional_monthly': Decimal(str(breakdown.get('proportional_base', 0))),
+                    'total_bonuses_monthly': Decimal(str(breakdown.get('total_bonuses_monthly', 0))),
+                    'worked_days': self._calculate_worked_days(work_logs)
+                }
+            )
+
+            # Create daily calculations and compensatory days
+            self._create_daily_records(employee, context, work_logs, result)
+
+            logger.info(
+                f"Successfully persisted calculation results for employee {context['employee_id']}",
+                extra={ "employee_id": context['employee_id'], "action": "persist_results_success" }
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to persist calculation results: {e}", extra={
+                "employee_id": context['employee_id'],
+                "error": str(e),
+                "action": "persist_results_error"
+            }, exc_info=True)
+            # Re-raise the exception so the caller knows the transaction failed
+            raise
+
+    def _calculate_worked_days(self, work_logs: List[WorkLog]) -> int:
+        """Calculate unique days worked in the period."""
+        return len(set(log.check_in.date() for log in work_logs))
+
+    def _create_daily_records(self, employee: Employee, context: CalculationContext, work_logs: List[WorkLog], result: PayrollResult) -> None:
+        """
+        Create DailyPayrollCalculation and CompensatoryDay records.
+        This logic uses proportional distribution for simplicity.
+        """
+        # Clear existing daily calculations for the month to avoid duplicates
+        DailyPayrollCalculation.objects.filter(
+            employee=employee,
+            work_date__year=context['year'],
+            work_date__month=context['month']
+        ).delete()
+
+        daily_logs = {}
+        for log in work_logs:
+            work_date = log.check_in.date()
+            daily_logs.setdefault(work_date, []).append(log)
+
+        monthly_total_hours = result.get('total_hours', Decimal('0'))
+        if monthly_total_hours <= 0:
+            return
+
+        # Distribute monthly totals proportionally based on daily hours
+        for work_date, logs_for_day in daily_logs.items():
+            daily_hours = sum(log.get_total_hours() for log in logs_for_day)
+            proportion = daily_hours / monthly_total_hours
+
+            # Check if it's a holiday or sabbath to create compensatory days
+            holiday_record = Holiday.objects.filter(date=work_date, is_holiday=True).first()
+            is_holiday = holiday_record is not None
+            is_sabbath = Holiday.objects.filter(date=work_date, is_shabbat=True).exists()
+
+            if is_holiday:
+                CompensatoryDay.objects.get_or_create(employee=employee, date_earned=work_date, reason="holiday")
+            if is_sabbath:
+                CompensatoryDay.objects.get_or_create(employee=employee, date_earned=work_date, reason="sabbath")
+
+            DailyPayrollCalculation.objects.create(
+                employee=employee,
+                work_date=work_date,
+                regular_hours=result['regular_hours'] * proportion,
+                total_gross_pay=result['total_salary'] * proportion,
+                is_holiday=is_holiday,
+                is_sabbath=is_sabbath,
+                holiday_name=holiday_record.name if is_holiday else '',
+                calculated_by_service='PayrollService',
+                worklog=logs_for_day[0] if logs_for_day else None
+            )
+
+
+# Global service instance
 _global_service = PayrollService()
 
 

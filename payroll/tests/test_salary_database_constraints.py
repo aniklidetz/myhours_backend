@@ -52,6 +52,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="hourly",
             hourly_rate=Decimal("50.00"),
+            is_active=True,
         )
         self.assertIsNotNone(salary.pk)
 
@@ -62,6 +63,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("5000.00"),
+            is_active=True,
         )
         self.assertIsNotNone(salary.pk)
 
@@ -72,6 +74,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="hourly",
             hourly_rate=Decimal("40.00"),
+            is_active=True,
         )
         self.assertEqual(salary.employee, self.employee)
 
@@ -90,6 +93,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("10000.00"),
+            is_active=True,
         )
         self.assertIsNotNone(monthly_salary.pk)
         self.assertEqual(monthly_salary.calculation_type, "monthly")
@@ -100,6 +104,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="hourly",
             hourly_rate=Decimal("45.00"),
+            is_active=True,
         )
         # Should have default currency
         self.assertIsNotNone(salary.currency)
@@ -111,6 +116,7 @@ class SalaryDatabaseConstraintsTest(TestCase):
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("8000.00"),
+            is_active=True,
         )
         # Should default to True for is_active
         self.assertTrue(salary.is_active)

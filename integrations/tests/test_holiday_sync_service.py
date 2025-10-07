@@ -18,12 +18,32 @@ class HolidaySyncServiceTest(TestCase):
     """Test suite for HolidaySyncService"""
 
     def setUp(self):
-        """Set up test environment"""
-        Holiday.objects.all().delete()
+        """Set up test environment - Iron Isolation pattern"""
+        # Only clean specific dates used by integration tests + their eve dates, not all Holiday records
+        integration_test_dates = [
+            date(2025, 9, 16), date(2025, 9, 15),  # Rosh Hashanah + eve
+            date(2025, 9, 25), date(2025, 9, 24),  # Yom Kippur + eve
+            date(2025, 10, 1), date(2025, 9, 30),  # Minor Holiday + eve
+            date(2025, 1, 3), date(2025, 1, 2),    # Shabbat + potential eve
+            date(2025, 1, 4), date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 9),
+            date(2025, 7, 12), date(2025, 7, 19), date(2025, 7, 5), date(2025, 7, 4),
+            date(2025, 1, 1), date(2025, 1, 17), date(2025, 1, 24), date(2025, 1, 31), date(2025, 2, 7)
+        ]
+        Holiday.objects.filter(date__in=integration_test_dates).delete()
 
     def tearDown(self):
-        """Clean up after tests"""
-        Holiday.objects.all().delete()
+        """Clean up after tests - Iron Isolation pattern"""
+        # Only clean specific dates used by integration tests + their eve dates, not all Holiday records
+        integration_test_dates = [
+            date(2025, 9, 16), date(2025, 9, 15),  # Rosh Hashanah + eve
+            date(2025, 9, 25), date(2025, 9, 24),  # Yom Kippur + eve
+            date(2025, 10, 1), date(2025, 9, 30),  # Minor Holiday + eve
+            date(2025, 1, 3), date(2025, 1, 2),    # Shabbat + potential eve
+            date(2025, 1, 4), date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 9),
+            date(2025, 7, 12), date(2025, 7, 19), date(2025, 7, 5), date(2025, 7, 4),
+            date(2025, 1, 1), date(2025, 1, 17), date(2025, 1, 24), date(2025, 1, 31), date(2025, 2, 7)
+        ]
+        Holiday.objects.filter(date__in=integration_test_dates).delete()
 
     @patch("integrations.services.holiday_sync_service.IsraeliHolidaysService")
     @patch("integrations.services.holiday_sync_service.get_shabbat_times")

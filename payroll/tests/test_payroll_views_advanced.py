@@ -50,6 +50,7 @@ class PayrollViewsAdvancedTest(PayrollTestMixin, TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
 
         # Create regular employee
@@ -69,6 +70,7 @@ class PayrollViewsAdvancedTest(PayrollTestMixin, TestCase):
             calculation_type="hourly",
             hourly_rate=Decimal("60.00"),
             currency="ILS",
+            is_active=True,
         )
 
 class PayrollListAdvancedTest(PayrollViewsAdvancedTest):

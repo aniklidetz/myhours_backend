@@ -44,6 +44,7 @@ class BasicPayrollViewsTest(PayrollTestMixin, TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
 
         # Create regular employee
@@ -63,6 +64,7 @@ class BasicPayrollViewsTest(PayrollTestMixin, TestCase):
             calculation_type="hourly",
             hourly_rate=Decimal("60.00"),
             currency="ILS",
+            is_active=True,
         )
 
 class PayrollListBasicTest(BasicPayrollViewsTest):
@@ -164,10 +166,10 @@ class EnhancedEarningsBasicTest(BasicPayrollViewsTest):
         self.client.force_authenticate(user=self.admin_user)
         response = self.client.get("/api/v1/payroll/earnings/?month=invalid&year=abc")
 
-        # Should handle gracefully and use defaults
-        # Accept 200 or 404 as endpoint may not exist
+        # Should return 400 for invalid parameters
+        # Accept 400 or 404 as endpoint may not exist
         self.assertIn(
-            response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
+            response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND]
         )
 
 class DailyCalculationsBasicTest(BasicPayrollViewsTest):

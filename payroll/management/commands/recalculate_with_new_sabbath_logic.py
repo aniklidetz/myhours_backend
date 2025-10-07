@@ -93,7 +93,7 @@ class Command(BaseCommand):
                         month=calc.work_date.month,
                         user_id=1,  # System user
                         employee_type=employee_type,
-                        fast_mode=True
+                        fast_mode=False
                     )
                     service = PayrollService()
                     result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -111,7 +111,7 @@ class Command(BaseCommand):
                         month=calc.work_date.month,
                         user_id=1,  # System user
                         employee_type=employee_type,
-                        fast_mode=True
+                        fast_mode=False
                     )
                     service = PayrollService()
                     result = service.calculate(context, CalculationStrategy.ENHANCED)

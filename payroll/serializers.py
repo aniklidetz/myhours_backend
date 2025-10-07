@@ -35,12 +35,28 @@ class SalarySerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_calculated_salary(self, obj):
-        """Get current month's calculated salary"""
+        """Get current month's calculated salary using PayrollService"""
         try:
             from django.utils import timezone
+            from payroll.services.payroll_service import PayrollService
+            from payroll.services.contracts import CalculationContext
 
             now = timezone.now()
-            return obj.calculate_monthly_salary(now.month, now.year)
+            context = CalculationContext(
+                employee_id=obj.employee.id,
+                year=now.year,
+                month=now.month,
+                user_id=None,  # No user context in serializer
+                fast_mode=True  # Use fast mode for serializer performance
+            )
+            service = PayrollService(context)
+            result = service.calculate()
+            return {
+                'total_salary': float(result.total_salary),
+                'total_hours': float(result.total_hours),
+                'regular_hours': float(result.regular_hours),
+                'overtime_hours': float(result.overtime_hours)
+            }
         except Exception:
             return None
 

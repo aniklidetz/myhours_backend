@@ -42,6 +42,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             base_salary=Decimal("50000.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
         # Should remain as project type
         self.assertEqual(salary.calculation_type, "project")
@@ -55,6 +56,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             base_salary=Decimal("50000.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
         # Should be converted to monthly based on employment_type='contract'
         self.assertEqual(salary.calculation_type, "monthly")
@@ -81,6 +83,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             hourly_rate=Decimal("75.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=90),
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "project")
         self.assertEqual(salary.monthly_hourly, Decimal("75.00"))
@@ -94,6 +97,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             hourly_rate=Decimal("75.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=90),
+            is_active=True,
         )
         # Should be converted based on employment_type (contract -> monthly)
         self.assertEqual(salary.calculation_type, "monthly")
@@ -107,6 +111,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("10000.00"),
+            is_active=True,
         )
         self.assertEqual(monthly_salary.calculation_type, "monthly")
 
@@ -127,6 +132,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             employee=employee2,
             calculation_type="hourly",
             hourly_rate=Decimal("50.00"),
+            is_active=True,
         )
         self.assertEqual(hourly_salary.calculation_type, "hourly")
 
@@ -138,6 +144,7 @@ class SalaryProjectTypePreservationTest(TestCase):
                 employee=self.employee,
                 calculation_type="project",
                 base_salary=Decimal("30000.00"),
+                is_active=True,
                 # Missing required project dates
             )
 

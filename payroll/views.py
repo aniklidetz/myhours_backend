@@ -34,9 +34,7 @@ from .services.contracts import CalculationContext, PayrollResult
 from .services.enums import CalculationStrategy
 # Legacy service import removed - migration to new PayrollService completed
 
-# TEMPORARY ADAPTERS for backward compatibility with legacy code
-# Import from separate module to isolate deprecated functionality
-from .services.adapters import PayrollCalculationService, EnhancedPayrollCalculationService
+# Legacy adapters removed - migration to PayrollService completed
 
 logger = logging.getLogger(__name__)
 
@@ -509,14 +507,23 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                         total_hours * base_rate * 1.3
                     )  # Approximate estimate with bonuses
             else:
-                # For monthly employees, use proportional calculation
+                # For monthly employees, use PayrollService for proper calculation
                 try:
-                    result = salary.calculate_monthly_salary(
-                        current_date.month, current_date.year
+                    from payroll.services.payroll_service import PayrollService
+                    from payroll.services.contracts import CalculationContext
+
+                    context = CalculationContext(
+                        employee_id=employee.id,
+                        year=current_date.year,
+                        month=current_date.month,
+                        user_id=self.request.user.id if self.request.user.is_authenticated else None,
+                        fast_mode=True
                     )
-                    estimated_salary = float(result.get("total_salary", 0))
+                    service = PayrollService(context)
+                    result = service.calculate()
+                    estimated_salary = float(result.total_salary)
                     logger.info(
-                        "Monthly calculation completed",
+                        "Monthly calculation completed via PayrollService",
                         extra={
                             "employee_id": getattr(employee, "id", None),
                             "action": "monthly_calc",

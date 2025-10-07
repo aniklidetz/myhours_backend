@@ -66,28 +66,29 @@ def test_no_optimized_imports_in_non_legacy():
         f"Use PayrollService with CalculationStrategy.ENHANCED instead."
     )
 
-def test_legacy_files_exist_where_expected():
+def test_legacy_files_cleanup_completed():
     """
-    Verify that known legacy files still exist in expected locations.
+    Verify that legacy files have been properly removed.
 
-    This test ensures that the legacy files we expect to contain
-    optimized_service imports are still present and can be monitored.
+    This test confirms that legacy files containing optimized_service
+    have been cleaned up as part of the refactoring process.
     """
-    expected_legacy_files = [
+    removed_legacy_files = [
         "payroll.tests.legacy.test_optimized_service",
         "payroll.tests.legacy.test_optimized_service_equivalency",
         "payroll.management.commands.test_payroll_optimization"
     ]
 
-    missing_files = []
-    for module_name in expected_legacy_files:
+    still_present = []
+    for module_name in removed_legacy_files:
         try:
             importlib.import_module(module_name)
+            still_present.append(module_name)
         except ImportError:
-            missing_files.append(module_name)
+            # Expected - file should be removed
+            pass
 
-    # This is more of a documentation test - if files are moved/deleted,
-    # we want to know so we can update the guard test above
-    if missing_files:
-        print(f"Note: Expected legacy files not found: {missing_files}")
-        print("This may be expected if legacy cleanup has progressed.")
+    assert not still_present, (
+        f"Legacy files still present: {still_present}. "
+        f"These should have been removed during cleanup."
+    )

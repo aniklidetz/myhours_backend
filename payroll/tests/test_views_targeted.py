@@ -121,6 +121,7 @@ class PayrollListViewTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
         self.token = Token.objects.create(user=self.user)
 
@@ -171,6 +172,7 @@ class PayrollListViewTest(APITestCase):
             base_salary=Decimal("4000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.client.credentials(HTTP_AUTHORIZATION="Token " + self.token.key)
@@ -255,6 +257,7 @@ class EnhancedEarningsViewTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
         self.token = Token.objects.create(user=self.user)
 
@@ -729,6 +732,7 @@ class PayrollViewsIntegrationTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
     def test_payroll_workflow_admin(self):

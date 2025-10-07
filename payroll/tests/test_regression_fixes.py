@@ -41,6 +41,7 @@ class SalaryConstraintRegressionTest(TestCase):
             base_salary=Decimal("15000.00"),
             hourly_rate=None,  # Should be None, not 0
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "monthly")
         self.assertEqual(salary.base_salary, Decimal("15000.00"))
@@ -54,6 +55,7 @@ class SalaryConstraintRegressionTest(TestCase):
             hourly_rate=Decimal("50.00"),
             base_salary=None,  # Should be None, not 0
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "hourly")
         self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
@@ -88,6 +90,7 @@ class SalaryInfoPropertyRegressionTest(TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(self.employee.salary_info, salary)
         # Check if employee has active salary by checking salary_info exists
@@ -169,8 +172,8 @@ class SalarySerializerRegressionTest(TestCase):
         serializer = SalarySerializer(data=data)
         self.assertTrue(serializer.is_valid())
         # Check if zero is handled properly (may stay as 0 or convert to None depending on implementation)
-        monthly_hourly = serializer.validated_data["monthly_hourly"]
-        self.assertTrue(monthly_hourly is None or monthly_hourly == 0)
+        hourly_rate = serializer.validated_data["hourly_rate"]
+        self.assertTrue(hourly_rate is None or hourly_rate == 0)
 
     def test_serializer_rejects_negative_values(self):
         """Test serializer rejects negative values"""

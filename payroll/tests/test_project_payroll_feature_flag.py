@@ -51,6 +51,7 @@ class ProjectPayrollFeatureFlagTest(TestCase):
             currency="ILS",
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
 
         # Manually set to project type (bypassing auto-mapping)
@@ -88,6 +89,7 @@ class ProjectPayrollFeatureFlagTest(TestCase):
             currency="ILS",
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
 
         # Manually set to project (since auto-mapping goes to monthly)

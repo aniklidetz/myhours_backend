@@ -66,6 +66,7 @@ class PayrollViewsSmokeTest(PayrollTestMixin, TestCase):
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.employee_salary = Salary.objects.create(
@@ -73,6 +74,7 @@ class PayrollViewsSmokeTest(PayrollTestMixin, TestCase):
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
             currency="ILS",
+            is_active=True,
         )
 
         # Create API clients
@@ -280,12 +282,12 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_payroll_list_with_optimized_service_mock(self):
-        """Test payroll list flow (optimized service may not exist)"""
+    def test_payroll_list_with_enhanced_service(self):
+        """Test payroll list flow with enhanced service"""
         url = reverse("payroll-list")
         response = self.admin_client.get(url)
 
-        # Service should handle missing optimized service gracefully
+        # Service should use enhanced strategy for calculations
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_payroll_list_legacy_fallback_exists(self):

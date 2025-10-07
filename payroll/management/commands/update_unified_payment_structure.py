@@ -98,7 +98,7 @@ class Command(BaseCommand):
                     user_id=1,  # System user for management commands
                     employee_type=employee_type,
                     force_recalculate=True,
-                    fast_mode=True  # Skip external API calls for speed
+                    fast_mode=False  # Enable database persistence
                 )
                 result = service.calculate(context, CalculationStrategy.ENHANCED)
 
