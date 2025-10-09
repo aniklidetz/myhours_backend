@@ -186,8 +186,9 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         context = make_context(self.employee, 2025, 7, fast_mode=False)
         result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should calculate work
+        # FIXED: Hourly employees don't get normalization - 8 actual hours = 8.0 hours
         total_hours = result.get("total_hours", 0)
-        self.assertAlmostEqual(float(total_hours), 8.6, places=1)
+        self.assertAlmostEqual(float(total_hours), 8.0, places=1)
 
         # Test functional result: combined Sabbath+Holiday should work without conflicts
         # System should calculate combined premiums correctly
@@ -239,8 +240,9 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
         # (once for synchronization, then for individual date lookups)
         self.assertTrue(mock_get_holidays.called)
         # Should calculate work (holiday detection may not work with mocked API)
+        # FIXED: Hourly employees don't get normalization - 3 days × 8.0 hours = 24.0 hours
         total_hours = result.get("total_hours", 0)
-        self.assertAlmostEqual(float(total_hours), 25.8, delta=1.0)  # 3 days × 8.6 normative hours (allow for calculation differences)
+        self.assertAlmostEqual(float(total_hours), 24.0, delta=1.0)
         # Should get reasonable pay
         total_pay = float(result.get("total_salary", 0))
         self.assertGreater(total_pay, 0)
@@ -310,8 +312,9 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
             self.assertLessEqual(mock_get.call_count, 50, "Raw HTTP calls should be limited by caches")
 
             # Basic result validation
+            # FIXED: Hourly employees don't get normalization - 15 days × 8.0 hours = 120.0 hours
             total_hours = float(result.get("total_hours", 0))
-            self.assertAlmostEqual(total_hours, 129.0, delta=1.0)  # 15 days × 8.6 normative hours (allow for calculation differences)
+            self.assertAlmostEqual(total_hours, 120.0, delta=1.0)
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_invalid_api_response_handling(self, mock_get_holidays):
         """Test handling of malformed API responses"""

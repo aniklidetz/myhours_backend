@@ -72,23 +72,24 @@ class PayrollMetadata(TypedDict, total=False):
 class PayrollResult(TypedDict):
     """
     Standardized payroll calculation result contract.
-    
+
     All payroll strategies must return data conforming to this structure.
     This ensures consistency across legacy, enhanced, and optimized calculations.
     """
     # Core financial data (required)
     total_salary: Decimal
     total_hours: Decimal
-    
+
     # Time breakdown (required)
     regular_hours: Decimal
     overtime_hours: Decimal
     holiday_hours: Decimal
     shabbat_hours: Decimal
-    
+    night_hours: Decimal  # Total hours worked during night period (22:00-06:00)
+
     # Detailed breakdown (required)
     breakdown: PayrollBreakdown
-    
+
     # Additional metadata (required)
     metadata: PayrollMetadata
 
@@ -396,6 +397,7 @@ def create_empty_payroll_result(
         overtime_hours=Decimal('0'),
         holiday_hours=Decimal('0'),
         shabbat_hours=Decimal('0'),
+        night_hours=Decimal('0'),
         breakdown=create_empty_breakdown(),
         metadata=PayrollMetadata(
             calculation_strategy=strategy,

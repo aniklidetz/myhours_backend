@@ -91,7 +91,8 @@ class PayrollServicesBasicTest(PayrollTestMixin, TestCase):
         result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
 
         # Should have 8 regular hours, no overtime
-        self.assertAlmostEqual(float(result["regular_hours"]), 8.6, places=1)
+        # FIXED: Hourly employees don't get normalization - 8 actual hours = 8.0 hours
+        self.assertAlmostEqual(float(result["regular_hours"]), 8.0, places=1)
         self.assertEqual(float(result["overtime_hours"]), 0.0)
 
         # Expected pay: 8 hours × 80 ILS = 640 ILS

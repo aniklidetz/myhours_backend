@@ -50,7 +50,7 @@ def test_simple():
 
         # Try to save
         salary.save()
-        print("✅ Salary saved successfully")
+        print("Salary saved successfully")
 
         # Create simple work log
         check_in = timezone.make_aware(datetime(2025, 7, 5, 9, 0))
@@ -61,7 +61,7 @@ def test_simple():
             check_in=check_in,
             check_out=check_out
         )
-        print("✅ WorkLog created successfully")
+        print("WorkLog created successfully")
 
         # Calculate payroll
         context = CalculationContext(
@@ -74,7 +74,7 @@ def test_simple():
 
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
-        print("✅ Payroll calculated successfully")
+        print("Payroll calculated successfully")
 
         print(f"Total salary: {result.get('total_salary', 'N/A')}")
         print(f"Total hours: {result.get('total_hours', 'N/A')}")
@@ -82,7 +82,7 @@ def test_simple():
         return True
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         return False

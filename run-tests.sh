@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🧪 MyHours Test Runner${NC}"
+echo -e "${BLUE} MyHours Test Runner${NC}"
 echo "=================================="
 
 # Function to run tests with proper settings
@@ -98,4 +98,4 @@ case $TEST_TYPE in
         ;;
 esac
 
-echo -e "${GREEN}✅ Tests completed successfully!${NC}"
+echo -e "${GREEN} Tests completed successfully!${NC}"

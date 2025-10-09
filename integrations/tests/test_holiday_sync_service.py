@@ -184,7 +184,9 @@ class HolidaySyncServiceTest(TestCase):
         created, updated = HolidaySyncService._sync_other_holidays(holidays)
 
         # Verify holidays were created
-        self.assertEqual(created, 3)
+        # Note: Official holidays that start in evening create 2 records (eve + main day)
+        # Rosh Hashanah creates 2 (eve + main), Yom Kippur creates 2 (eve + main), Minor creates 1 = 5 total
+        self.assertEqual(created, 5)
         self.assertEqual(updated, 0)
 
         # Verify official holidays have is_holiday=True
@@ -223,12 +225,14 @@ class HolidaySyncServiceTest(TestCase):
         created, updated = HolidaySyncService._sync_weekly_shabbats(weekly_shabbats)
 
         # Verify Shabbats were created
-        self.assertEqual(created, 2)
+        # Note: Each Shabbat creates 2 records (Friday evening + Saturday)
+        # 2 Shabbats × 2 records = 4 total
+        self.assertEqual(created, 4)
         self.assertEqual(updated, 0)
 
         # Verify database records
         shabbats = Holiday.objects.filter(is_shabbat=True, is_special_shabbat=False)
-        self.assertEqual(len(shabbats), 2)
+        self.assertEqual(len(shabbats), 4)  # 2 Shabbats × 2 records each
 
         first_shabbat = shabbats.get(date=date(2025, 1, 3))
         self.assertEqual(first_shabbat.name, "Shabbat")
@@ -263,8 +267,10 @@ class HolidaySyncServiceTest(TestCase):
 
         created, updated = HolidaySyncService._sync_weekly_shabbats(weekly_shabbats)
 
-        # Should not update special Shabbat
-        self.assertEqual(created, 0)
+        # Should not update special Shabbat (Friday), but creates Saturday record
+        # Friday 2025-01-03 already exists as special, so not created
+        # Saturday 2025-01-04 gets created = 1 record
+        self.assertEqual(created, 1)
         self.assertEqual(updated, 0)
 
         # Verify special status is preserved

@@ -13,14 +13,17 @@ from payroll.models import CompensatoryDay, MonthlyPayrollSummary, Salary
 from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
 from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.tests.base import MockedShabbatTestBase
 from users.models import Employee
 from worktime.models import WorkLog
 from integrations.models import Holiday
 from .test_helpers import create_shabbat_for_date
-class SabbathCalculationTest(PayrollTestMixin, TestCase):
+class SabbathCalculationTest(PayrollTestMixin, MockedShabbatTestBase):
     """Test Sabbath work detection and premium calculations"""
     def setUp(self):
         """Set up test data"""
+        super().setUp()  # Call MockedShabbatTestBase.setUp() for API mocking
+
         # Create hourly employee
         self.hourly_employee = Employee.objects.create(
             first_name="Sabbath",
@@ -52,30 +55,22 @@ class SabbathCalculationTest(PayrollTestMixin, TestCase):
             is_active=True,
         )
 
-        # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
-        # July 2025 Saturdays
-        Holiday.objects.filter(date=date(2025, 7, 5)).delete()
-        Holiday.objects.create(date=date(2025, 7, 5), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 12)).delete()
-        Holiday.objects.create(date=date(2025, 7, 12), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 19)).delete()
-        Holiday.objects.create(date=date(2025, 7, 19), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 26)).delete()
-        Holiday.objects.create(date=date(2025, 7, 26), name="Shabbat", is_shabbat=True)
-
-        # July 2025 Fridays
-        Holiday.objects.filter(date=date(2025, 7, 4)).delete()
-        Holiday.objects.create(date=date(2025, 7, 4), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 11)).delete()
-        Holiday.objects.create(date=date(2025, 7, 11), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 18)).delete()
-        Holiday.objects.create(date=date(2025, 7, 18), name="Shabbat", is_shabbat=True)
-        Holiday.objects.filter(date=date(2025, 7, 25)).delete()
-        Holiday.objects.create(date=date(2025, 7, 25), name="Shabbat", is_shabbat=True)
+        # Create Shabbat Holiday records for all dates used in tests with proper times
+        # July 2025 - create Friday/Saturday pairs with times
+        self.create_shabbat_holiday(date(2025, 7, 4), date(2025, 7, 5))
+        self.create_shabbat_holiday(date(2025, 7, 11), date(2025, 7, 12))
+        self.create_shabbat_holiday(date(2025, 7, 18), date(2025, 7, 19))
+        self.create_shabbat_holiday(date(2025, 7, 25), date(2025, 7, 26))
 
         # Add Yom Kippur for test_sabbath_during_holiday
-        Holiday.objects.filter(date=date(2025, 10, 4)).delete()
-        Holiday.objects.create(date=date(2025, 10, 4), name="Yom Kippur", is_holiday=True)
+        # October 4, 2025 is Saturday, so Friday is October 3
+        Holiday.objects.create(
+            date=date(2025, 10, 4),
+            name="Yom Kippur",
+            is_holiday=True,
+            start_time=self.ISRAEL_TZ.localize(datetime(2025, 10, 3, 17, 30)),
+            end_time=self.ISRAEL_TZ.localize(datetime(2025, 10, 4, 18, 30))
+        )
 
         self.payroll_service = PayrollService()
     def test_saturday_daytime_work_hourly(self):
@@ -115,8 +110,9 @@ class SabbathCalculationTest(PayrollTestMixin, TestCase):
         proportional_salary = 8 * monthly_hourly_rate  # ~1098.9 ILS
         sabbath_bonus = 8 * monthly_hourly_rate * 0.5  # 50% bonus
         expected_total = proportional_salary + sabbath_bonus  # ~1648.3 ILS (150% total)
-        # Updated expected value to match enhanced algorithm: 1771.98
-        self.assertAlmostEqual(float(total_pay), 1771.98, delta=5)
+        # FIXED: Sabbath hours should NOT be normalized (normalization only for weekdays)
+        # Expected: 8h actual work → proportional (1098.9) + Sabbath bonus 50% (549.4) = 1648.3
+        self.assertAlmostEqual(float(total_pay), expected_total, delta=5)
     @patch(
         "integrations.services.unified_shabbat_service.get_shabbat_times"
     )

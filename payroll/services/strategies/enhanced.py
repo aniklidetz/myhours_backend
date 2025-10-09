@@ -33,24 +33,34 @@ from ..enums import CalculationStrategy, PayrollStatus, EmployeeType, Calculatio
 from .base import AbstractPayrollStrategy
 
 
-def apply_normative(actual: Decimal, dt, fast_mode: bool) -> Decimal:
+def apply_normative(actual: Decimal, is_monthly: bool, is_weekday: bool, fast_mode: bool) -> Decimal:
     """
     Apply Israeli labor law normative hours conversion.
-    
-    Only applies to regular hours when fast_mode=False.
+
+    CRITICAL RULES:
+    1. Only applies to MONTHLY employees (not hourly)
+    2. Only applies to WEEKDAYS (not Sabbath, not holidays)
+    3. Only applies when fast_mode=False
+
     Converts: 8.0 actual hours -> 8.6 normative hours (day shifts)
              7.0 actual hours -> 7.0 normative hours (night shifts)
-    
+
     Args:
         actual: Actual hours worked
-        dt: Datetime of shift start (for future night shift detection)
+        is_monthly: True if employee is monthly (not hourly)
+        is_weekday: True if weekday (not Sabbath, not holiday)
         fast_mode: If True, skip normative conversion
-        
+
     Returns:
-        Normative hours for billing
+        Normative hours for billing (same as actual if conditions not met)
     """
-    if fast_mode:
+    # Apply normalization ONLY if:
+    # 1. Monthly employee
+    # 2. Weekday (not Sabbath/holiday)
+    # 3. Not fast mode
+    if fast_mode or not is_monthly or not is_weekday:
         return actual
+
     mapping = {Decimal("8.0"): Decimal("8.6"), Decimal("7.0"): Decimal("7.0")}
     return mapping.get(actual, actual)
 
@@ -506,7 +516,8 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 log.check_in,
                 log.check_out,
                 hourly_rate,
-                holidays
+                holidays,
+                salary.calculation_type
             )
 
 
@@ -563,6 +574,10 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             holiday_rate=float(hourly_rate * self.HOLIDAY_RATE),
             holiday_pay=float(total_result["holiday_pay"]),
 
+            # Night shift tracking (diagnostic)
+            night_shift_hours=float(total_result.get("night_shift_hours", Decimal("0"))),
+            night_hours=float(total_result.get("night_hours", Decimal("0"))),
+
             # Totals
             total_salary=float(total_salary),
             total_hours=float(total_result["regular_hours"] + total_result["overtime_125_hours"] +
@@ -586,6 +601,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             overtime_hours=total_result["overtime_125_hours"] + total_result["overtime_150_hours"],
             shabbat_hours=total_result["sabbath_regular_hours"] + total_result["sabbath_overtime_175_hours"] + total_result["sabbath_overtime_200_hours"],
             holiday_hours=total_result["holiday_hours"],  # Aggregate holiday hours
+            night_hours=total_result.get("night_hours", Decimal("0")),  # Total night hours (22:00-06:00)
             breakdown=breakdown,
             metadata={
                 'calculation_strategy': 'enhanced_critical_points',
@@ -601,7 +617,8 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         shift_start_datetime,
         shift_end_datetime,
         base_hourly_rate,
-        holidays
+        holidays,
+        calculation_type="hourly"
     ):
         """
         Calculate shift payment using critical points algorithm.
@@ -610,6 +627,13 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         Step 1: Preliminary analysis
         Step 2: Critical points determination
         Step 3: Iterative calculation by segments
+
+        Args:
+            shift_start_datetime: Shift start time
+            shift_end_datetime: Shift end time
+            base_hourly_rate: Base hourly rate
+            holidays: Dict of holidays
+            calculation_type: Employee calculation type ("hourly" or "monthly")
         """
         from datetime import datetime, time, timedelta
         from django.utils import timezone
@@ -634,7 +658,12 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         )
 
         is_night_shift = total_hours_in_night_period > self.NIGHT_DETECTION_MINIMUM  # More than 2 hours in night period = night shift
+
+        # CRITICAL: Overtime thresholds ALWAYS use normative hours (8.6 for day, 7.0 for night)
+        # This applies to BOTH hourly and monthly employees
+        # The threshold determines WHEN overtime kicks in, not HOW MUCH to pay
         applicable_daily_norm = self.NIGHT_NORM if is_night_shift else self.DAY_NORM
+        is_monthly = calculation_type == "monthly"
 
         # Get Sabbath times from API
         from integrations.services.unified_shabbat_service import get_shabbat_times
@@ -818,18 +847,34 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
             hours_worked_so_far += segment_duration_hours
 
-        # Apply normative hours conversion for Israeli labor law compliance
-        # Convert base hours (regular and sabbath regular) from actual to normative
-        if result["regular_hours"] > 0:
-            normative_regular = apply_normative(result["regular_hours"], None, self._fast_mode)
-            result["regular_hours"] = normative_regular
+        # Track night hours separately for diagnostic purposes
+        # This is the total hours that fall within the night period (22:00-06:00)
+        result["night_shift_hours"] = total_hours_in_night_period
+        result["night_hours"] = total_hours_in_night_period  # Alias for compatibility
 
-        if result["sabbath_regular_hours"] > 0:
-            normative_sabbath = apply_normative(result["sabbath_regular_hours"], None, self._fast_mode)
-            result["sabbath_regular_hours"] = normative_sabbath
+        # Apply normative hours conversion for MONTHLY employees on WEEKDAYS
+        # CRITICAL RULES:
+        # 1. Only for monthly employees (not hourly)
+        # 2. Only for weekday regular hours (not Sabbath, not holidays)
+        # 3. Only when fast_mode=False
+        # 4. Overtime hours always remain as actual hours
+        if is_monthly and not self._fast_mode and result["regular_hours"] > Decimal("0"):
+            # Check if this shift has any Sabbath or holiday hours
+            has_sabbath = result["sabbath_regular_hours"] > Decimal("0") or \
+                         result["sabbath_overtime_175_hours"] > Decimal("0") or \
+                         result["sabbath_overtime_200_hours"] > Decimal("0")
+            has_holiday = result["holiday_hours"] > Decimal("0")
 
-        # Note: Overtime and holiday hours remain as actual hours (no normative conversion)
-        # This ensures correct reporting while maintaining accurate pay calculations
+            # If shift is ONLY on weekdays (no Sabbath/holiday hours), apply normalization
+            if not has_sabbath and not has_holiday:
+                # Apply normalization to regular hours only
+                normative_regular = apply_normative(
+                    result["regular_hours"],
+                    is_monthly=True,
+                    is_weekday=True,
+                    fast_mode=False
+                )
+                result["regular_hours"] = normative_regular
 
         return result
 
@@ -876,10 +921,14 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             elif shift_end_time >= night_start_time:
                 night_start_dt = datetime.combine(shift_date, night_start_time, shift_start.tzinfo)
                 night_hours = Decimal(str((shift_end - night_start_dt).total_seconds() / 3600))
-            # Check if shift is in early morning (before 6:00)
+            # Check if shift is in early morning (completely before 6:00)
             elif shift_end_time <= night_end_time:
                 if shift_start_time <= night_end_time:
                     night_hours = Decimal(str((shift_end - shift_start).total_seconds() / 3600))
+            # Check if shift starts before 6:00 but ends after 6:00
+            elif shift_start_time < night_end_time < shift_end_time:
+                night_end_dt = datetime.combine(shift_date, night_end_time, shift_start.tzinfo)
+                night_hours = Decimal(str((night_end_dt - shift_start).total_seconds() / 3600))
 
         return night_hours
 
@@ -916,6 +965,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 overtime_hours=0.0,
                 shabbat_hours=0.0,
                 holiday_hours=0.0,
+                night_hours=0.0,
                 breakdown=create_empty_breakdown()
             )
     
@@ -1076,6 +1126,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             overtime_hours=total_result.get("overtime_125_hours", Decimal('0')) + total_result.get("overtime_150_hours", Decimal('0')),
             shabbat_hours=total_result.get("sabbath_regular_hours", Decimal('0')) + total_result.get("sabbath_overtime_175_hours", Decimal('0')) + total_result.get("sabbath_overtime_200_hours", Decimal('0')),
             holiday_hours=total_result.get("holiday_regular_hours", Decimal('0')) + total_result.get("holiday_overtime_175_hours", Decimal('0')) + total_result.get("holiday_overtime_200_hours", Decimal('0')),
+            night_hours=total_result.get("night_hours", Decimal('0')),  # Total night hours (22:00-06:00)
             breakdown=breakdown,
             metadata={
                 'calculation_strategy': 'enhanced_critical_points_monthly',
@@ -1118,11 +1169,13 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Use existing critical points calculation but extract only premiums
         # Call the existing method to get full calculation
+        # IMPORTANT: Pass "monthly" as calculation_type to use normative thresholds (8.6h/7h)
         full_result = self._calculate_shift_critical_points(
             shift_start_datetime,
             shift_end_datetime,
             effective_hourly_rate,
-            holidays
+            holidays,
+            calculation_type="monthly"
         )
 
         # Initialize breakdown for premiums only
@@ -1255,17 +1308,18 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         
         return base_norm, bands
     
-    def _apply_bands(self, segment_hours: Decimal, hourly_rate: Decimal, is_sabbath: bool, is_night: bool, is_holiday: bool = False):
+    def _apply_bands(self, segment_hours: Decimal, hourly_rate: Decimal, is_sabbath: bool, is_night: bool, is_holiday: bool = False, is_monthly_employee: bool = False):
         """
         Apply hour bands to a segment and calculate hours and pay breakdown.
-        
+
         Args:
             segment_hours: Total hours in segment
             hourly_rate: Base hourly rate
             is_sabbath: Whether segment is on Sabbath
             is_night: Whether segment is night shift
             is_holiday: Whether segment is on holiday
-            
+            is_monthly_employee: Whether employee is monthly (affects normalization)
+
         Returns:
             dict: Hours and pay breakdown by category
         """
@@ -1307,18 +1361,30 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 
             # Calculate hours in this band
             band_hours = min(remaining_hours, hours_limit)
-            
+
             # For first band (base hours): apply normative hours conversion
-            if (i == 0 and hours_key in ["regular_hours", "sabbath_regular_hours", "holiday_hours"] and band_hours > 0):
-                # Apply normative conversion to base hours (regular, Sabbath regular, and holiday)
-                normative_hours = apply_normative(band_hours, None, self._fast_mode)
+            # CRITICAL RULES:
+            # 1. Only for MONTHLY employees (not hourly)
+            # 2. Only for WEEKDAY regular hours (not Sabbath, not holidays)
+            # 3. Only when fast_mode=False
+            if i == 0 and hours_key == "regular_hours" and band_hours > 0:
+                # Determine if this is a weekday (not Sabbath, not holiday)
+                is_weekday = not is_sabbath and not is_holiday
+
+                # Apply normative conversion ONLY for monthly employees on weekdays
+                normative_hours = apply_normative(
+                    band_hours,
+                    is_monthly=is_monthly_employee,
+                    is_weekday=is_weekday,
+                    fast_mode=self._fast_mode
+                )
                 result[hours_key] += normative_hours
                 result[pay_key] += band_hours * hourly_rate * multiplier  # Pay based on actual
             else:
-                # All other bands (overtime) use actual hours
+                # All other bands (overtime, Sabbath, holidays) use actual hours - NO normalization
                 result[hours_key] += band_hours
                 result[pay_key] += band_hours * hourly_rate * multiplier
-            
+
             # Reduce remaining hours based on actual hours worked
             remaining_hours -= band_hours
 

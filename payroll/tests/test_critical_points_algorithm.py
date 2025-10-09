@@ -291,15 +291,16 @@ class CriticalPointsAlgorithmTestCase(TestCase):
 
         result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
 
-        # 8 actual hours should become 8.6 normative hours
+        # FIXED: Normalization ONLY applies to monthly employees, not hourly
+        # For hourly employees, 8 actual hours = 8.0 hours (no normalization)
         self.assertAlmostEqual(
             float(result['total_hours']),
-            8.6,
+            8.0,
             places=1,
-            msg="8 actual hours should convert to 8.6 normative hours"
+            msg="Hourly employees: 8 actual hours = 8.0 hours (no normalization on weekdays)"
         )
 
-        # But payment should be for 8 actual hours
+        # Payment should be for 8 actual hours
         self.assertSalaryAlmostEqual(result['total_salary'], 800.00)
 
 

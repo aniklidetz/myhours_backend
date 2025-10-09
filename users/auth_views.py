@@ -131,10 +131,18 @@ def test_connection(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])  # Allow any authenticated user to logout
 def logout_view(request):
     """
     Logout endpoint that deletes the token
     """
+    # Check if user is authenticated
+    if not request.user or not request.user.is_authenticated:
+        return Response(
+            {"error": "Authentication required"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
     try:
         # Delete the user's token
         request.user.auth_token.delete()

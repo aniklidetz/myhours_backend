@@ -304,8 +304,9 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         context = make_context(self.hourly_employee, 2025, 7)
         result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should calculate 8 hours of work
+        # FIXED: Hourly employees don't get normalization - 8 actual hours = 8.0 hours
         total_hours = result.get("total_hours", 0)
-        self.assertAlmostEqual(float(total_hours), 8.6, places=1)
+        self.assertAlmostEqual(float(total_hours), 8.0, places=1)
         # Should get pay (note: might get Sabbath premium since July 12, 2025 is Saturday)
         total_pay = float(result.get("total_salary", 0))
         self.assertGreater(total_pay, 0)

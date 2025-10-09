@@ -75,7 +75,8 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         context = make_context(self.hourly_employee, 2025, 7)
         result = self.payroll_service.calculate(context, CalculationStrategy.ENHANCED)
         # Should have 8 regular hours, no overtime
-        self.assertAlmostEqual(float(result.get("regular_hours", 0)), 8.6, places=1)
+        # FIXED: Hourly employees don't get normalization - 8 actual hours = 8.0 hours
+        self.assertAlmostEqual(float(result.get("regular_hours", 0)), 8.0, places=1)
         self.assertEqual(float(result.get("overtime_hours", 0)), 0.0)
         # Total pay should be 8 * 100 = 800
         expected_pay = 8 * 100

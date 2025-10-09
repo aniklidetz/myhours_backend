@@ -8,7 +8,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
@@ -75,7 +75,8 @@ class WorkLogRaceConditionTest(TransactionTestCase):
                     )
                     worklog.save()
                 successful_creations.append(worklog)
-            except (ValidationError, IntegrityError) as e:
+            except (ValidationError, IntegrityError, OperationalError) as e:
+                # OperationalError can occur with SQLite database locking in tests
                 errors.append(str(e))
 
         # Create threads to simulate concurrent creation
