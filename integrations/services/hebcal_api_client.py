@@ -17,6 +17,7 @@ import logging
 from datetime import date
 
 import requests
+
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ class HebcalAPIClient:
 
             # Parse response
             from integrations.utils import safe_to_json
+
             raw_data = safe_to_json(response)
 
             # Filter and parse holiday items
@@ -87,9 +89,9 @@ class HebcalAPIClient:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
-                "Error fetching holidays from Hebcal API",
-                extra={"err": err_tag(e)}
+                "Error fetching holidays from Hebcal API", extra={"err": err_tag(e)}
             )
             return []
 
@@ -100,12 +102,12 @@ class HebcalAPIClient:
             "v": 1,
             "cfg": "json",
             "year": year,
-            "ss": "on",   # Include Shabbats
-            "c": "on",    # Use Gregorian calendar
+            "ss": "on",  # Include Shabbats
+            "c": "on",  # Use Gregorian calendar
             "maj": "on",  # Major holidays
             "min": "on",  # Minor holidays
-            "nx": "on",   # Modern holidays
-            "i": "on",    # Israel holidays (not diaspora)
+            "nx": "on",  # Modern holidays
+            "i": "on",  # Israel holidays (not diaspora)
         }
 
         if month:
@@ -128,15 +130,12 @@ class HebcalAPIClient:
         items = [
             item
             for item in raw_data.get("items", [])
-            if item.get("category") == "holiday"
-            and item["date"].startswith(str(year))
+            if item.get("category") == "holiday" and item["date"].startswith(str(year))
         ]
 
         # Log filtering for debugging
         total_items = len(raw_data.get("items", []))
         if total_items != len(items):
-            logger.debug(
-                f"Filtered {total_items} → {len(items)} items for year {year}"
-            )
+            logger.debug(f"Filtered {total_items} → {len(items)} items for year {year}")
 
         return items

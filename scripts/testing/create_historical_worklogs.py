@@ -3,18 +3,21 @@
 Create historical work logs for July-August 2025 and first half of September 2025.
 """
 import os
-import django
 import random
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+import django
+
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myhours.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings")
 django.setup()
 
 from django.utils import timezone
+
 from users.models import Employee
 from worktime.models import WorkLog
+
 
 def get_work_schedule(pattern, work_date):
     """Return (should_work, hours, start_hour) based on work pattern"""
@@ -93,30 +96,34 @@ def get_work_schedule(pattern, work_date):
     else:
         return False, 0, 0
 
+
 def get_location_for_pattern(pattern):
     """Return appropriate location based on work pattern"""
     if pattern == "remote_work":
         return "Home Office"
     elif pattern == "business_trips":
-        return random.choice([
-            "Client Site - Tel Aviv",
-            "Client Site - Jerusalem",
-            "Hotel - Business Trip"
-        ])
+        return random.choice(
+            [
+                "Client Site - Tel Aviv",
+                "Client Site - Jerusalem",
+                "Hotel - Business Trip",
+            ]
+        )
     elif pattern == "night_shifts":
         return "Office - Night Shift"
     elif pattern == "student_hours":
         return "University Campus Office"
     else:
-        return random.choice([
-            "Office Tel Aviv",
-            "Office Main Building",
-            "Office - Floor 3"
-        ])
+        return random.choice(
+            ["Office Tel Aviv", "Office Main Building", "Office - Floor 3"]
+        )
+
 
 def create_work_logs_for_period(start_date, end_date):
     """Create work logs for the specified period"""
-    print(f"Creating work logs from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+    print(
+        f"Creating work logs from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+    )
 
     employees = Employee.objects.filter(email__endswith="@test.com")
     total_logs_created = 0
@@ -136,7 +143,7 @@ def create_work_logs_for_period(start_date, end_date):
             "yael.baron@test.com": "overtime_lover",
             "gilad.friedman@test.com": "flexible_hours",
             "maya.shechter@test.com": "remote_work",
-            "omer.klein@test.com": "student_hours"
+            "omer.klein@test.com": "student_hours",
         }
 
         pattern = pattern_map.get(employee.email, "flexible_hours")
@@ -147,7 +154,7 @@ def create_work_logs_for_period(start_date, end_date):
         WorkLog.objects.filter(
             employee=employee,
             check_in__date__gte=start_date,
-            check_in__date__lte=end_date
+            check_in__date__lte=end_date,
         ).delete()
 
         current_day = start_date
@@ -161,13 +168,17 @@ def create_work_logs_for_period(start_date, end_date):
                     hour=start_hour,
                     minute=check_in_minute,
                     second=random.randint(0, 59),
-                    microsecond=0
+                    microsecond=0,
                 )
 
                 # Ensure 36-hour rest period
                 if last_work_end:
                     # Convert check_in to timezone-aware for comparison
-                    check_in_aware = timezone.make_aware(check_in) if timezone.is_naive(check_in) else check_in
+                    check_in_aware = (
+                        timezone.make_aware(check_in)
+                        if timezone.is_naive(check_in)
+                        else check_in
+                    )
                     time_since_last_work = check_in_aware - last_work_end
                     if time_since_last_work < timedelta(hours=36):
                         current_day += timedelta(days=1)
@@ -191,16 +202,28 @@ def create_work_logs_for_period(start_date, end_date):
                 # Create work log
                 worklog = WorkLog.objects.create(
                     employee=employee,
-                    check_in=timezone.make_aware(check_in) if timezone.is_naive(check_in) else check_in,
-                    check_out=timezone.make_aware(check_out) if timezone.is_naive(check_out) else check_out,
+                    check_in=(
+                        timezone.make_aware(check_in)
+                        if timezone.is_naive(check_in)
+                        else check_in
+                    ),
+                    check_out=(
+                        timezone.make_aware(check_out)
+                        if timezone.is_naive(check_out)
+                        else check_out
+                    ),
                     is_approved=True,
                     location_check_in=get_location_for_pattern(pattern),
                     location_check_out=get_location_for_pattern(pattern),
-                    notes=f"Historical data - {pattern} pattern"
+                    notes=f"Historical data - {pattern} pattern",
                 )
                 logs_created += 1
 
-                last_work_end = timezone.make_aware(check_out) if timezone.is_naive(check_out) else check_out
+                last_work_end = (
+                    timezone.make_aware(check_out)
+                    if timezone.is_naive(check_out)
+                    else check_out
+                )
 
             current_day += timedelta(days=1)
 
@@ -208,6 +231,7 @@ def create_work_logs_for_period(start_date, end_date):
         total_logs_created += logs_created
 
     print(f"✅ Total work logs created: {total_logs_created}")
+
 
 def main():
     print("=== Creating Historical Work Logs ===")
@@ -233,5 +257,6 @@ def main():
 
     print("\n🎉 Historical work logs creation completed!")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

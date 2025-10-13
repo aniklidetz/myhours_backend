@@ -25,6 +25,7 @@ class HebcalService:
     - HolidaySyncService for orchestrating holiday synchronization
     - HolidayUtilityService for utility functions
     """
+
     """
     Service for working with Hebcal API to retrieve information about Jewish holidays.
 
@@ -446,13 +447,15 @@ class HebcalService:
         Kept for backward compatibility.
         """
         import warnings
+
         warnings.warn(
             "HebcalService.sync_holidays_to_db is deprecated. Use HolidaySyncService.sync_year() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
         from .holiday_sync_service import HolidaySyncService
+
         return HolidaySyncService.sync_year(year, include_weekly_shabbats)
 
     @classmethod
@@ -462,13 +465,15 @@ class HebcalService:
         Kept for backward compatibility.
         """
         import warnings
+
         warnings.warn(
             "HebcalService.fetch_holidays is deprecated. Use HebcalAPIClient.fetch_holidays() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
         from .hebcal_api_client import HebcalAPIClient
+
         return HebcalAPIClient.fetch_holidays(year, month, use_cache)
 
     @classmethod
@@ -478,13 +483,15 @@ class HebcalService:
         Kept for backward compatibility.
         """
         import warnings
+
         warnings.warn(
             "HebcalService.get_holiday_name is deprecated. Use HolidayUtilityService.get_holiday_name() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
         from .holiday_utility_service import HolidayUtilityService
+
         return HolidayUtilityService.get_holiday_name(holiday_date)
 
     @classmethod
@@ -494,11 +501,13 @@ class HebcalService:
         Kept for backward compatibility.
         """
         import warnings
+
         warnings.warn(
             "HebcalService.is_holiday is deprecated. Use HolidayUtilityService.is_holiday() instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
         from .holiday_utility_service import HolidayUtilityService
+
         return HolidayUtilityService.is_holiday(check_date)

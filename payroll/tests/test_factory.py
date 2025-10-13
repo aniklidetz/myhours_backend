@@ -5,18 +5,19 @@ This module tests the PayrollCalculatorFactory to ensure proper strategy
 registration, creation, and error handling.
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
+from payroll.services.contracts import CalculationContext
+from payroll.services.enums import CalculationStrategy
 from payroll.services.factory import (
     PayrollCalculatorFactory,
     StrategyNotFoundError,
+    create_calculator_for_context,
     get_payroll_factory,
     register_default_strategies,
-    create_calculator_for_context
 )
-from payroll.services.enums import CalculationStrategy
-from payroll.services.contracts import CalculationContext
 from payroll.services.strategies.base import AbstractPayrollStrategy
 
 
@@ -25,19 +26,20 @@ class MockStrategy(AbstractPayrollStrategy):
 
     def calculate(self):
         return {
-            'total_salary': 5000.0,
-            'total_hours': 160.0,
-            'regular_hours': 144.0,
-            'overtime_hours': 16.0,
-            'holiday_hours': 0.0,
-            'shabbat_hours': 0.0,
-            'breakdown': {},
-            'metadata': {'calculation_strategy': 'mock'}
+            "total_salary": 5000.0,
+            "total_hours": 160.0,
+            "regular_hours": 144.0,
+            "overtime_hours": 16.0,
+            "holiday_hours": 0.0,
+            "shabbat_hours": 0.0,
+            "breakdown": {},
+            "metadata": {"calculation_strategy": "mock"},
         }
 
 
 class InvalidStrategy:
     """Invalid strategy that doesn't inherit from AbstractPayrollStrategy"""
+
     pass
 
 
@@ -61,7 +63,7 @@ class TestPayrollCalculatorFactory:
             force_recalculate=False,
             fast_mode=False,
             include_breakdown=True,
-            include_daily_details=False
+            include_daily_details=False,
         )
 
     def test_factory_initialization(self, factory):
@@ -168,13 +170,13 @@ class TestGlobalFactoryFunctions:
 
     def test_register_default_strategies_logs_warning_on_import_error(self):
         """Test that register_default_strategies handles import errors gracefully"""
-        with patch('payroll.services.factory.logger') as mock_logger:
+        with patch("payroll.services.factory.logger") as mock_logger:
             register_default_strategies()
 
             # Should log that strategies are registered (even though imports fail)
             mock_logger.info.assert_called_once()
-            call_args = mock_logger.info.call_args[1]['extra']
-            assert call_args['action'] == 'default_strategies_registered'
+            call_args = mock_logger.info.call_args[1]["extra"]
+            assert call_args["action"] == "default_strategies_registered"
 
     @pytest.fixture
     def context(self):
@@ -188,7 +190,7 @@ class TestGlobalFactoryFunctions:
             force_recalculate=False,
             fast_mode=False,
             include_breakdown=True,
-            include_daily_details=False
+            include_daily_details=False,
         )
 
     def test_create_calculator_for_context_preferred_strategy(self, context):
@@ -196,7 +198,9 @@ class TestGlobalFactoryFunctions:
         factory = get_payroll_factory()
         factory.register_strategy(CalculationStrategy.ENHANCED, MockStrategy)
 
-        calculator = create_calculator_for_context(context, CalculationStrategy.ENHANCED)
+        calculator = create_calculator_for_context(
+            context, CalculationStrategy.ENHANCED
+        )
         assert isinstance(calculator, MockStrategy)
 
     def test_create_calculator_for_context_default_strategy(self, context):
@@ -213,17 +217,19 @@ class TestGlobalFactoryFunctions:
         # Clear any registered strategies
         factory = PayrollCalculatorFactory()
 
-        with patch('payroll.services.factory._global_factory', factory):
+        with patch("payroll.services.factory._global_factory", factory):
             with pytest.raises(StrategyNotFoundError) as exc_info:
                 create_calculator_for_context(context)
 
-            assert "No payroll calculation strategies are registered" in str(exc_info.value)
+            assert "No payroll calculation strategies are registered" in str(
+                exc_info.value
+            )
 
     def test_create_calculator_for_context_auto_selection(self, context):
         """Test automatic strategy selection when default is not available"""
         factory = PayrollCalculatorFactory()
         factory.register_strategy(CalculationStrategy.LEGACY, MockStrategy)
 
-        with patch('payroll.services.factory._global_factory', factory):
+        with patch("payroll.services.factory._global_factory", factory):
             calculator = create_calculator_for_context(context)
             assert isinstance(calculator, MockStrategy)

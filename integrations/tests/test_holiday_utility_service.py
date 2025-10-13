@@ -29,8 +29,8 @@ class HolidayUtilityServiceTest(TestCase):
                 "name": "New Year",
                 "is_holiday": True,
                 "is_shabbat": False,
-                "is_special_shabbat": False
-            }
+                "is_special_shabbat": False,
+            },
         )
 
         self.regular_shabbat, _ = Holiday.objects.get_or_create(
@@ -40,9 +40,13 @@ class HolidayUtilityServiceTest(TestCase):
                 "is_holiday": False,
                 "is_shabbat": True,
                 "is_special_shabbat": False,
-                "start_time": datetime(2025, 1, 3, 16, 30, tzinfo=datetime.now().astimezone().tzinfo),
-                "end_time": datetime(2025, 1, 4, 17, 30, tzinfo=datetime.now().astimezone().tzinfo)
-            }
+                "start_time": datetime(
+                    2025, 1, 3, 16, 30, tzinfo=datetime.now().astimezone().tzinfo
+                ),
+                "end_time": datetime(
+                    2025, 1, 4, 17, 30, tzinfo=datetime.now().astimezone().tzinfo
+                ),
+            },
         )
 
         self.special_shabbat, _ = Holiday.objects.get_or_create(
@@ -51,8 +55,8 @@ class HolidayUtilityServiceTest(TestCase):
                 "name": "Shabbat Rosh Chodesh",
                 "is_holiday": False,
                 "is_shabbat": True,
-                "is_special_shabbat": True
-            }
+                "is_special_shabbat": True,
+            },
         )
 
         self.non_holiday, _ = Holiday.objects.get_or_create(
@@ -61,8 +65,8 @@ class HolidayUtilityServiceTest(TestCase):
                 "name": "Minor Event",
                 "is_holiday": False,
                 "is_shabbat": False,
-                "is_special_shabbat": False
-            }
+                "is_special_shabbat": False,
+            },
         )
 
     def tearDown(self):
@@ -98,12 +102,14 @@ class HolidayUtilityServiceTest(TestCase):
                 "title": "API Holiday",
                 "date": "2025-12-25",
                 "category": "holiday",
-                "subcat": "major"
+                "subcat": "major",
             }
         ]
 
         # Mock is_official_holiday to return True
-        with patch("integrations.services.holiday_utility_service.is_official_holiday") as mock_official:
+        with patch(
+            "integrations.services.holiday_utility_service.is_official_holiday"
+        ) as mock_official:
             mock_official.return_value = True
 
             name = HolidayUtilityService.get_holiday_name(date(2025, 12, 25))
@@ -121,12 +127,14 @@ class HolidayUtilityServiceTest(TestCase):
                 "title": "Non-Official Holiday",
                 "date": "2025-12-25",
                 "category": "holiday",
-                "subcat": "minor"
+                "subcat": "minor",
             }
         ]
 
         # Mock is_official_holiday to return False
-        with patch("integrations.services.holiday_utility_service.is_official_holiday") as mock_official:
+        with patch(
+            "integrations.services.holiday_utility_service.is_official_holiday"
+        ) as mock_official:
             mock_official.return_value = False
 
             name = HolidayUtilityService.get_holiday_name(date(2025, 12, 25))
@@ -163,12 +171,14 @@ class HolidayUtilityServiceTest(TestCase):
                 "title": "API Holiday",
                 "date": "2025-12-25",
                 "category": "holiday",
-                "subcat": "major"
+                "subcat": "major",
             }
         ]
 
         # Mock is_official_holiday to return True
-        with patch("integrations.services.holiday_utility_service.is_official_holiday") as mock_official:
+        with patch(
+            "integrations.services.holiday_utility_service.is_official_holiday"
+        ) as mock_official:
             mock_official.return_value = True
 
             is_holiday = HolidayUtilityService.is_holiday(date(2025, 12, 25))
@@ -279,7 +289,9 @@ class HolidayUtilityServiceTest(TestCase):
     def test_error_handling_get_holiday_name(self):
         """Test error handling in get_holiday_name"""
         # Mock database error
-        with patch("integrations.services.holiday_utility_service.Holiday.objects.filter") as mock_filter:
+        with patch(
+            "integrations.services.holiday_utility_service.Holiday.objects.filter"
+        ) as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             name = HolidayUtilityService.get_holiday_name(date(2025, 1, 1))
@@ -288,7 +300,9 @@ class HolidayUtilityServiceTest(TestCase):
     def test_error_handling_is_holiday(self):
         """Test error handling in is_holiday"""
         # Mock database error
-        with patch("integrations.services.holiday_utility_service.Holiday.objects.filter") as mock_filter:
+        with patch(
+            "integrations.services.holiday_utility_service.Holiday.objects.filter"
+        ) as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             is_holiday = HolidayUtilityService.is_holiday(date(2025, 1, 1))
@@ -297,7 +311,9 @@ class HolidayUtilityServiceTest(TestCase):
     def test_error_handling_is_shabbat(self):
         """Test error handling in is_shabbat"""
         # Mock database error
-        with patch("integrations.services.holiday_utility_service.Holiday.objects.filter") as mock_filter:
+        with patch(
+            "integrations.services.holiday_utility_service.Holiday.objects.filter"
+        ) as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             is_shabbat = HolidayUtilityService.is_shabbat(date(2025, 1, 3))
@@ -306,7 +322,9 @@ class HolidayUtilityServiceTest(TestCase):
     def test_error_handling_is_special_shabbat(self):
         """Test error handling in is_special_shabbat"""
         # Mock database error
-        with patch("integrations.services.holiday_utility_service.Holiday.objects.filter") as mock_filter:
+        with patch(
+            "integrations.services.holiday_utility_service.Holiday.objects.filter"
+        ) as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             is_special = HolidayUtilityService.is_special_shabbat(date(2025, 1, 10))
@@ -315,7 +333,9 @@ class HolidayUtilityServiceTest(TestCase):
     def test_error_handling_get_holiday_info(self):
         """Test error handling in get_holiday_info"""
         # Mock database error
-        with patch("integrations.services.holiday_utility_service.Holiday.objects.filter") as mock_filter:
+        with patch(
+            "integrations.services.holiday_utility_service.Holiday.objects.filter"
+        ) as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             info = HolidayUtilityService.get_holiday_info(date(2025, 1, 1))
@@ -344,7 +364,7 @@ class HolidayUtilityServiceTest(TestCase):
                 "title": "Invalid Date Holiday",
                 "date": "invalid-date",
                 "category": "holiday",
-                "subcat": "major"
+                "subcat": "major",
             }
         ]
 

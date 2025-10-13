@@ -1,9 +1,13 @@
 """
 Test helpers for payroll tests
 """
+
 from datetime import date, datetime, timedelta
+
 import pytz
+
 from integrations.models import Holiday
+
 
 def create_shabbat_for_date(saturday_date):
     """
@@ -22,31 +26,39 @@ def create_shabbat_for_date(saturday_date):
 
     # Use approximate times for tests (19:30 start, 20:30 end)
     # Friday evening portion
-    friday_start = israel_tz.localize(datetime(friday_date.year, friday_date.month, friday_date.day, 19, 30))
-    friday_end = israel_tz.localize(datetime(saturday_date.year, saturday_date.month, saturday_date.day, 0, 0))
+    friday_start = israel_tz.localize(
+        datetime(friday_date.year, friday_date.month, friday_date.day, 19, 30)
+    )
+    friday_end = israel_tz.localize(
+        datetime(saturday_date.year, saturday_date.month, saturday_date.day, 0, 0)
+    )
 
     friday_holiday, created = Holiday.objects.get_or_create(
         date=friday_date,
         name="Shabbat",
         defaults={
-            'is_shabbat': True,
-            'start_time': friday_start,
-            'end_time': friday_end
-        }
+            "is_shabbat": True,
+            "start_time": friday_start,
+            "end_time": friday_end,
+        },
     )
 
     # Saturday portion
-    saturday_start = israel_tz.localize(datetime(saturday_date.year, saturday_date.month, saturday_date.day, 0, 0))
-    saturday_end = israel_tz.localize(datetime(saturday_date.year, saturday_date.month, saturday_date.day, 20, 30))
+    saturday_start = israel_tz.localize(
+        datetime(saturday_date.year, saturday_date.month, saturday_date.day, 0, 0)
+    )
+    saturday_end = israel_tz.localize(
+        datetime(saturday_date.year, saturday_date.month, saturday_date.day, 20, 30)
+    )
 
     saturday_holiday, created = Holiday.objects.get_or_create(
         date=saturday_date,
         name="Shabbat",
         defaults={
-            'is_shabbat': True,
-            'start_time': saturday_start,
-            'end_time': saturday_end
-        }
+            "is_shabbat": True,
+            "start_time": saturday_start,
+            "end_time": saturday_end,
+        },
     )
 
     return friday_holiday, saturday_holiday

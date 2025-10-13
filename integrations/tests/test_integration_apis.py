@@ -14,6 +14,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import requests
+
 from django.core.cache import cache
 from django.test import TestCase
 
@@ -105,6 +106,7 @@ class IntegrationErrorHandlingTest(TestCase):
 
             # Should return estimated times, not raise exception
             from integrations.services.unified_shabbat_service import get_shabbat_times
+
             shabbat_times = get_shabbat_times(date(2025, 7, 25))
 
             self.assertIn("shabbat_start", shabbat_times)
@@ -205,6 +207,7 @@ class IntegrationPerformanceTest(TestCase):
             dates = [date(2025, 7, i) for i in range(1, 11)]  # 10 different dates
 
             from integrations.services.unified_shabbat_service import get_shabbat_times
+
             results = []
             for test_date in dates:
                 result = get_shabbat_times(test_date)

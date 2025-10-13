@@ -17,10 +17,11 @@ class SimpleNotificationService:
     def check_daily_hours(employee, work_log):
         """Check if employee is approaching daily limits and send push if needed"""
 
-        # Skip notifications during tests
+        # Skip notifications during tests or bulk operations
+        import os
         import sys
 
-        if "test" in sys.argv:
+        if "test" in sys.argv or os.environ.get("SKIP_NOTIFICATIONS"):
             return
 
         # Calculate today's total hours
@@ -66,10 +67,11 @@ class SimpleNotificationService:
     def check_weekly_hours(employee):
         """Check weekly hours and notify if high"""
 
-        # Skip notifications during tests
+        # Skip notifications during tests or bulk operations
+        import os
         import sys
 
-        if "test" in sys.argv:
+        if "test" in sys.argv or os.environ.get("SKIP_NOTIFICATIONS"):
             return
 
         from worktime.models import WorkLog
@@ -105,10 +107,11 @@ class SimpleNotificationService:
     def notify_holiday_work(employee, holiday_name):
         """Notify about working on holiday"""
 
-        # Skip notifications during tests
+        # Skip notifications during tests or bulk operations
+        import os
         import sys
 
-        if "test" in sys.argv:
+        if "test" in sys.argv or os.environ.get("SKIP_NOTIFICATIONS"):
             return
 
         SimpleNotificationService._send_push(

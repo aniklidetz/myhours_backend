@@ -3,13 +3,17 @@ Tests for Salary model database-level constraints
 """
 
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from payroll.models import Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -120,4 +124,3 @@ class SalaryDatabaseConstraintsTest(TestCase):
         )
         # Should default to True for is_active
         self.assertTrue(salary.is_active)
-

@@ -10,23 +10,30 @@ Notes:
     * For MONTHLY employees the base salary is proportional (salary/182 * hours)
       and bonuses only are added (Sabbath/holiday and overtime tiers).
 """
-from datetime import datetime, date, timedelta
+
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 import pytz
+
 from django.test import TestCase
 from django.utils import timezone
 
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary, Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import make_context
+from payroll.services.payroll_service import PayrollService
 from payroll.tests.base import MockedShabbatTestBase
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
 ISRAEL_TZ = pytz.timezone("Israel")
+
 
 class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
     """
@@ -58,7 +65,7 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
             calculation_type="hourly",
             hourly_rate=Decimal("100.00"),
             currency="ILS",
-            is_active=True
+            is_active=True,
         )
 
         # Monthly employee @ 25,000 ILS/month
@@ -74,7 +81,7 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
             calculation_type="monthly",
             base_salary=Decimal("25000.00"),
             currency="ILS",
-            is_active=True
+            is_active=True,
         )
 
         self.service = PayrollService()
@@ -82,8 +89,7 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Create Holiday records for Sabbath detection with proper times
         # Saturday July 5, 2025 - Friday is July 4
         self.create_shabbat_holiday(
-            friday_date=date(2025, 7, 4),
-            saturday_date=date(2025, 7, 5)
+            friday_date=date(2025, 7, 4), saturday_date=date(2025, 7, 5)
         )
 
     # -------------------- Hourly employees --------------------
@@ -92,7 +98,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """8-hour weekday - all hours regular (8 < 8.6)."""
         check_in = timezone.make_aware(datetime(2025, 7, 1, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 1, 17, 0))  # 8h
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -107,7 +115,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """10-hour weekday - 8.6h @100% + 1.4h @125%."""
         check_in = timezone.make_aware(datetime(2025, 7, 2, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 2, 19, 0))  # 10h
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -121,7 +131,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """12-hour weekday - 8.6h @100% + 2h @125% + 1.4h @150%."""
         check_in = timezone.make_aware(datetime(2025, 7, 3, 8, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 3, 20, 0))  # 12h
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -139,12 +151,16 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Saturday 2025-07-05
         check_in = timezone.make_aware(datetime(2025, 7, 5, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 5, 17, 0))  # 8h
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7, fast_mode=False)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
 
-        expected = 8.0 * 100.0 * 1.5  # Enhanced Strategy uses actual hours for Sabbath premium
+        expected = (
+            8.0 * 100.0 * 1.5
+        )  # Enhanced Strategy uses actual hours for Sabbath premium
         self.assertAlmostEqual(float(res["total_salary"]), expected, delta=2.0)
         self.assertGreater(float(res.get("shabbat_hours", 0)), 0.0)
 
@@ -156,7 +172,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
 
         check_in = timezone.make_aware(datetime(2025, 7, 5, 8, 0))  # Saturday
         check_out = timezone.make_aware(datetime(2025, 7, 5, 20, 0))  # 12h
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7, fast_mode=False)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -176,7 +194,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """
         check_in = timezone.make_aware(datetime(2025, 7, 1, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 1, 17, 0))  # 8h
-        WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.monthly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.monthly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -187,7 +207,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
 
         # 2. Calculate proportional base for normative hours (8.6)
         normative_hours = ISRAELI_DAILY_NORM_HOURS  # 8.6
-        proportional_base = (float(normative_hours) / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (
+            float(normative_hours) / float(MONTHLY_NORM_HOURS)
+        ) * float(monthly_salary)
 
         # 3. Calculate premiums (zero for regular day)
         total_premiums = 0.0
@@ -196,9 +218,15 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         expected_total_salary = proportional_base + total_premiums
 
         # 5. Assert the values
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=10.0)
-        self.assertAlmostEqual(float(res['breakdown']['proportional_base']), proportional_base, delta=10.0)
-        self.assertAlmostEqual(float(res['breakdown']['total_bonuses_monthly']), total_premiums, delta=1.0)
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=10.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["proportional_base"]), proportional_base, delta=10.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["total_bonuses_monthly"]), total_premiums, delta=1.0
+        )
 
     def test_monthly_ten_hour_day_overtime_bonus_only(self):
         """
@@ -206,7 +234,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """
         check_in = timezone.make_aware(datetime(2025, 7, 3, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 3, 19, 0))  # 10h
-        WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.monthly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.monthly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -217,7 +247,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
 
         # 2. Calculate proportional base (10h total)
         total_hours = 10.0
-        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(
+            monthly_salary
+        )
 
         # 3. Calculate premiums. For 10h shift: 8.6h regular (0% premium), 1.4h OT1 (25% premium)
         premium_125 = 1.4 * rate * 0.25
@@ -227,8 +259,12 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         expected_total_salary = proportional_base + total_premiums
 
         # 5. Assert the values
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=60.0)
-        self.assertAlmostEqual(float(res['breakdown']['total_bonuses_monthly']), total_premiums, delta=2.0)
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=60.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["total_bonuses_monthly"]), total_premiums, delta=2.0
+        )
         self.assertAlmostEqual(float(res.get("overtime_hours", 0)), 1.4, places=1)
 
     def test_monthly_twelve_hour_day_overtime_bonuses(self):
@@ -237,7 +273,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """
         check_in = timezone.make_aware(datetime(2025, 7, 4, 8, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 4, 20, 0))  # 12h
-        WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.monthly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.monthly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -252,7 +290,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Total hours for proportional: 8.6h (normalized regular) + 2h OT1 + 1.4h OT2 = 12.0h
         # But proportional base should be calculated on ALL actual hours
         total_hours = 12.0
-        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(
+            monthly_salary
+        )
 
         # 3. Calculate premiums. For 12h shift: 8.6h (0%), 2h OT1 (25%), 1.4h OT2 (50%)
         premium_125 = 2.0 * rate * 0.25
@@ -265,8 +305,14 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # 5. Assert the values
         # NOTE: Increased delta due to normalization affecting calculations
         # The actual implementation may calculate bonuses differently with normalization
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=180.0)
-        self.assertAlmostEqual(float(res['breakdown']['total_bonuses_monthly']), total_premiums, delta=180.0)
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=180.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["total_bonuses_monthly"]),
+            total_premiums,
+            delta=180.0,
+        )
 
     def test_monthly_sabbath_daytime_bonus_only(self):
         """
@@ -274,7 +320,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         """
         check_in = timezone.make_aware(datetime(2025, 7, 5, 9, 0))  # Saturday
         check_out = timezone.make_aware(datetime(2025, 7, 5, 17, 0))  # 8h
-        WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.monthly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.monthly_employee, 2025, 7, fast_mode=False)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -286,7 +334,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # 2. Calculate proportional base (8h worked)
         # FIXED: Sabbath hours are NOT normalized (only weekdays for monthly employees)
         actual_hours = 8.0
-        proportional_base = (actual_hours / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (actual_hours / float(MONTHLY_NORM_HOURS)) * float(
+            monthly_salary
+        )
 
         # 3. Calculate premiums. For 8h on Sabbath (no overtime): 8h (50% premium)
         total_premiums = 8.0 * rate * 0.50
@@ -295,8 +345,12 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         expected_total_salary = proportional_base + total_premiums
 
         # 5. Assert the values - FIXED: Sabbath hours not normalized
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=5.0)
-        self.assertAlmostEqual(float(res['breakdown']['total_bonuses_monthly']), total_premiums, delta=2.0)
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=5.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["total_bonuses_monthly"]), total_premiums, delta=2.0
+        )
         self.assertGreater(float(res.get("shabbat_hours", 0)), 0.0)
 
     def test_monthly_sabbath_overtime_bonuses(self):
@@ -309,7 +363,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
 
         check_in = timezone.make_aware(datetime(2025, 7, 5, 8, 0))  # Saturday
         check_out = timezone.make_aware(datetime(2025, 7, 5, 20, 0))  # 12h
-        WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.monthly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.monthly_employee, 2025, 7, fast_mode=False)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -320,36 +376,46 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
 
         # 2. Calculate proportional base (12h total)
         total_hours = 12.0
-        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (total_hours / float(MONTHLY_NORM_HOURS)) * float(
+            monthly_salary
+        )
 
         # 3. Calculate premiums. For 12h Sabbath: 8.6h (50%), 2h OT1 (75%), 1.4h OT2 (100%)
         premium_sabbath_regular = 8.6 * rate * 0.50
         premium_sabbath_ot1 = 2.0 * rate * 0.75
         premium_sabbath_ot2 = 1.4 * rate * 1.00
-        total_premiums = premium_sabbath_regular + premium_sabbath_ot1 + premium_sabbath_ot2
+        total_premiums = (
+            premium_sabbath_regular + premium_sabbath_ot1 + premium_sabbath_ot2
+        )
 
         # 4. Expected salary = Proportional base + Premiums
         expected_total_salary = proportional_base + total_premiums
 
         # 5. Assert the values
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=100.0)
-        self.assertAlmostEqual(float(res['breakdown']['total_bonuses_monthly']), total_premiums, delta=2.0)
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=100.0
+        )
+        self.assertAlmostEqual(
+            float(res["breakdown"]["total_bonuses_monthly"]), total_premiums, delta=2.0
+        )
 
     # -------------------- Multi-day scenarios --------------------
 
     def test_mixed_week_hourly(self):
         """Hourly: mix of regular, overtime, and Sabbath days."""
         work_patterns = [
-            (1, 8),    # Tuesday - regular
-            (2, 10),   # Wednesday - overtime
-            (3, 6),    # Thursday - short day
-            (5, 8),    # Saturday - Sabbath
+            (1, 8),  # Tuesday - regular
+            (2, 10),  # Wednesday - overtime
+            (3, 6),  # Thursday - short day
+            (5, 8),  # Saturday - Sabbath
         ]
 
         for day, hours in work_patterns:
             check_in = timezone.make_aware(datetime(2025, 7, day, 9, 0))
             check_out = check_in + timedelta(hours=hours)
-            WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+            WorkLog.objects.create(
+                employee=self.hourly_employee, check_in=check_in, check_out=check_out
+            )
 
         ctx = make_context(self.hourly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -362,16 +428,18 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
     def test_mixed_week_monthly(self):
         """Monthly: mix of regular, overtime, and Sabbath days. Result should be proportional salary + calculated premiums."""
         work_patterns = [
-            (1, 8),    # Tuesday - regular
-            (2, 10),   # Wednesday - overtime
-            (3, 6),    # Thursday - short day
-            (5, 8),    # Saturday - Sabbath
+            (1, 8),  # Tuesday - regular
+            (2, 10),  # Wednesday - overtime
+            (3, 6),  # Thursday - short day
+            (5, 8),  # Saturday - Sabbath
         ]
 
         for day, hours in work_patterns:
             check_in = timezone.make_aware(datetime(2025, 7, day, 9, 0))
             check_out = check_in + timedelta(hours=hours)
-            WorkLog.objects.create(employee=self.monthly_employee, check_in=check_in, check_out=check_out)
+            WorkLog.objects.create(
+                employee=self.monthly_employee, check_in=check_in, check_out=check_out
+            )
 
         ctx = make_context(self.monthly_employee, 2025, 7, fast_mode=False)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -388,7 +456,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Saturday: 8h → 8h (NO normalization on Sabbath)
         # Total proportional hours: 8.6 + 10 + 6 + 8 = 32.6h
         total_proportional_hours = 32.6
-        proportional_base = (total_proportional_hours / float(MONTHLY_NORM_HOURS)) * float(monthly_salary)
+        proportional_base = (
+            total_proportional_hours / float(MONTHLY_NORM_HOURS)
+        ) * float(monthly_salary)
 
         # 3. Calculate expected premiums for all shifts:
         # Tuesday 8.6h: no premiums (regular day)
@@ -399,14 +469,23 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         wednesday_premiums = 1.4 * rate * 0.25  # 1.4h OT1
         thursday_premiums = 0.0  # 6h regular
         saturday_premiums = 8.0 * rate * 0.50  # 8h Sabbath
-        total_premiums = tuesday_premiums + wednesday_premiums + thursday_premiums + saturday_premiums
+        total_premiums = (
+            tuesday_premiums
+            + wednesday_premiums
+            + thursday_premiums
+            + saturday_premiums
+        )
 
         # 4. Expected salary = Proportional base + Premiums
         expected_total_salary = proportional_base + total_premiums
 
         # 5. Assert the final salary is within range
-        self.assertAlmostEqual(float(res["total_salary"]), expected_total_salary, delta=50.0)
-        self.assertGreater(float(res["total_salary"]), proportional_base)  # Should be more than base due to bonuses
+        self.assertAlmostEqual(
+            float(res["total_salary"]), expected_total_salary, delta=50.0
+        )
+        self.assertGreater(
+            float(res["total_salary"]), proportional_base
+        )  # Should be more than base due to bonuses
 
     # -------------------- API contract / regression guards --------------------
 
@@ -415,7 +494,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Add some work to get meaningful results
         check_in = timezone.make_aware(datetime(2025, 7, 1, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 1, 17, 0))
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         ctx = make_context(self.hourly_employee, 2025, 7)
         res = self.service.calculate(ctx, CalculationStrategy.ENHANCED)
@@ -429,7 +510,9 @@ class EnhancedPayrollServiceCoreRefactor(MockedShabbatTestBase):
         # Add some work
         check_in = timezone.make_aware(datetime(2025, 7, 1, 9, 0))
         check_out = timezone.make_aware(datetime(2025, 7, 1, 17, 0))
-        WorkLog.objects.create(employee=self.hourly_employee, check_in=check_in, check_out=check_out)
+        WorkLog.objects.create(
+            employee=self.hourly_employee, check_in=check_in, check_out=check_out
+        )
 
         for fast in (True, False):
             ctx = make_context(self.hourly_employee, 2025, 7, fast_mode=fast)

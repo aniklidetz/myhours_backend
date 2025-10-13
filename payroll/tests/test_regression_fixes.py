@@ -4,7 +4,6 @@ Regression tests for the fixes applied to payroll system
 
 from datetime import date, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -14,6 +13,11 @@ from django.test import TestCase
 
 from payroll.models import Salary
 from payroll.serializers import SalarySerializer
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -230,4 +234,3 @@ class ProjectPayrollAutoConversionTest(TestCase):
         # Should convert to 'monthly' based on employment_type='contract'
         # This test will pass/fail based on ENABLE_PROJECT_PAYROLL setting
         self.assertIn(salary.calculation_type, ["project", "monthly"])
-

@@ -41,10 +41,7 @@ class HolidayUtilityService:
         """
         try:
             # Check database first (primary source)
-            holiday = Holiday.objects.filter(
-                date=holiday_date,
-                is_holiday=True
-            ).first()
+            holiday = Holiday.objects.filter(date=holiday_date, is_holiday=True).first()
 
             if holiday:
                 return holiday.name
@@ -54,6 +51,7 @@ class HolidayUtilityService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error getting holiday name",
                 extra={"err": err_tag(e), "date": str(holiday_date)},
@@ -74,8 +72,7 @@ class HolidayUtilityService:
         try:
             # Check database first (primary source)
             holiday_exists = Holiday.objects.filter(
-                date=check_date,
-                is_holiday=True
+                date=check_date, is_holiday=True
             ).exists()
 
             if holiday_exists:
@@ -86,6 +83,7 @@ class HolidayUtilityService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error checking if date is holiday",
                 extra={"err": err_tag(e), "date": str(check_date)},
@@ -104,13 +102,11 @@ class HolidayUtilityService:
             bool: True if the date is a Shabbat, False otherwise
         """
         try:
-            return Holiday.objects.filter(
-                date=check_date,
-                is_shabbat=True
-            ).exists()
+            return Holiday.objects.filter(date=check_date, is_shabbat=True).exists()
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error checking if date is Shabbat",
                 extra={"err": err_tag(e), "date": str(check_date)},
@@ -130,12 +126,12 @@ class HolidayUtilityService:
         """
         try:
             return Holiday.objects.filter(
-                date=check_date,
-                is_special_shabbat=True
+                date=check_date, is_special_shabbat=True
             ).exists()
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error checking if date is special Shabbat",
                 extra={"err": err_tag(e), "date": str(check_date)},
@@ -179,6 +175,7 @@ class HolidayUtilityService:
 
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error getting holiday info",
                 extra={"err": err_tag(e), "date": str(check_date)},
@@ -222,13 +219,13 @@ class HolidayUtilityService:
         """
         try:
             holidays = Holiday.objects.filter(
-                date__gte=start_date,
-                date__lte=end_date,
-                is_holiday=True
+                date__gte=start_date, date__lte=end_date, is_holiday=True
             )
             return list(holidays)
         except Exception as e:
-            logger.warning(f"Failed to get holidays in range {start_date} to {end_date}: {e}")
+            logger.warning(
+                f"Failed to get holidays in range {start_date} to {end_date}: {e}"
+            )
             return []
 
     @classmethod

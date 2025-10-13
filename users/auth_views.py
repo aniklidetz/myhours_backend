@@ -139,8 +139,7 @@ def logout_view(request):
     # Check if user is authenticated
     if not request.user or not request.user.is_authenticated:
         return Response(
-            {"error": "Authentication required"},
-            status=status.HTTP_401_UNAUTHORIZED
+            {"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED
         )
 
     try:

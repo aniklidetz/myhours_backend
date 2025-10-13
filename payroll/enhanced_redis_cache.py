@@ -49,9 +49,7 @@ class EnhancedPayrollCache(PayrollRedisCache):
                     work_date = date.fromisoformat(date_str)
 
                     # Get precise timing from unified shabbat service (Israeli timezone)
-                    shabbat_times = get_shabbat_times(
-                        work_date
-                    )
+                    shabbat_times = get_shabbat_times(work_date)
 
                     if shabbat_times:
                         # Update with precise API data (Israeli timezone)
@@ -114,9 +112,7 @@ class EnhancedPayrollCache(PayrollRedisCache):
             # Bulk load Shabbat times for all Fridays using unified service
             enhanced_data = {}
             for friday in fridays:
-                shabbat_times = get_shabbat_times(
-                    friday
-                )
+                shabbat_times = get_shabbat_times(friday)
                 if shabbat_times:
                     # Also cache Saturday data
                     saturday_date = friday + timedelta(days=1)

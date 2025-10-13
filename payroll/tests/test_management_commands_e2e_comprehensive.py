@@ -23,9 +23,8 @@ Covers ALL 8 commands:
 """
 
 import io
-from datetime import date, datetime, timedelta, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest import skip
 from unittest.mock import MagicMock, Mock, patch
 
@@ -44,14 +43,22 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import PayrollTestMixin, make_context
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
 
-def create_mock_shabbat_times(friday_date_str="2025-02-14", saturday_date_str="2025-02-15"):
+def create_mock_shabbat_times(
+    friday_date_str="2025-02-14", saturday_date_str="2025-02-15"
+):
     """Helper function to create mock ShabbatTimes in UnifiedShabbatService format"""
     return {
         "shabbat_start": f"{friday_date_str}T17:15:00+02:00",
@@ -63,7 +70,7 @@ def create_mock_shabbat_times(friday_date_str="2025-02-14", saturday_date_str="2
         "calculation_method": "api_precise",
         "coordinates": {"lat": 31.7683, "lng": 35.2137},
         "friday_date": friday_date_str,
-        "saturday_date": saturday_date_str
+        "saturday_date": saturday_date_str,
     }
 
 
@@ -75,11 +82,11 @@ def create_mock_shabbat_times(friday_date_str="2025-02-14", saturday_date_str="2
         }
     },
     DATABASES={
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
         }
-    }
+    },
 )
 class ComprehensivePayrollCommandsE2ETest(PayrollTestMixin, TestCase):
     """Comprehensive E2E tests covering all critical requirements"""
@@ -94,12 +101,21 @@ class ComprehensivePayrollCommandsE2ETest(PayrollTestMixin, TestCase):
         self.tz = pytz.timezone("Asia/Jerusalem")
 
         # Create Holiday records for Shabbat detection - Iron Isolation pattern
-        from integrations.models import Holiday
         from datetime import date
+
+        from integrations.models import Holiday
+
         # February 2025 Saturdays and Fridays
         sabbath_dates = [
-            date(2025, 2, 1), date(2025, 2, 8), date(2025, 2, 15), date(2025, 2, 22),
-            date(2025, 1, 31), date(2025, 2, 7), date(2025, 2, 14), date(2025, 2, 21), date(2025, 2, 28)
+            date(2025, 2, 1),
+            date(2025, 2, 8),
+            date(2025, 2, 15),
+            date(2025, 2, 22),
+            date(2025, 1, 31),
+            date(2025, 2, 7),
+            date(2025, 2, 14),
+            date(2025, 2, 21),
+            date(2025, 2, 28),
         ]
         for sabbath_date in sabbath_dates:
             Holiday.objects.filter(date=sabbath_date).delete()
@@ -277,8 +293,12 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
         self._clear_payroll_calculations()
 
         # STEP 1: First run of generate_missing_payroll
-        with patch("sys.stdout", self.stdout), \
-             patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays:
+        with (
+            patch("sys.stdout", self.stdout),
+            patch(
+                "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+            ) as mock_holidays,
+        ):
 
             # Configure additional external service mocks
             mock_holidays.return_value = True
@@ -343,8 +363,12 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
             }
 
         # STEP 2: IDEMPOTENCY TEST - Second identical run
-        with patch("sys.stdout", io.StringIO()) as second_stdout, \
-             patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays2:
+        with (
+            patch("sys.stdout", io.StringIO()) as second_stdout,
+            patch(
+                "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+            ) as mock_holidays2,
+        ):
 
             # Configure external service mocks
             mock_holidays2.return_value = True
@@ -398,8 +422,12 @@ class MiniCaseIdempotencyTest(ComprehensivePayrollCommandsE2ETest):
                 )
 
         # STEP 3: Test with --force flag (should recalculate)
-        with patch("sys.stdout", io.StringIO()) as force_stdout, \
-             patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays3:
+        with (
+            patch("sys.stdout", io.StringIO()) as force_stdout,
+            patch(
+                "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+            ) as mock_holidays3,
+        ):
 
             # Configure external service mocks
             mock_holidays3.return_value = True
@@ -435,8 +463,12 @@ class AllCommandsParametersTest(ComprehensivePayrollCommandsE2ETest):
         """Test all parameters for generate_missing_payroll"""
 
         # Test valid parameters
-        with patch("sys.stdout", self.stdout), \
-             patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays:
+        with (
+            patch("sys.stdout", self.stdout),
+            patch(
+                "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+            ) as mock_holidays,
+        ):
 
             # Configure additional external service mocks
             mock_holidays.return_value = True
@@ -467,8 +499,12 @@ class AllCommandsParametersTest(ComprehensivePayrollCommandsE2ETest):
                         raise
 
         # Test invalid month (should handle gracefully)
-        with patch("sys.stdout", self.stdout), \
-             patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays:
+        with (
+            patch("sys.stdout", self.stdout),
+            patch(
+                "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+            ) as mock_holidays,
+        ):
 
             # Configure external service mocks
             mock_holidays.return_value = True
@@ -676,7 +712,9 @@ class IntegrationsAndMockingTest(ComprehensivePayrollCommandsE2ETest):
         # Use the new PayrollService architecture
         from payroll.services.payroll_service import PayrollService
 
-        with patch("payroll.services.payroll_service.PayrollService.calculate") as mock_calculate:
+        with patch(
+            "payroll.services.payroll_service.PayrollService.calculate"
+        ) as mock_calculate:
             mock_calculate.return_value = {
                 "total_salary": Decimal("1000.00"),
                 "total_hours": ISRAELI_DAILY_NORM_HOURS,
@@ -802,7 +840,7 @@ class PerformanceStressTest(ComprehensivePayrollCommandsE2ETest):
                 "sunrise": "2025-02-01T06:30:00+00:00",
                 "sunset": "2025-02-01T18:30:00+00:00",
             },
-            "items": []  # For Hebcal requests
+            "items": [],  # For Hebcal requests
         }
         mock_response.raise_for_status.return_value = None
         mock_requests.return_value = mock_response
@@ -854,7 +892,9 @@ class PerformanceStressTest(ComprehensivePayrollCommandsE2ETest):
         start_time = timezone.now()
 
         # Mock external services to prevent hanging
-        with patch("payroll.services.payroll_service.PayrollService.calculate") as mock_calculate:
+        with patch(
+            "payroll.services.payroll_service.PayrollService.calculate"
+        ) as mock_calculate:
             # Mock the service to return quickly
             mock_calculate.return_value = {
                 "total_salary": Decimal("1000.00"),
@@ -903,9 +943,15 @@ class AllCommandsCoverageTest(ComprehensivePayrollCommandsE2ETest):
         for command_name, kwargs in commands_to_test:
             try:
                 # Mock external dependencies more comprehensively
-                with patch("payroll.redis_cache_service.payroll_cache") as mock_redis, \
-                     patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_shabbat, \
-                     patch("integrations.services.holiday_sync_service.HolidaySyncService.sync_year") as mock_holidays:
+                with (
+                    patch("payroll.redis_cache_service.payroll_cache") as mock_redis,
+                    patch(
+                        "integrations.services.unified_shabbat_service.get_shabbat_times"
+                    ) as mock_shabbat,
+                    patch(
+                        "integrations.services.holiday_sync_service.HolidaySyncService.sync_year"
+                    ) as mock_holidays,
+                ):
 
                     # Configure mocks
                     mock_redis.get.return_value = None
@@ -913,9 +959,16 @@ class AllCommandsCoverageTest(ComprehensivePayrollCommandsE2ETest):
                     mock_shabbat.return_value = create_mock_shabbat_times()
                     mock_holidays.return_value = True
 
-                    with patch("sys.stdout", io.StringIO()) as command_stdout, \
-                         patch("sys.stderr", io.StringIO()) as command_stderr:
-                        call_command(command_name, stdout=command_stdout, stderr=command_stderr, **kwargs)
+                    with (
+                        patch("sys.stdout", io.StringIO()) as command_stdout,
+                        patch("sys.stderr", io.StringIO()) as command_stderr,
+                    ):
+                        call_command(
+                            command_name,
+                            stdout=command_stdout,
+                            stderr=command_stderr,
+                            **kwargs,
+                        )
 
                 executed_commands.append(command_name)
 
@@ -931,7 +984,9 @@ class AllCommandsCoverageTest(ComprehensivePayrollCommandsE2ETest):
 
         # Report results
         if failed_commands:
-            failure_report = "; ".join([f"{cmd}: {err}" for cmd, err in failed_commands])
+            failure_report = "; ".join(
+                [f"{cmd}: {err}" for cmd, err in failed_commands]
+            )
             self.fail(f"Commands failed: {failure_report}")
 
         # Verify at least some commands were executed (be more lenient for E2E tests)
@@ -1023,10 +1078,18 @@ class E2EWorkflowTestBase(PayrollTestMixin, TransactionTestCase):
 
         # Create Holiday records for Shabbat detection
         from integrations.models import Holiday
+
         # Iron Isolation pattern for Holiday creation
         sabbath_dates = [
-            date(2025, 2, 1), date(2025, 2, 8), date(2025, 2, 15), date(2025, 2, 22),
-            date(2025, 1, 31), date(2025, 2, 7), date(2025, 2, 14), date(2025, 2, 21), date(2025, 2, 28)
+            date(2025, 2, 1),
+            date(2025, 2, 8),
+            date(2025, 2, 15),
+            date(2025, 2, 22),
+            date(2025, 1, 31),
+            date(2025, 2, 7),
+            date(2025, 2, 14),
+            date(2025, 2, 21),
+            date(2025, 2, 28),
         ]
         for sabbath_date in sabbath_dates:
             Holiday.objects.filter(date=sabbath_date).delete()
@@ -1037,13 +1100,21 @@ class E2EWorkflowTestBase(PayrollTestMixin, TransactionTestCase):
 
     def _create_holiday_records(self):
         """Create Holiday records for Shabbat and other holidays used in tests"""
-        from integrations.models import Holiday
         from django.utils import timezone
+
+        from integrations.models import Holiday
 
         # Iron Isolation pattern for Holiday creation with Shabbat times
         sabbath_dates = [
-            date(2025, 2, 1), date(2025, 2, 8), date(2025, 2, 15), date(2025, 2, 22),
-            date(2025, 1, 31), date(2025, 2, 7), date(2025, 2, 14), date(2025, 2, 21), date(2025, 2, 28)
+            date(2025, 2, 1),
+            date(2025, 2, 8),
+            date(2025, 2, 15),
+            date(2025, 2, 22),
+            date(2025, 1, 31),
+            date(2025, 2, 7),
+            date(2025, 2, 14),
+            date(2025, 2, 21),
+            date(2025, 2, 28),
         ]
         for sabbath_date in sabbath_dates:
             Holiday.objects.filter(date=sabbath_date).delete()
@@ -1051,7 +1122,9 @@ class E2EWorkflowTestBase(PayrollTestMixin, TransactionTestCase):
 
         # Simulated holiday for testing
         Holiday.objects.filter(date=date(2025, 2, 20)).delete()
-        Holiday.objects.create(date=date(2025, 2, 20), name="Test Holiday", is_holiday=True)
+        Holiday.objects.create(
+            date=date(2025, 2, 20), name="Test Holiday", is_holiday=True
+        )
 
     def _create_work_logs(self):
         """Create test work logs for both employees"""
@@ -1092,7 +1165,9 @@ class E2EWorkflowTestBase(PayrollTestMixin, TransactionTestCase):
         # holiday_filter_mock = patch("integrations.models.Holiday.objects.filter")
 
         holidays_mock.start()
-        shabbat_mock.start().return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
+        shabbat_mock.start().return_value = create_mock_shabbat_times(
+            "2025-02-14", "2025-02-15"
+        )
         # Allow real Holiday data to be used by not mocking the range service
         # holidays_range_mock.start().return_value = []  # No holidays in range for stable tests
 
@@ -1124,6 +1199,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         try:
             # 3. Run the command and capture output
             from io import StringIO
+
             out = StringIO()
             call_command(
                 "generate_missing_payroll",
@@ -1141,9 +1217,14 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
 
             # Check that the command calculated non-zero salaries
             # Monthly employee (Sabbath work): should be > 1800 ILS
-            self.assertRegex(command_output, r"Updated daily calc for 2025-02-15 - salary: 1[8-9]\d\d")
+            self.assertRegex(
+                command_output,
+                r"Updated daily calc for 2025-02-15 - salary: 1[8-9]\d\d",
+            )
             # Hourly employee: should be > 1000 ILS
-            self.assertRegex(command_output, r"Updated daily calc for 2025-02-16 - salary: 10\d\d")
+            self.assertRegex(
+                command_output, r"Updated daily calc for 2025-02-16 - salary: 10\d\d"
+            )
 
             # 5. Verify basic database consistency (records exist)
             daily_calcs = DailyPayrollCalculation.objects.all()
@@ -1153,12 +1234,16 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
             monthly_calc_15 = DailyPayrollCalculation.objects.filter(
                 employee=self.monthly_employee, work_date=self.test_date1
             ).first()
-            self.assertIsNotNone(monthly_calc_15, "Monthly employee calculation record should exist")
+            self.assertIsNotNone(
+                monthly_calc_15, "Monthly employee calculation record should exist"
+            )
 
             hourly_calc_16 = DailyPayrollCalculation.objects.filter(
                 employee=self.hourly_employee, work_date=self.test_date2
             ).first()
-            self.assertIsNotNone(hourly_calc_16, "Hourly employee calculation record should exist")
+            self.assertIsNotNone(
+                hourly_calc_16, "Hourly employee calculation record should exist"
+            )
 
             # 5. Verify monthly summaries were created or updated
             monthly_summaries = MonthlyPayrollSummary.objects.filter(
@@ -1277,6 +1362,7 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
         try:
             # Run with force_recalculate and capture output like the working test
             from io import StringIO
+
             out = StringIO()
             call_command(
                 "generate_missing_payroll",
@@ -1288,16 +1374,26 @@ class TestGenerateMissingPayrollE2E(E2EWorkflowTestBase):
             command_output = out.getvalue()
 
             # Verify the command successfully processed the calculation (like the working test)
-            self.assertIn(f"Updated daily calc for {self.test_date1}", command_output,
-                        "Command should show updated calculation")
+            self.assertIn(
+                f"Updated daily calc for {self.test_date1}",
+                command_output,
+                "Command should show updated calculation",
+            )
 
             # Verify reasonable salary calculation was shown in output
             # Look for a salary amount > 100 (should be much higher for monthly employee)
             import re
-            salary_match = re.search(r"Updated daily calc for .* - salary: ([0-9.]+)", command_output)
+
+            salary_match = re.search(
+                r"Updated daily calc for .* - salary: ([0-9.]+)", command_output
+            )
             if salary_match:
                 calculated_salary = float(salary_match.group(1))
-                self.assertGreater(calculated_salary, 100, "Should calculate meaningful salary > 100 ILS")
+                self.assertGreater(
+                    calculated_salary,
+                    100,
+                    "Should calculate meaningful salary > 100 ILS",
+                )
 
             # Basic record existence check
             updated_calc = DailyPayrollCalculation.objects.filter(
@@ -1380,12 +1476,20 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
 
         try:
             # Recalculate only for monthly employee
-            with patch("sys.stdout", self.stdout), \
-                 patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_shabbat, \
-                 patch("integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range") as mock_holidays_range:
+            with (
+                patch("sys.stdout", self.stdout),
+                patch(
+                    "integrations.services.unified_shabbat_service.get_shabbat_times"
+                ) as mock_shabbat,
+                patch(
+                    "integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range"
+                ) as mock_holidays_range,
+            ):
 
                 # Configure external service mocks for specific employee recalculation
-                mock_shabbat.return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
+                mock_shabbat.return_value = create_mock_shabbat_times(
+                    "2025-02-14", "2025-02-15"
+                )
                 # Allow real Holiday data to be used
                 # mock_holidays_range.return_value = []  # No holidays for this test
 
@@ -1429,12 +1533,20 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
 
         try:
             # Run with dry_run
-            with patch("sys.stdout", self.stdout), \
-                 patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_shabbat, \
-                 patch("integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range") as mock_holidays_range:
+            with (
+                patch("sys.stdout", self.stdout),
+                patch(
+                    "integrations.services.unified_shabbat_service.get_shabbat_times"
+                ) as mock_shabbat,
+                patch(
+                    "integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range"
+                ) as mock_holidays_range,
+            ):
 
                 # Configure external service mocks for dry run
-                mock_shabbat.return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
+                mock_shabbat.return_value = create_mock_shabbat_times(
+                    "2025-02-14", "2025-02-15"
+                )
                 # Allow real Holiday data to be used
                 # mock_holidays_range.return_value = []  # No holidays for dry run test
 
@@ -1452,7 +1564,9 @@ class TestRecalculateMonthlyPayrollE2E(E2EWorkflowTestBase):
             unchanged_calc = DailyPayrollCalculation.objects.filter(
                 employee=self.monthly_employee, work_date=self.test_date1
             ).first()
-            self.assertIsNotNone(unchanged_calc, "Daily calculation should still exist after dry run")
+            self.assertIsNotNone(
+                unchanged_calc, "Daily calculation should still exist after dry run"
+            )
 
         finally:
             holidays_mock.stop()
@@ -1559,7 +1673,11 @@ class TestUpdateTotalSalaryE2E(E2EWorkflowTestBase):
 
         # Verify total was recalculated
         updated_calc = DailyPayrollCalculation.objects.get(id=calc.id)
-        expected_total = calc.base_regular_pay + calc.bonus_overtime_pay_1 + calc.bonus_overtime_pay_2
+        expected_total = (
+            calc.base_regular_pay
+            + calc.bonus_overtime_pay_1
+            + calc.bonus_overtime_pay_2
+        )
 
         # The exact calculation may vary based on business logic
         # Just verify it was updated and is reasonable
@@ -1577,12 +1695,20 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
 
         try:
             # 1. Generate missing payroll
-            with patch("sys.stdout", self.stdout), \
-                 patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_shabbat, \
-                 patch("integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range") as mock_holidays_range:
+            with (
+                patch("sys.stdout", self.stdout),
+                patch(
+                    "integrations.services.unified_shabbat_service.get_shabbat_times"
+                ) as mock_shabbat,
+                patch(
+                    "integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range"
+                ) as mock_holidays_range,
+            ):
 
                 # Configure external service mocks for pipeline step 1
-                mock_shabbat.return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
+                mock_shabbat.return_value = create_mock_shabbat_times(
+                    "2025-02-14", "2025-02-15"
+                )
                 # Allow real Holiday data to be used
                 # mock_holidays_range.return_value = []  # No holidays for pipeline test
 
@@ -1598,12 +1724,20 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
             self.assertGreater(initial_count, 0)
 
             # 2. Recalculate monthly payroll
-            with patch("sys.stdout", self.stdout), \
-                 patch("integrations.services.unified_shabbat_service.get_shabbat_times") as mock_shabbat2, \
-                 patch("integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range") as mock_holidays_range2:
+            with (
+                patch("sys.stdout", self.stdout),
+                patch(
+                    "integrations.services.unified_shabbat_service.get_shabbat_times"
+                ) as mock_shabbat2,
+                patch(
+                    "integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range"
+                ) as mock_holidays_range2,
+            ):
 
                 # Configure external service mocks for pipeline step 2
-                mock_shabbat2.return_value = create_mock_shabbat_times("2025-02-14", "2025-02-15")
+                mock_shabbat2.return_value = create_mock_shabbat_times(
+                    "2025-02-14", "2025-02-15"
+                )
                 # Allow real Holiday data to be used
                 # mock_holidays_range2.return_value = []  # No holidays for pipeline test
 
@@ -1630,12 +1764,19 @@ class TestFullPayrollPipelineE2E(E2EWorkflowTestBase):
 
             if meaningful_calcs.count() > 0:
                 for calc in meaningful_calcs:
-                    self.assertGreater(calc.total_salary, Decimal("0"),
-                                    f"Calculation for {calc.employee} on {calc.work_date} should have positive salary")
+                    self.assertGreater(
+                        calc.total_salary,
+                        Decimal("0"),
+                        f"Calculation for {calc.employee} on {calc.work_date} should have positive salary",
+                    )
                     self.assertGreaterEqual(calc.regular_hours, Decimal("0"))
             else:
                 # If no meaningful calculations, at least verify pipeline completed
-                self.assertGreater(final_calculations.count(), 0, "Pipeline should create some calculations")
+                self.assertGreater(
+                    final_calculations.count(),
+                    0,
+                    "Pipeline should create some calculations",
+                )
 
             # 5. Verify monthly summaries exist
             monthly_summaries = MonthlyPayrollSummary.objects.filter(
@@ -1755,4 +1896,3 @@ class TestCommandRobustnessE2E(E2EWorkflowTestBase):
 
             # Clean up performance test data
             Employee.objects.filter(first_name="Perf").delete()
-

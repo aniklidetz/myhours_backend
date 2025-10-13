@@ -8,7 +8,6 @@ that are not covered by the basic tests.
 import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 import pytz
@@ -24,8 +23,15 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+)
 from users.models import Employee
 from worktime.models import WorkLog
+
 
 class PayrollViewsAdvancedTest(PayrollTestMixin, TestCase):
     """Advanced test cases for payroll views edge cases and error conditions"""
@@ -72,6 +78,7 @@ class PayrollViewsAdvancedTest(PayrollTestMixin, TestCase):
             currency="ILS",
             is_active=True,
         )
+
 
 class PayrollListAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for payroll_list view"""
@@ -161,6 +168,7 @@ class PayrollListAdvancedTest(PayrollViewsAdvancedTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
+
 class EnhancedEarningsAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for enhanced_earnings view"""
 
@@ -215,6 +223,7 @@ class EnhancedEarningsAdvancedTest(PayrollViewsAdvancedTest):
                 status.HTTP_404_NOT_FOUND,
             ],
         )
+
 
 class DailyPayrollCalculationsAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for daily_payroll_calculations view"""
@@ -276,6 +285,7 @@ class DailyPayrollCalculationsAdvancedTest(PayrollViewsAdvancedTest):
         self.assertIn(
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
+
 
 class RecalculatePayrollAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for recalculate_payroll view"""
@@ -359,6 +369,7 @@ class RecalculatePayrollAdvancedTest(PayrollViewsAdvancedTest):
             ],
         )
 
+
 class PayrollAnalyticsAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for payroll_analytics view"""
 
@@ -405,6 +416,7 @@ class PayrollAnalyticsAdvancedTest(PayrollViewsAdvancedTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
+
 class MonthlyPayrollSummaryAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for monthly_payroll_summary view"""
 
@@ -450,6 +462,7 @@ class MonthlyPayrollSummaryAdvancedTest(PayrollViewsAdvancedTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
 
+
 class BackwardCompatibleEarningsAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for backward_compatible_earnings view"""
 
@@ -482,6 +495,7 @@ class BackwardCompatibleEarningsAdvancedTest(PayrollViewsAdvancedTest):
         self.assertIn(
             response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
         )
+
 
 class PayrollHelperFunctionsAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for helper functions in payroll views"""
@@ -542,6 +556,7 @@ class PayrollHelperFunctionsAdvancedTest(PayrollViewsAdvancedTest):
             # If function has dependencies we can't mock, that's OK
             self.skipTest("Legacy calculation function has unmockable dependencies")
 
+
 class PayrollViewsErrorHandlingTest(PayrollViewsAdvancedTest):
     """Test error handling in payroll views"""
 
@@ -597,4 +612,3 @@ class PayrollViewsErrorHandlingTest(PayrollViewsAdvancedTest):
                 status.HTTP_404_NOT_FOUND,
             ],
         )
-

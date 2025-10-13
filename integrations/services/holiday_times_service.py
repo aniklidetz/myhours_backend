@@ -11,7 +11,10 @@ from typing import Optional, Tuple
 
 from django.utils import timezone
 
-from integrations.services.unified_shabbat_service import get_sunset_time, get_nightfall_time
+from integrations.services.unified_shabbat_service import (
+    get_nightfall_time,
+    get_sunset_time,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +36,19 @@ class HolidayTimesService:
 
     # Standard buffer times (same as Shabbat)
     STANDARD_START_BUFFER = 18  # Minutes before sunset (candle lighting)
-    STANDARD_END_BUFFER = 0      # Already included in nightfall calculation (42 min after sunset)
+    STANDARD_END_BUFFER = (
+        0  # Already included in nightfall calculation (42 min after sunset)
+    )
 
     # Holidays that have special timing rules
     SPECIAL_TIMING_HOLIDAYS = {
         "Yom Kippur": {
             "start_offset": 40,  # Starts 40 minutes before sunset
-            "end_offset": 10,    # Ends 10 minutes after normal nightfall
+            "end_offset": 10,  # Ends 10 minutes after normal nightfall
         },
         "Tish'a B'Av": {
             "start_offset": 18,  # Normal candle lighting time
-            "end_offset": 0,     # Normal nightfall
+            "end_offset": 0,  # Normal nightfall
         },
     }
 
@@ -53,7 +58,7 @@ class HolidayTimesService:
         holiday_date: datetime.date,
         holiday_name: str,
         lat: float = 31.7683,  # Jerusalem
-        lng: float = 35.2137   # Jerusalem
+        lng: float = 35.2137,  # Jerusalem
     ) -> Tuple[Optional[datetime], Optional[datetime]]:
         """
         Calculate start and end times for a Jewish holiday.
@@ -73,7 +78,9 @@ class HolidayTimesService:
             sunset = get_sunset_time(day_before, lat, lng)
 
             # Determine end date (same day or next day for 2-day holidays)
-            is_two_day = any(two_day in holiday_name for two_day in cls.TWO_DAY_HOLIDAYS)
+            is_two_day = any(
+                two_day in holiday_name for two_day in cls.TWO_DAY_HOLIDAYS
+            )
 
             if is_two_day or "II" in holiday_name:
                 # For second day or explicitly 2-day holidays
@@ -94,8 +101,12 @@ class HolidayTimesService:
                 if special_holiday in holiday_name:
                     if sunset:
                         # Override with special offset (already subtracted standard, so adjust)
-                        sunset = sunset + timedelta(minutes=cls.STANDARD_START_BUFFER)  # Undo standard
-                        sunset = sunset - timedelta(minutes=offsets["start_offset"])   # Apply special
+                        sunset = sunset + timedelta(
+                            minutes=cls.STANDARD_START_BUFFER
+                        )  # Undo standard
+                        sunset = sunset - timedelta(
+                            minutes=offsets["start_offset"]
+                        )  # Apply special
                     if nightfall:
                         nightfall = nightfall + timedelta(minutes=offsets["end_offset"])
                     break
@@ -105,10 +116,12 @@ class HolidayTimesService:
             if sunset and sunset.tzinfo is None:
                 # This shouldn't happen with current implementation, but safety check
                 import pytz
+
                 israel_tz = pytz.timezone("Asia/Jerusalem")
                 sunset = israel_tz.localize(sunset)
             if nightfall and nightfall.tzinfo is None:
                 import pytz
+
                 israel_tz = pytz.timezone("Asia/Jerusalem")
                 nightfall = israel_tz.localize(nightfall)
 

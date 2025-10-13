@@ -8,13 +8,17 @@ These tests focus on:
 4. Behavior with large datasets
 """
 
-import pytest
 import time
-from datetime import date, datetime, timedelta
-from unittest.mock import patch, Mock
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, timedelta
+from unittest.mock import Mock, patch
 
-from integrations.services.unified_shabbat_service import UnifiedShabbatService, unified_shabbat_service
+import pytest
+
+from integrations.services.unified_shabbat_service import (
+    UnifiedShabbatService,
+    unified_shabbat_service,
+)
 from payroll.services.contracts import validate_shabbat_times
 
 
@@ -51,7 +55,9 @@ class TestPerformance:
 
         # Cached request should be very fast (under 0.1s)
         duration = end_time - start_time
-        assert duration < 0.1, f"Cached request took {duration:.3f}s, should be under 0.1s"
+        assert (
+            duration < 0.1
+        ), f"Cached request took {duration:.3f}s, should be under 0.1s"
         validate_shabbat_times(result)
 
     @pytest.mark.slow
@@ -76,7 +82,9 @@ class TestPerformance:
         # Note: UnifiedShabbatService makes 2 API calls per unique date for precision
         # 52 dates * 2 API calls = ~104 network requests, expect ~1s per request
         duration = end_time - start_time
-        assert duration < 120.0, f"52 requests took {duration:.2f}s, should be under 120s"
+        assert (
+            duration < 120.0
+        ), f"52 requests took {duration:.2f}s, should be under 120s"
 
         # All results should be valid
         assert len(results) == 52
@@ -91,7 +99,7 @@ class TestReliability:
         """Test that service handles API timeouts without crashing"""
         service = UnifiedShabbatService()
 
-        with patch('requests.get') as mock_get:
+        with patch("requests.get") as mock_get:
             # Simulate timeout
             mock_get.side_effect = Exception("Request timeout")
 
@@ -115,7 +123,7 @@ class TestReliability:
         ]
 
         for malformed_response in test_cases:
-            with patch('requests.get') as mock_get:
+            with patch("requests.get") as mock_get:
                 mock_response = Mock()
                 mock_response.json.return_value = malformed_response
                 mock_response.raise_for_status.return_value = None
@@ -163,6 +171,7 @@ class TestReliability:
     def test_memory_usage_stable(self):
         """Test that memory usage doesn't grow excessively"""
         import gc
+
         service = UnifiedShabbatService()
 
         # Force garbage collection
@@ -209,7 +218,7 @@ class TestEdgeConditions:
 
         # Test end of year and beginning of next year
         end_of_year = date(2024, 12, 27)  # Friday
-        start_of_year = date(2025, 1, 3)   # Friday
+        start_of_year = date(2025, 1, 3)  # Friday
 
         end_result = service.get_shabbat_times(end_of_year)
         start_result = service.get_shabbat_times(start_of_year)
@@ -267,14 +276,14 @@ class TestErrorRecovery:
                 mock_response = Mock()
                 mock_response.json.return_value = {
                     "status": "OK",
-                    "results": {"sunset": "2024-06-14T16:30:15+00:00"}
+                    "results": {"sunset": "2024-06-14T16:30:15+00:00"},
                 }
                 mock_response.raise_for_status.return_value = None
                 return mock_response
             else:  # Second call (Saturday) fails
                 raise Exception("Network error for Saturday")
 
-        with patch('requests.get', side_effect=mock_get_with_partial_failure):
+        with patch("requests.get", side_effect=mock_get_with_partial_failure):
             result = service.get_shabbat_times(date(2024, 6, 14))
 
             validate_shabbat_times(result)
@@ -287,7 +296,7 @@ class TestErrorRecovery:
         service = UnifiedShabbatService()
 
         # Mock cache to return invalid data
-        with patch('django.core.cache.cache.get') as mock_cache_get:
+        with patch("django.core.cache.cache.get") as mock_cache_get:
             mock_cache_get.return_value = {"invalid": "data"}
 
             # Should ignore corrupted cache and get fresh data
@@ -316,9 +325,10 @@ class TestServiceInteroperability:
         # Test pattern: checking if work time overlaps with Shabbat
         # (Common pattern in payroll calculation)
         import pytz
+
         israel_tz = pytz.timezone("Asia/Jerusalem")
         work_start = israel_tz.localize(datetime(2024, 6, 14, 20, 0))  # Friday 8pm
-        work_end = israel_tz.localize(datetime(2024, 6, 15, 1, 0))     # Saturday 1am
+        work_end = israel_tz.localize(datetime(2024, 6, 15, 1, 0))  # Saturday 1am
 
         # Should be able to determine overlap
         overlap_start = max(work_start, shabbat_start)
@@ -335,16 +345,12 @@ class TestServiceInteroperability:
         # Test with different Israeli cities coordinates
         # Tel Aviv
         tel_aviv_result = service.get_shabbat_times(
-            date(2024, 6, 15),
-            lat=32.0853,
-            lng=34.7818
+            date(2024, 6, 15), lat=32.0853, lng=34.7818
         )
 
         # Haifa
         haifa_result = service.get_shabbat_times(
-            date(2024, 6, 15),
-            lat=32.7940,
-            lng=34.9896
+            date(2024, 6, 15), lat=32.7940, lng=34.9896
         )
 
         validate_shabbat_times(tel_aviv_result)
@@ -360,8 +366,10 @@ class TestServiceInteroperability:
 
 if __name__ == "__main__":
     # Run performance tests
-    pytest.main([
-        __file__ + "::TestPerformance",
-        "-v",
-        "-s"  # Show print statements for timing info
-    ])
+    pytest.main(
+        [
+            __file__ + "::TestPerformance",
+            "-v",
+            "-s",  # Show print statements for timing info
+        ]
+    )

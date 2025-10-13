@@ -13,6 +13,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytz
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -88,7 +89,7 @@ class MockedShabbatTestBase(PayrollTestBase):
 
         # Start patching get_shabbat_times
         self.shabbat_patcher = patch(
-            'integrations.services.unified_shabbat_service.get_shabbat_times'
+            "integrations.services.unified_shabbat_service.get_shabbat_times"
         )
         self.mock_get_shabbat_times = self.shabbat_patcher.start()
 
@@ -133,7 +134,7 @@ class MockedShabbatTestBase(PayrollTestBase):
             "shabbat_end": shabbat_end.isoformat(),
             "friday_date": friday_date.isoformat(),
             "calculation_method": "mocked",
-            "coordinates": {"lat": 31.7683, "lng": 35.2137}
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
         }
 
     def set_shabbat_times(self, friday_date: date, start_time: str, end_time: str):
@@ -161,7 +162,7 @@ class MockedShabbatTestBase(PayrollTestBase):
                 "shabbat_end": shabbat_end.isoformat(),
                 "friday_date": friday_date.isoformat(),
                 "calculation_method": "mocked_custom",
-                "coordinates": {"lat": 31.7683, "lng": 35.2137}
+                "coordinates": {"lat": 31.7683, "lng": 35.2137},
             }
 
         self.mock_get_shabbat_times.side_effect = specific_times
@@ -196,7 +197,7 @@ class MockedShabbatTestBase(PayrollTestBase):
             is_special_shabbat=False,
             is_holiday=False,
             start_time=shabbat_start,
-            end_time=friday_midnight
+            end_time=friday_midnight,
         )
 
         # Create Saturday record
@@ -207,7 +208,7 @@ class MockedShabbatTestBase(PayrollTestBase):
             is_special_shabbat=False,
             is_holiday=False,
             start_time=friday_midnight,
-            end_time=shabbat_end
+            end_time=shabbat_end,
         )
 
 

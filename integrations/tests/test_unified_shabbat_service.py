@@ -9,19 +9,25 @@ Tests focus on:
 5. Edge cases - API failures, invalid dates, etc.
 """
 
-import pytest
 from datetime import date, datetime, timedelta
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
+import pytest
 import pytz
 
 from integrations.services.unified_shabbat_service import (
     UnifiedShabbatService,
-    unified_shabbat_service,
     get_shabbat_times,
-    is_shabbat_time
+    is_shabbat_time,
+    unified_shabbat_service,
 )
+
 # Removed imports of old deprecated services - now using UnifiedShabbatService only
-from payroll.services.contracts import ShabbatTimes, validate_shabbat_times, ValidationError
+from payroll.services.contracts import (
+    ShabbatTimes,
+    ValidationError,
+    validate_shabbat_times,
+)
 
 
 class TestUnifiedShabbatServiceContract:
@@ -52,15 +58,17 @@ class TestUnifiedShabbatServiceContract:
 
         # Test different seasons
         test_dates = [
-            date(2024, 6, 15),   # Summer
+            date(2024, 6, 15),  # Summer
             date(2024, 12, 15),  # Winter
-            date(2024, 3, 15),   # Spring
-            date(2024, 9, 15),   # Fall
+            date(2024, 3, 15),  # Spring
+            date(2024, 9, 15),  # Fall
         ]
 
         for test_date in test_dates:
             result = service.get_shabbat_times(test_date)
-            assert result["timezone"] == "Asia/Jerusalem", f"Wrong timezone for {test_date}"
+            assert (
+                result["timezone"] == "Asia/Jerusalem"
+            ), f"Wrong timezone for {test_date}"
 
     def test_times_are_iso_format(self):
         """Test that all datetime fields are in valid ISO format"""
@@ -68,12 +76,19 @@ class TestUnifiedShabbatServiceContract:
         result = service.get_shabbat_times(date(2024, 6, 15))
 
         # Test that times can be parsed as ISO datetimes
-        time_fields = ["shabbat_start", "shabbat_end", "friday_sunset", "saturday_sunset"]
+        time_fields = [
+            "shabbat_start",
+            "shabbat_end",
+            "friday_sunset",
+            "saturday_sunset",
+        ]
         for field in time_fields:
             time_str = result[field]
             try:
                 parsed_time = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-                assert parsed_time.tzinfo is not None, f"{field} should be timezone-aware"
+                assert (
+                    parsed_time.tzinfo is not None
+                ), f"{field} should be timezone-aware"
             except ValueError:
                 pytest.fail(f"{field} '{time_str}' is not valid ISO format")
 
@@ -94,8 +109,9 @@ class TestShabbatCalculationCorrectness:
         expected_diff = timedelta(minutes=18)
 
         # Allow 1 minute tolerance for rounding
-        assert abs(diff - expected_diff) < timedelta(minutes=1), \
-            f"Shabbat should start 18min before sunset, got {diff}"
+        assert abs(diff - expected_diff) < timedelta(
+            minutes=1
+        ), f"Shabbat should start 18min before sunset, got {diff}"
 
     def test_shabbat_end_is_42_minutes_after_sunset(self):
         """Test that Shabbat ends exactly 42 minutes after Saturday sunset"""
@@ -110,8 +126,9 @@ class TestShabbatCalculationCorrectness:
         expected_diff = timedelta(minutes=42)
 
         # Allow 1 minute tolerance for rounding
-        assert abs(diff - expected_diff) < timedelta(minutes=1), \
-            f"Shabbat should end 42min after sunset, got {diff}"
+        assert abs(diff - expected_diff) < timedelta(
+            minutes=1
+        ), f"Shabbat should end 42min after sunset, got {diff}"
 
     def test_shabbat_duration_is_approximately_25_hours(self):
         """Test that Shabbat duration is approximately 25 hours (24h + buffers)"""
@@ -125,8 +142,11 @@ class TestShabbatCalculationCorrectness:
 
         # Should be around 25 hours (24h + 18min + 42min = 25h exactly)
         # Allow some tolerance for sunset time variations
-        assert timedelta(hours=24, minutes=30) <= duration <= timedelta(hours=25, minutes=30), \
-            f"Shabbat duration should be ~25 hours, got {duration}"
+        assert (
+            timedelta(hours=24, minutes=30)
+            <= duration
+            <= timedelta(hours=25, minutes=30)
+        ), f"Shabbat duration should be ~25 hours, got {duration}"
 
     def test_times_are_reasonable_for_israel(self):
         """Test that sunset times are reasonable for Israeli geography"""
@@ -137,17 +157,18 @@ class TestShabbatCalculationCorrectness:
         summer_sunset = datetime.fromisoformat(summer_result["friday_sunset"])
 
         # Summer sunset in Israel should be between 7:00-8:00 PM
-        assert 19 <= summer_sunset.hour <= 20, \
-            f"Summer sunset hour {summer_sunset.hour} seems unreasonable for Israel"
+        assert (
+            19 <= summer_sunset.hour <= 20
+        ), f"Summer sunset hour {summer_sunset.hour} seems unreasonable for Israel"
 
         # Test winter (short days)
         winter_result = service.get_shabbat_times(date(2024, 12, 21))  # Winter solstice
         winter_sunset = datetime.fromisoformat(winter_result["friday_sunset"])
 
         # Winter sunset in Israel should be between 4:30-5:30 PM
-        assert 16 <= winter_sunset.hour <= 17, \
-            f"Winter sunset hour {winter_sunset.hour} seems unreasonable for Israel"
-
+        assert (
+            16 <= winter_sunset.hour <= 17
+        ), f"Winter sunset hour {winter_sunset.hour} seems unreasonable for Israel"
 
 
 class TestEdgeCases:
@@ -172,14 +193,15 @@ class TestEdgeCases:
             result = service.get_shabbat_times(test_date)
             friday_date = result["friday_date"]
 
-            assert friday_date == expected_friday, \
-                f"Date {test_date} ({test_date.strftime('%A')}) should map to Friday {expected_friday}, got {friday_date}"
+            assert (
+                friday_date == expected_friday
+            ), f"Date {test_date} ({test_date.strftime('%A')}) should map to Friday {expected_friday}, got {friday_date}"
 
     def test_fallback_when_api_fails(self):
         """Test that service returns fallback times when API fails"""
         service = UnifiedShabbatService()
 
-        with patch('requests.get') as mock_get:
+        with patch("requests.get") as mock_get:
             # Simulate API failure
             mock_get.side_effect = Exception("Network error")
 
@@ -196,7 +218,7 @@ class TestEdgeCases:
         """Test that fallback times vary by season appropriately"""
         service = UnifiedShabbatService()
 
-        with patch('requests.get') as mock_get:
+        with patch("requests.get") as mock_get:
             mock_get.side_effect = Exception("API unavailable")
 
             summer_result = service.get_shabbat_times(date(2024, 7, 5))  # July
@@ -206,8 +228,9 @@ class TestEdgeCases:
             winter_sunset = datetime.fromisoformat(winter_result["friday_sunset"])
 
             # Summer sunset should be later than winter
-            assert summer_sunset.hour > winter_sunset.hour, \
-                "Summer fallback sunset should be later than winter"
+            assert (
+                summer_sunset.hour > winter_sunset.hour
+            ), "Summer fallback sunset should be later than winter"
 
 
 class TestConvenienceFunctions:
@@ -269,6 +292,7 @@ class TestCaching:
 
         # Clear any existing cache
         from django.core.cache import cache
+
         cache.clear()
 
         # Get initial API call count
@@ -312,7 +336,7 @@ class TestIntegrationScenarios:
         # Create work times
         israel_tz = pytz.timezone("Asia/Jerusalem")
         work_start = israel_tz.localize(datetime(2024, 6, 14, 8, 0))  # Friday 8am
-        work_end = israel_tz.localize(datetime(2024, 6, 15, 2, 0))    # Saturday 2am
+        work_end = israel_tz.localize(datetime(2024, 6, 15, 2, 0))  # Saturday 2am
 
         shabbat_start = datetime.fromisoformat(shabbat_times["shabbat_start"])
         shabbat_end = datetime.fromisoformat(shabbat_times["shabbat_end"])
@@ -329,7 +353,4 @@ class TestIntegrationScenarios:
 
 if __name__ == "__main__":
     # Run specific test groups
-    pytest.main([
-        __file__ + "::TestUnifiedShabbatServiceContract",
-        "-v"
-    ])
+    pytest.main([__file__ + "::TestUnifiedShabbatServiceContract", "-v"])

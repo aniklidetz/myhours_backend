@@ -2,6 +2,10 @@ from rest_framework.routers import DefaultRouter
 
 from django.urls import include, path
 
+from .bulk_views import (
+    bulk_calculate_payroll_optimized,
+    bulk_calculation_status,
+)
 from .views import (
     backward_compatible_earnings,
     daily_payroll_calculations,
@@ -35,4 +39,11 @@ urlpatterns = [
     path("monthly-summary/", monthly_payroll_summary, name="monthly-payroll-summary"),
     path("recalculate/", recalculate_payroll, name="recalculate-payroll"),
     path("analytics/", payroll_analytics, name="payroll-analytics"),
+    # Bulk payroll calculation endpoints
+    path(
+        "bulk/calculate/",
+        bulk_calculate_payroll_optimized,
+        name="bulk-calculate-payroll",
+    ),
+    path("bulk/status/", bulk_calculation_status, name="bulk-calculation-status"),
 ]

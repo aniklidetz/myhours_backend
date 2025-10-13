@@ -3,21 +3,25 @@
 Simple test to check if our enhanced strategy works
 """
 import os
+
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myhours.settings_ci')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings_ci")
 django.setup()
 
 from datetime import datetime
 from decimal import Decimal
+
 from django.utils import timezone
-from users.models import Employee
+
 from payroll.models import Salary
-from worktime.models import WorkLog
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy
+from payroll.services.payroll_service import PayrollService
+from users.models import Employee
+from worktime.models import WorkLog
+
 
 def test_simple():
     """Simple test."""
@@ -30,19 +34,19 @@ def test_simple():
 
         # Create hourly employee (should work)
         employee = Employee.objects.create(
-            email='hourly_test@example.com',
-            first_name='Hourly',
-            last_name='Test',
-            employment_type='full_time',
-            role='employee'
+            email="hourly_test@example.com",
+            first_name="Hourly",
+            last_name="Test",
+            employment_type="full_time",
+            role="employee",
         )
 
         # Try without is_active field first
         salary = Salary(
             employee=employee,
-            calculation_type='hourly',
-            hourly_rate=Decimal('100.00'),
-            currency='ILS'
+            calculation_type="hourly",
+            hourly_rate=Decimal("100.00"),
+            currency="ILS",
         )
 
         # Check available fields
@@ -57,9 +61,7 @@ def test_simple():
         check_out = timezone.make_aware(datetime(2025, 7, 5, 17, 0))  # 8h
 
         WorkLog.objects.create(
-            employee=employee,
-            check_in=check_in,
-            check_out=check_out
+            employee=employee, check_in=check_in, check_out=check_out
         )
         print("WorkLog created successfully")
 
@@ -69,7 +71,7 @@ def test_simple():
             year=2025,
             month=7,
             user_id=1,
-            force_recalculate=True
+            force_recalculate=True,
         )
 
         service = PayrollService()
@@ -84,8 +86,10 @@ def test_simple():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     test_simple()

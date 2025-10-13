@@ -169,7 +169,11 @@ class DailyPayrollCalculationAdmin(admin.ModelAdmin):
             "Legacy Pay Breakdown",
             {
                 "fields": (
-                    ("base_regular_pay", "bonus_overtime_pay_1", "bonus_overtime_pay_2"),
+                    (
+                        "base_regular_pay",
+                        "bonus_overtime_pay_1",
+                        "bonus_overtime_pay_2",
+                    ),
                     ("bonus_sabbath_overtime_pay_1", "bonus_sabbath_overtime_pay_2"),
                     "total_pay",
                 ),

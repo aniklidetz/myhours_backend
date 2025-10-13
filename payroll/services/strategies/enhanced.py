@@ -23,17 +23,28 @@ from core.logging_utils import safe_log_employee
 from integrations.models import Holiday
 from integrations.services.unified_shabbat_service import get_shabbat_times
 from payroll.enhanced_redis_cache import enhanced_payroll_cache
-from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary, CompensatoryDay
+from payroll.models import (
+    CompensatoryDay,
+    DailyPayrollCalculation,
+    MonthlyPayrollSummary,
+)
+from users.models import Employee
 from worktime.models import WorkLog
 from worktime.night_shift import night_hours as calc_night_hours
-from users.models import Employee
 
-from ..contracts import PayrollResult, PayrollBreakdown, PayrollMetadata, CalculationContext
-from ..enums import CalculationStrategy, PayrollStatus, EmployeeType, CalculationMode
+from ..contracts import (
+    CalculationContext,
+    PayrollBreakdown,
+    PayrollMetadata,
+    PayrollResult,
+)
+from ..enums import CalculationMode, CalculationStrategy, EmployeeType, PayrollStatus
 from .base import AbstractPayrollStrategy
 
 
-def apply_normative(actual: Decimal, is_monthly: bool, is_weekday: bool, fast_mode: bool) -> Decimal:
+def apply_normative(
+    actual: Decimal, is_monthly: bool, is_weekday: bool, fast_mode: bool
+) -> Decimal:
     """
     Apply Israeli labor law normative hours conversion.
 
@@ -71,39 +82,43 @@ logger = logging.getLogger(__name__)
 def night_hours(check_in: datetime, check_out: datetime) -> float:
     """
     Helper function to calculate night hours (22:00-06:00) for testing compatibility.
-    
+
     Args:
         check_in: Work start time
         check_out: Work end time
-        
+
     Returns:
         float: Number of night hours
     """
     # Simple night hours calculation for 22:00-06:00
     night_start = 22  # 10 PM
-    night_end = 6     # 6 AM
-    
+    night_end = 6  # 6 AM
+
     total_night_hours = 0.0
     current_time = check_in
-    
+
     while current_time < check_out:
         hour = current_time.hour
         if hour >= night_start or hour < night_end:
             # This is a night hour
-            next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            next_hour = current_time.replace(
+                minute=0, second=0, microsecond=0
+            ) + timedelta(hours=1)
             end_time = min(next_hour, check_out)
             duration = (end_time - current_time).total_seconds() / 3600
             total_night_hours += duration
-        
-        current_time = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    
+
+        current_time = current_time.replace(
+            minute=0, second=0, microsecond=0
+        ) + timedelta(hours=1)
+
     return total_night_hours
 
 
 class EnhancedPayrollStrategy(AbstractPayrollStrategy):
     """
     Enhanced payroll calculation strategy with full Israeli labor law compliance.
-    
+
     This strategy provides comprehensive payroll calculations with:
     - Complete Israeli labor law compliance
     - API integration for precise Sabbath and holiday calculations
@@ -112,7 +127,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
     - Legal compliance validation
     - Audit trails and detailed breakdowns
     """
-    
+
     # Israeli labor law constants
     MAX_DAILY_HOURS = Decimal("12")
     MAX_WEEKLY_REGULAR_HOURS = Decimal("42")  # 5-day work week
@@ -124,10 +139,10 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
     REGULAR_DAILY_HOURS = Decimal("8.6")  # Regular day (4 days per week)
     SHORT_DAILY_HOURS = Decimal("7.6")  # Short day (usually Friday)
     NIGHT_SHIFT_MAX_REGULAR_HOURS = Decimal("7")  # Night shift norm
-    
+
     # Night shift detection constants
     NIGHT_NORM = Decimal("7.0")  # Night shift norm hours
-    DAY_NORM = Decimal("8.6")    # Day shift norm hours
+    DAY_NORM = Decimal("8.6")  # Day shift norm hours
     NIGHT_DETECTION_MINIMUM = Decimal("2.0")  # Minimum hours to classify as night shift
 
     # Night shift constants
@@ -154,13 +169,23 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
     SPECIAL_DAY_BONUS = Decimal("0.50")  # +50% for holiday/sabbath work (base hours)
 
     # Sabbath/Holiday overtime bonuses for monthly employees
-    SABBATH_OVERTIME_BONUS_175 = Decimal("0.75")  # +75% for first 2 overtime hours in Sabbath (175% - 100%)
-    SABBATH_OVERTIME_BONUS_200 = Decimal("1.00")  # +100% for additional overtime hours in Sabbath (200% - 100%)
-    HOLIDAY_OVERTIME_BONUS_175 = Decimal("0.75")  # +75% for first 2 overtime hours in holiday (175% - 100%)
-    HOLIDAY_OVERTIME_BONUS_200 = Decimal("1.00")  # +100% for additional overtime hours in holiday (200% - 100%)
+    SABBATH_OVERTIME_BONUS_175 = Decimal(
+        "0.75"
+    )  # +75% for first 2 overtime hours in Sabbath (175% - 100%)
+    SABBATH_OVERTIME_BONUS_200 = Decimal(
+        "1.00"
+    )  # +100% for additional overtime hours in Sabbath (200% - 100%)
+    HOLIDAY_OVERTIME_BONUS_175 = Decimal(
+        "0.75"
+    )  # +75% for first 2 overtime hours in holiday (175% - 100%)
+    HOLIDAY_OVERTIME_BONUS_200 = Decimal(
+        "1.00"
+    )  # +100% for additional overtime hours in holiday (200% - 100%)
 
     # Regular work premium (no premium)
-    RATE_REGULAR_PREMIUM = Decimal("0.00")  # Regular hours premium coefficient (no bonus)
+    RATE_REGULAR_PREMIUM = Decimal(
+        "0.00"
+    )  # Regular hours premium coefficient (no bonus)
 
     def __init__(self, context: CalculationContext):
         super().__init__(context)
@@ -176,11 +201,11 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         }
         self._calculation_errors = []
         self._warnings = []
-        
+
     def calculate(self) -> PayrollResult:
         """
         Calculate payroll using enhanced algorithm with full Israeli labor law compliance.
-        
+
         Returns:
             PayrollResult: Comprehensive payroll calculation result
         """
@@ -188,34 +213,38 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             # Get employee with full related data
             employee = self._get_employee_with_relations()
             salary = self._get_salary_info(employee)
-            
+
             # Initialize API services if not in fast mode
             if not self._fast_mode:
                 self._initialize_api_services()
-            
+
             # Get holidays and work logs for the month
             holidays = self._get_holidays_enhanced()
             work_logs = self._get_work_logs_enhanced(employee)
-            
+
             # Validate work logs for legal compliance
             self._validate_legal_compliance(work_logs)
-            
+
             # Determine employee type and calculation mode
             calculation_mode = self._determine_calculation_mode(salary)
-            
+
             # Calculate payroll based on employee type
             if calculation_mode == CalculationMode.HOURLY:
-                result = self._calculate_hourly_employee(employee, salary, work_logs, holidays)
+                result = self._calculate_hourly_employee(
+                    employee, salary, work_logs, holidays
+                )
             else:
-                result = self._calculate_monthly_employee(employee, salary, work_logs, holidays)
+                result = self._calculate_monthly_employee(
+                    employee, salary, work_logs, holidays
+                )
 
             # Add work_log_count to metadata
-            if 'metadata' not in result:
-                result['metadata'] = {}
-            result['metadata']['work_log_count'] = len(work_logs)
+            if "metadata" not in result:
+                result["metadata"] = {}
+            result["metadata"]["work_log_count"] = len(work_logs)
 
             return result
-            
+
         except Exception as e:
             logger.error(
                 f"EnhancedPayrollStrategy calculation failed for employee {self._employee_id}",
@@ -225,82 +254,91 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                     "month": self._month,
                     "error": str(e),
                     "error_type": type(e).__name__,
-                    "action": "enhanced_calculation_error"
+                    "action": "enhanced_calculation_error",
                 },
-                exc_info=True
+                exc_info=True,
             )
             raise
-    
+
     def _get_employee_with_relations(self) -> Employee:
         """
         Get employee with all necessary relations prefetched for calculations.
-        
+
         Returns:
             Employee: Employee instance with prefetched relations
         """
         start_time = timezone.now()
-        
+
         try:
-            employee = Employee.objects.select_related(
-                'user'
-            ).prefetch_related(
-                'salaries',
-                models.Prefetch(
-                    'work_logs',
-                    queryset=WorkLog.objects.filter(
-                        check_in__year=self._year,
-                        check_in__month=self._month,
-                        check_out__isnull=False
-                    ).select_related('employee').order_by('check_in'),
-                    to_attr='month_work_logs'
-                ),
-                models.Prefetch(
-                    'compensatory_days',
-                    queryset=CompensatoryDay.objects.filter(
-                        date_earned__year=self._year,
-                        date_earned__month=self._month
+            employee = (
+                Employee.objects.select_related("user")
+                .prefetch_related(
+                    "salaries",
+                    models.Prefetch(
+                        "work_logs",
+                        queryset=WorkLog.objects.filter(
+                            check_in__year=self._year,
+                            check_in__month=self._month,
+                            check_out__isnull=False,
+                        )
+                        .select_related("employee")
+                        .order_by("check_in"),
+                        to_attr="month_work_logs",
                     ),
-                    to_attr='month_compensatory_days'
+                    models.Prefetch(
+                        "compensatory_days",
+                        queryset=CompensatoryDay.objects.filter(
+                            date_earned__year=self._year, date_earned__month=self._month
+                        ),
+                        to_attr="month_compensatory_days",
+                    ),
                 )
-            ).get(id=self._employee_id)
-            
+                .get(id=self._employee_id)
+            )
+
             duration_ms = (timezone.now() - start_time).total_seconds() * 1000
             self._log_performance_metrics(
-                "employee_query_enhanced", 
+                "employee_query_enhanced",
                 duration_ms,
                 {
                     "has_salary": employee.salaries.exists(),
-                    "work_logs_count": len(getattr(employee, 'month_work_logs', [])),
-                    "compensatory_days": len(getattr(employee, 'month_compensatory_days', []))
-                }
+                    "work_logs_count": len(getattr(employee, "month_work_logs", [])),
+                    "compensatory_days": len(
+                        getattr(employee, "month_compensatory_days", [])
+                    ),
+                },
             )
-            
+
             return employee
-            
+
         except Employee.DoesNotExist:
-            raise Employee.DoesNotExist(f"Employee with id {self._employee_id} not found")
-    
+            raise Employee.DoesNotExist(
+                f"Employee with id {self._employee_id} not found"
+            )
+
     def _get_salary_info(self, employee):
         """
         Get active salary information for the employee.
-        
+
         Args:
             employee: Employee instance with prefetched salaries
-            
+
         Returns:
             Salary: Active salary configuration
-            
+
         Raises:
             ValueError: If no active salary configuration found
         """
         # Get active salary for current period
         active_salary = employee.salaries.filter(is_active=True).first()
-        
+
         if not active_salary:
-            raise ValueError(f"No active salary configuration found for employee {employee.id}")
-        
+            raise ValueError(
+                f"No active salary configuration found for employee {employee.id}"
+            )
+
         return active_salary
-    
+
     def _initialize_api_services(self) -> None:
         """Initialize external API services for precise calculations."""
         try:
@@ -310,8 +348,8 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 f"Initialized API services for employee {self._employee_id}",
                 extra={
                     "employee_id": self._employee_id,
-                    "action": "api_services_initialized"
-                }
+                    "action": "api_services_initialized",
+                },
             )
         except Exception as e:
             logger.warning(
@@ -319,41 +357,43 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 extra={
                     "employee_id": self._employee_id,
                     "error": str(e),
-                    "action": "api_services_fallback"
-                }
+                    "action": "api_services_fallback",
+                },
             )
-    
+
     def _get_holidays_enhanced(self) -> Dict[date, Dict]:
         """
         Get holidays for the month with enhanced API integration.
-        
+
         Returns:
             Dict: Holiday data with precise information
         """
         if self._holidays_cache is not None:
             return self._holidays_cache
-        
+
         cache_key = f"enhanced_holidays_{self._year}_{self._month}"
         start_time = timezone.now()
-        
+
         # Try cache first if available
         cached_holidays = None
         try:
-            cached_holidays = enhanced_payroll_cache.get_holidays(self._year, self._month)
+            cached_holidays = enhanced_payroll_cache.get_holidays(
+                self._year, self._month
+            )
         except (AttributeError, KeyError):
             pass
-            
+
         if cached_holidays:
             duration_ms = (timezone.now() - start_time).total_seconds() * 1000
             self._log_performance_metrics(
-                "holidays_cache_hit", 
+                "holidays_cache_hit",
                 duration_ms,
-                {"holiday_count": len(cached_holidays)}
+                {"holiday_count": len(cached_holidays)},
             )
             self._api_usage["redis_cache_hits"] += 1
             self._holidays_cache = cached_holidays
             return cached_holidays
-        
+
         # Cache miss - build holidays from multiple sources
         self._api_usage["redis_cache_misses"] += 1
         holidays_dict = {}
@@ -363,26 +403,28 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # 1. Get database holidays
         first_day = date(self._year, self._month, 1)
-        last_day = date(self._year, self._month, calendar.monthrange(self._year, self._month)[1])
-        
+        last_day = date(
+            self._year, self._month, calendar.monthrange(self._year, self._month)[1]
+        )
+
         db_holidays = Holiday.objects.filter(
-            date__gte=first_day,
-            date__lte=last_day,
-            is_holiday=True
-        ).values('date', 'name')
-        
+            date__gte=first_day, date__lte=last_day, is_holiday=True
+        ).values("date", "name")
+
         for holiday in db_holidays:
-            holidays_dict[holiday['date']] = {
-                'name': holiday['name'],
-                'is_paid': True,  # Assume all holidays are paid
-                'source': 'database'
+            holidays_dict[holiday["date"]] = {
+                "name": holiday["name"],
+                "is_paid": True,  # Assume all holidays are paid
+                "source": "database",
             }
-        
+
         # 2. Sync with API if not in fast mode
         if not self._fast_mode:
             try:
                 # Use proper integrations architecture via HolidayUtilityService
-                from integrations.services.holiday_utility_service import HolidayUtilityService
+                from integrations.services.holiday_utility_service import (
+                    HolidayUtilityService,
+                )
 
                 # Get holidays for the month using proper service
                 start_date = date(self._year, self._month, 1)
@@ -392,7 +434,9 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 else:
                     end_date = date(self._year, self._month + 1, 1)
 
-                api_holidays = HolidayUtilityService.get_holidays_in_range(start_date, end_date)
+                api_holidays = HolidayUtilityService.get_holidays_in_range(
+                    start_date, end_date
+                )
                 self._api_usage["hebcal_calls"] += 1
                 self._api_usage["api_holidays_found"] += len(api_holidays or [])
 
@@ -401,80 +445,83 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                     holiday_date = api_holiday.date
                     if holiday_date not in holidays_dict:
                         holidays_dict[holiday_date] = {
-                            'name': api_holiday.name,
-                            'is_paid': True,  # Default to paid since Holiday model doesn't have is_paid field
-                            'source': 'integrations'
+                            "name": api_holiday.name,
+                            "is_paid": True,  # Default to paid since Holiday model doesn't have is_paid field
+                            "source": "integrations",
                         }
             except Exception as e:
                 logger.warning(f"Holiday sync via integrations failed: {e}")
                 self._warnings.append(f"Holiday service unavailable: {e}")
-        
+
         # Cache the result if cache supports it
         try:
             enhanced_payroll_cache.set_holidays(self._year, self._month, holidays_dict)
         except (AttributeError, KeyError):
             pass
-        
+
         duration_ms = (timezone.now() - start_time).total_seconds() * 1000
         self._log_performance_metrics(
-            "holidays_enhanced_build", 
+            "holidays_enhanced_build",
             duration_ms,
-            {"holiday_count": len(holidays_dict)}
+            {"holiday_count": len(holidays_dict)},
         )
-        
+
         self._holidays_cache = holidays_dict
         return holidays_dict
-    
+
     def _get_work_logs_enhanced(self, employee: Employee) -> List[WorkLog]:
         """
         Get work logs with enhanced processing for split shifts.
-        
+
         Args:
             employee: Employee instance
-            
+
         Returns:
             List[WorkLog]: Enhanced work logs with split shift processing
         """
         # Try to use prefetched data first
-        if hasattr(employee, 'month_work_logs'):
+        if hasattr(employee, "month_work_logs"):
             work_logs = employee.month_work_logs
         else:
             # Fallback to direct query
-            work_logs = list(WorkLog.objects.filter(
-                employee_id=self._employee_id,
-                check_in__year=self._year,
-                check_in__month=self._month,
-                check_out__isnull=False
-            ).select_related('employee').order_by('check_in'))
-        
+            work_logs = list(
+                WorkLog.objects.filter(
+                    employee_id=self._employee_id,
+                    check_in__year=self._year,
+                    check_in__month=self._month,
+                    check_out__isnull=False,
+                )
+                .select_related("employee")
+                .order_by("check_in")
+            )
+
         # Note: Previously used _process_split_shifts here, but now replaced
         # by integrated critical points algorithm for better accuracy
-        
+
         logger.debug(
             f"Retrieved {len(work_logs)} work logs for enhanced calculation",
             extra={
                 "employee_id": self._employee_id,
                 "work_log_count": len(work_logs),
-                "action": "work_logs_enhanced"
-            }
+                "action": "work_logs_enhanced",
+            },
         )
-        
+
         return work_logs
-    
-    
+
     def _determine_calculation_mode(self, salary) -> CalculationMode:
         """
         Determine the calculation mode based on employee salary configuration.
-        
+
         Args:
             salary: Employee salary configuration
-            
+
         Returns:
             CalculationMode: The appropriate calculation mode
         """
-        if salary.calculation_type == 'hourly':
+        if salary.calculation_type == "hourly":
             return CalculationMode.HOURLY
-        elif salary.calculation_type == 'monthly':
+        elif salary.calculation_type == "monthly":
             return CalculationMode.MONTHLY
         else:
             logger.warning(
@@ -482,17 +529,17 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 extra={
                     "employee_id": self._employee_id,
                     "calculation_type": salary.calculation_type,
-                    "action": "calculation_mode_fallback"
-                }
+                    "action": "calculation_mode_fallback",
+                },
             )
             return CalculationMode.HOURLY
-    
+
     def _calculate_hourly_employee_critical_points(
         self,
         employee: Employee,
         salary,
         work_logs: List[WorkLog],
-        holidays: Dict[date, Dict]
+        holidays: Dict[date, Dict],
     ) -> PayrollResult:
         """
         Calculate payroll for hourly employees using critical points algorithm.
@@ -504,6 +551,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         - Israeli labor law compliance
         """
         from datetime import time, timedelta
+
         from ..contracts import create_empty_breakdown
 
         # Initialize accumulated results
@@ -517,9 +565,8 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 log.check_out,
                 hourly_rate,
                 holidays,
-                salary.calculation_type
+                salary.calculation_type,
             )
-
 
             # Accumulate results
             for key, value in shift_result.items():
@@ -528,15 +575,14 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Calculate total salary
         total_salary = (
-            total_result["regular_pay"] +
-            total_result["overtime_125_pay"] +
-            total_result["overtime_150_pay"] +
-            total_result["sabbath_regular_pay"] +
-            total_result["sabbath_overtime_175_pay"] +
-            total_result["sabbath_overtime_200_pay"] +
-            total_result["holiday_pay"]
+            total_result["regular_pay"]
+            + total_result["overtime_125_pay"]
+            + total_result["overtime_150_pay"]
+            + total_result["sabbath_regular_pay"]
+            + total_result["sabbath_overtime_175_pay"]
+            + total_result["sabbath_overtime_200_pay"]
+            + total_result["holiday_pay"]
         )
-
 
         # Build detailed breakdown using accumulated results
         breakdown = PayrollBreakdown(
@@ -544,72 +590,87 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             regular_hours=float(total_result["regular_hours"]),
             regular_rate=float(hourly_rate),
             regular_pay=float(total_result["regular_pay"]),
-
             # Overtime 125%
             overtime_125_hours=float(total_result["overtime_125_hours"]),
             overtime_125_rate=float(hourly_rate * self.OVERTIME_RATE_125),
             overtime_125_pay=float(total_result["overtime_125_pay"]),
-
             # Overtime 150%
             overtime_150_hours=float(total_result["overtime_150_hours"]),
             overtime_150_rate=float(hourly_rate * self.OVERTIME_RATE_150),
             overtime_150_pay=float(total_result["overtime_150_pay"]),
-
             # Sabbath regular (150%)
             sabbath_hours=float(total_result["sabbath_regular_hours"]),
             sabbath_rate=float(hourly_rate * self.SABBATH_RATE),
             sabbath_pay=float(total_result["sabbath_regular_pay"]),
-
             # Sabbath overtime
-            sabbath_overtime_175_hours=float(total_result["sabbath_overtime_175_hours"]),
-            sabbath_overtime_175_rate=float(hourly_rate * self.SABBATH_OVERTIME_RATE_175),
+            sabbath_overtime_175_hours=float(
+                total_result["sabbath_overtime_175_hours"]
+            ),
+            sabbath_overtime_175_rate=float(
+                hourly_rate * self.SABBATH_OVERTIME_RATE_175
+            ),
             sabbath_overtime_175_pay=float(total_result["sabbath_overtime_175_pay"]),
-
-            sabbath_overtime_200_hours=float(total_result["sabbath_overtime_200_hours"]),
-            sabbath_overtime_200_rate=float(hourly_rate * self.SABBATH_OVERTIME_RATE_200),
+            sabbath_overtime_200_hours=float(
+                total_result["sabbath_overtime_200_hours"]
+            ),
+            sabbath_overtime_200_rate=float(
+                hourly_rate * self.SABBATH_OVERTIME_RATE_200
+            ),
             sabbath_overtime_200_pay=float(total_result["sabbath_overtime_200_pay"]),
-
             # Holiday work
             holiday_hours=float(total_result["holiday_hours"]),
             holiday_rate=float(hourly_rate * self.HOLIDAY_RATE),
             holiday_pay=float(total_result["holiday_pay"]),
-
             # Night shift tracking (diagnostic)
-            night_shift_hours=float(total_result.get("night_shift_hours", Decimal("0"))),
+            night_shift_hours=float(
+                total_result.get("night_shift_hours", Decimal("0"))
+            ),
             night_hours=float(total_result.get("night_hours", Decimal("0"))),
-
             # Totals
             total_salary=float(total_salary),
-            total_hours=float(total_result["regular_hours"] + total_result["overtime_125_hours"] +
-                           total_result["overtime_150_hours"] + total_result["sabbath_regular_hours"] +
-                           total_result["sabbath_overtime_175_hours"] + total_result["sabbath_overtime_200_hours"] +
-                           total_result["holiday_hours"]),
+            total_hours=float(
+                total_result["regular_hours"]
+                + total_result["overtime_125_hours"]
+                + total_result["overtime_150_hours"]
+                + total_result["sabbath_regular_hours"]
+                + total_result["sabbath_overtime_175_hours"]
+                + total_result["sabbath_overtime_200_hours"]
+                + total_result["holiday_hours"]
+            ),
         )
 
         # Calculate total hours from accumulated results
         total_hours_calculated = (
-            total_result["regular_hours"] + total_result["overtime_125_hours"] +
-            total_result["overtime_150_hours"] + total_result["sabbath_regular_hours"] +
-            total_result["sabbath_overtime_175_hours"] + total_result["sabbath_overtime_200_hours"] +
-            total_result["holiday_hours"]
+            total_result["regular_hours"]
+            + total_result["overtime_125_hours"]
+            + total_result["overtime_150_hours"]
+            + total_result["sabbath_regular_hours"]
+            + total_result["sabbath_overtime_175_hours"]
+            + total_result["sabbath_overtime_200_hours"]
+            + total_result["holiday_hours"]
         )
 
         return PayrollResult(
             total_salary=total_salary,  # Keep as Decimal
             total_hours=total_hours_calculated,  # Keep as Decimal
             regular_hours=total_result["regular_hours"],
-            overtime_hours=total_result["overtime_125_hours"] + total_result["overtime_150_hours"],
-            shabbat_hours=total_result["sabbath_regular_hours"] + total_result["sabbath_overtime_175_hours"] + total_result["sabbath_overtime_200_hours"],
+            overtime_hours=total_result["overtime_125_hours"]
+            + total_result["overtime_150_hours"],
+            shabbat_hours=total_result["sabbath_regular_hours"]
+            + total_result["sabbath_overtime_175_hours"]
+            + total_result["sabbath_overtime_200_hours"],
             holiday_hours=total_result["holiday_hours"],  # Aggregate holiday hours
-            night_hours=total_result.get("night_hours", Decimal("0")),  # Total night hours (22:00-06:00)
+            night_hours=total_result.get(
+                "night_hours", Decimal("0")
+            ),  # Total night hours (22:00-06:00)
             breakdown=breakdown,
             metadata={
-                'calculation_strategy': 'enhanced_critical_points',
-                'employee_type': 'hourly',
-                'currency': 'ILS',
-                'has_cache': False,
-                'warnings': []
-            }
+                "calculation_strategy": "enhanced_critical_points",
+                "employee_type": "hourly",
+                "currency": "ILS",
+                "has_cache": False,
+                "warnings": [],
+            },
         )
 
     def _calculate_shift_critical_points(
@@ -618,7 +679,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         shift_end_datetime,
         base_hourly_rate,
         holidays,
-        calculation_type="hourly"
+        calculation_type="hourly",
     ):
         """
         Calculate shift payment using critical points algorithm.
@@ -636,7 +697,9 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             calculation_type: Employee calculation type ("hourly" or "monthly")
         """
         from datetime import datetime, time, timedelta
+
         from django.utils import timezone
+
         from ..contracts import create_empty_breakdown
 
         # Step 1: Preliminary analysis
@@ -645,11 +708,12 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Determine if shift is night shift
         night_period_start = time(22, 0)  # 22:00
-        night_period_end = time(6, 0)     # 06:00
+        night_period_end = time(6, 0)  # 06:00
 
         # Convert to local timezone for night period calculation
         import pytz
-        local_tz = pytz.timezone('Asia/Jerusalem')
+
+        local_tz = pytz.timezone("Asia/Jerusalem")
         shift_start_local = shift_start_datetime.astimezone(local_tz)
         shift_end_local = shift_end_datetime.astimezone(local_tz)
 
@@ -657,7 +721,9 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             shift_start_local, shift_end_local, night_period_start, night_period_end
         )
 
-        is_night_shift = total_hours_in_night_period > self.NIGHT_DETECTION_MINIMUM  # More than 2 hours in night period = night shift
+        is_night_shift = (
+            total_hours_in_night_period > self.NIGHT_DETECTION_MINIMUM
+        )  # More than 2 hours in night period = night shift
 
         # CRITICAL: Overtime thresholds ALWAYS use normative hours (8.6 for day, 7.0 for night)
         # This applies to BOTH hourly and monthly employees
@@ -710,12 +776,16 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         # Analyze shift-Sabbath intersection for critical points
 
         # Add norm achievement point
-        norm_end_time = shift_start_datetime + timedelta(hours=float(applicable_daily_norm))
+        norm_end_time = shift_start_datetime + timedelta(
+            hours=float(applicable_daily_norm)
+        )
         if shift_start_datetime <= norm_end_time <= shift_end_datetime:
             critical_points.append(norm_end_time)
 
         # Add overtime tier 1 end point
-        tier1_end_time = norm_end_time + timedelta(hours=float(self.OVERTIME_TIER1_HOURS))
+        tier1_end_time = norm_end_time + timedelta(
+            hours=float(self.OVERTIME_TIER1_HOURS)
+        )
         if shift_start_datetime <= tier1_end_time <= shift_end_datetime:
             critical_points.append(tier1_end_time)
 
@@ -724,7 +794,6 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Sort and remove duplicates
         critical_points = sorted(list(set(critical_points)))
-
 
         # Step 3: Iterative calculation by segments
         result = create_empty_breakdown()
@@ -755,26 +824,34 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
             # Determine overtime level based on hours worked so far
             # Use small epsilon to handle floating point precision issues
-            epsilon = Decimal('0.0001')
+            epsilon = Decimal("0.0001")
             tier2_threshold = applicable_daily_norm + self.OVERTIME_TIER1_HOURS
 
             is_regular_time = hours_worked_so_far < applicable_daily_norm - epsilon
-            is_overtime_1 = (hours_worked_so_far >= applicable_daily_norm - epsilon and
-                           hours_worked_so_far < tier2_threshold - epsilon)
+            is_overtime_1 = (
+                hours_worked_so_far >= applicable_daily_norm - epsilon
+                and hours_worked_so_far < tier2_threshold - epsilon
+            )
             is_overtime_2 = hours_worked_so_far >= tier2_threshold - epsilon
-
-
 
             # Select final rate based on territory and overtime level
             # Priority: Sabbath > Holiday > Regular day
             if is_in_sabbath:
                 # --- ИСПРАВЛЕНИЕ: Пересчитываем thresholds для Sabbath с учетом applicable_daily_norm ---
                 # Для Sabbath используем правильную норму (7.0 для ночных смен, 8.6 для дневных)
-                sabbath_tier2_threshold = applicable_daily_norm + self.OVERTIME_TIER1_HOURS
-                is_regular_time_sabbath = hours_worked_so_far < applicable_daily_norm - epsilon
-                is_overtime_1_sabbath = (hours_worked_so_far >= applicable_daily_norm - epsilon and
-                                       hours_worked_so_far < sabbath_tier2_threshold - epsilon)
-                is_overtime_2_sabbath = hours_worked_so_far >= sabbath_tier2_threshold - epsilon
+                sabbath_tier2_threshold = (
+                    applicable_daily_norm + self.OVERTIME_TIER1_HOURS
+                )
+                is_regular_time_sabbath = (
+                    hours_worked_so_far < applicable_daily_norm - epsilon
+                )
+                is_overtime_1_sabbath = (
+                    hours_worked_so_far >= applicable_daily_norm - epsilon
+                    and hours_worked_so_far < sabbath_tier2_threshold - epsilon
+                )
+                is_overtime_2_sabbath = (
+                    hours_worked_so_far >= sabbath_tier2_threshold - epsilon
+                )
 
                 if is_regular_time_sabbath:
                     final_rate = self.SABBATH_RATE  # 1.50
@@ -791,11 +868,19 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             elif is_in_holiday:
                 # --- ИСПРАВЛЕНИЕ: Пересчитываем thresholds для праздников с учетом applicable_daily_norm ---
                 # Для праздников также используем правильную норму (7.0 для ночных смен, 8.6 для дневных)
-                holiday_tier2_threshold = applicable_daily_norm + self.OVERTIME_TIER1_HOURS
-                is_regular_time_holiday = hours_worked_so_far < applicable_daily_norm - epsilon
-                is_overtime_1_holiday = (hours_worked_so_far >= applicable_daily_norm - epsilon and
-                                       hours_worked_so_far < holiday_tier2_threshold - epsilon)
-                is_overtime_2_holiday = hours_worked_so_far >= holiday_tier2_threshold - epsilon
+                holiday_tier2_threshold = (
+                    applicable_daily_norm + self.OVERTIME_TIER1_HOURS
+                )
+                is_regular_time_holiday = (
+                    hours_worked_so_far < applicable_daily_norm - epsilon
+                )
+                is_overtime_1_holiday = (
+                    hours_worked_so_far >= applicable_daily_norm - epsilon
+                    and hours_worked_so_far < holiday_tier2_threshold - epsilon
+                )
+                is_overtime_2_holiday = (
+                    hours_worked_so_far >= holiday_tier2_threshold - epsilon
+                )
 
                 if is_regular_time_holiday:
                     final_rate = self.HOLIDAY_RATE  # 1.50
@@ -834,16 +919,18 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 result[pay_key] += segment_pay
 
             # Add to detailed breakdown for debugging
-            calculation_breakdown.append({
-                "start": segment_start,
-                "end": segment_end,
-                "duration_hours": float(segment_duration_hours),
-                "hours_key": hours_key,
-                "pay_key": pay_key,
-                "multiplier": float(final_rate),
-                "pay": float(segment_pay),
-                "hours_worked_before": float(hours_worked_so_far)
-            })
+            calculation_breakdown.append(
+                {
+                    "start": segment_start,
+                    "end": segment_end,
+                    "duration_hours": float(segment_duration_hours),
+                    "hours_key": hours_key,
+                    "pay_key": pay_key,
+                    "multiplier": float(final_rate),
+                    "pay": float(segment_pay),
+                    "hours_worked_before": float(hours_worked_so_far),
+                }
+            )
 
             hours_worked_so_far += segment_duration_hours
 
@@ -858,11 +945,17 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         # 2. Only for weekday regular hours (not Sabbath, not holidays)
         # 3. Only when fast_mode=False
         # 4. Overtime hours always remain as actual hours
-        if is_monthly and not self._fast_mode and result["regular_hours"] > Decimal("0"):
+        if (
+            is_monthly
+            and not self._fast_mode
+            and result["regular_hours"] > Decimal("0")
+        ):
             # Check if this shift has any Sabbath or holiday hours
-            has_sabbath = result["sabbath_regular_hours"] > Decimal("0") or \
-                         result["sabbath_overtime_175_hours"] > Decimal("0") or \
-                         result["sabbath_overtime_200_hours"] > Decimal("0")
+            has_sabbath = (
+                result["sabbath_regular_hours"] > Decimal("0")
+                or result["sabbath_overtime_175_hours"] > Decimal("0")
+                or result["sabbath_overtime_200_hours"] > Decimal("0")
+            )
             has_holiday = result["holiday_hours"] > Decimal("0")
 
             # If shift is ONLY on weekdays (no Sabbath/holiday hours), apply normalization
@@ -872,15 +965,17 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                     result["regular_hours"],
                     is_monthly=True,
                     is_weekday=True,
-                    fast_mode=False
+                    fast_mode=False,
                 )
                 result["regular_hours"] = normative_regular
 
         return result
 
-    def _calculate_night_hours(self, shift_start, shift_end, night_start_time, night_end_time):
+    def _calculate_night_hours(
+        self, shift_start, shift_end, night_start_time, night_end_time
+    ):
         """Calculate how many hours fall within night period (22:00-06:00)"""
-        from datetime import datetime, timedelta, time
+        from datetime import datetime, time, timedelta
 
         night_hours = Decimal("0")
 
@@ -894,20 +989,36 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             # Calculate night hours from 22:00 to midnight
             if shift_start_time < night_start_time:
                 # Shift starts before 22:00, count from 22:00 to midnight
-                night_start_dt = datetime.combine(shift_date, night_start_time, shift_start.tzinfo)
-                midnight = datetime.combine(shift_date + timedelta(days=1), time(0, 0), shift_start.tzinfo)
-                night_hours += Decimal(str((midnight - night_start_dt).total_seconds() / 3600))
+                night_start_dt = datetime.combine(
+                    shift_date, night_start_time, shift_start.tzinfo
+                )
+                midnight = datetime.combine(
+                    shift_date + timedelta(days=1), time(0, 0), shift_start.tzinfo
+                )
+                night_hours += Decimal(
+                    str((midnight - night_start_dt).total_seconds() / 3600)
+                )
             else:
                 # Shift starts after 22:00, count from start to midnight
-                midnight = datetime.combine(shift_date + timedelta(days=1), time(0, 0), shift_start.tzinfo)
-                night_hours += Decimal(str((midnight - shift_start).total_seconds() / 3600))
+                midnight = datetime.combine(
+                    shift_date + timedelta(days=1), time(0, 0), shift_start.tzinfo
+                )
+                night_hours += Decimal(
+                    str((midnight - shift_start).total_seconds() / 3600)
+                )
 
             # Add hours from midnight to shift end (or 6:00, whichever is earlier)
-            next_day_6am = datetime.combine(shift_end.date(), night_end_time, shift_end.tzinfo)
+            next_day_6am = datetime.combine(
+                shift_end.date(), night_end_time, shift_end.tzinfo
+            )
             if shift_end <= next_day_6am:
                 # Shift ends before 6:00, count all hours from midnight to end
-                midnight = datetime.combine(shift_end.date(), time(0, 0), shift_end.tzinfo)
-                night_hours += Decimal(str((shift_end - midnight).total_seconds() / 3600))
+                midnight = datetime.combine(
+                    shift_end.date(), time(0, 0), shift_end.tzinfo
+                )
+                night_hours += Decimal(
+                    str((shift_end - midnight).total_seconds() / 3600)
+                )
             else:
                 # Shift ends after 6:00, count only until 6:00
                 night_hours += Decimal("6.0")  # 00:00 to 06:00
@@ -916,19 +1027,31 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         else:
             # Check if shift is in evening (after 22:00)
             if shift_start_time >= night_start_time:
-                night_hours = Decimal(str((shift_end - shift_start).total_seconds() / 3600))
+                night_hours = Decimal(
+                    str((shift_end - shift_start).total_seconds() / 3600)
+                )
             # Check if shift ends after 22:00
             elif shift_end_time >= night_start_time:
-                night_start_dt = datetime.combine(shift_date, night_start_time, shift_start.tzinfo)
-                night_hours = Decimal(str((shift_end - night_start_dt).total_seconds() / 3600))
+                night_start_dt = datetime.combine(
+                    shift_date, night_start_time, shift_start.tzinfo
+                )
+                night_hours = Decimal(
+                    str((shift_end - night_start_dt).total_seconds() / 3600)
+                )
             # Check if shift is in early morning (completely before 6:00)
             elif shift_end_time <= night_end_time:
                 if shift_start_time <= night_end_time:
-                    night_hours = Decimal(str((shift_end - shift_start).total_seconds() / 3600))
+                    night_hours = Decimal(
+                        str((shift_end - shift_start).total_seconds() / 3600)
+                    )
             # Check if shift starts before 6:00 but ends after 6:00
             elif shift_start_time < night_end_time < shift_end_time:
-                night_end_dt = datetime.combine(shift_date, night_end_time, shift_start.tzinfo)
-                night_hours = Decimal(str((night_end_dt - shift_start).total_seconds() / 3600))
+                night_end_dt = datetime.combine(
+                    shift_date, night_end_time, shift_start.tzinfo
+                )
+                night_hours = Decimal(
+                    str((night_end_dt - shift_start).total_seconds() / 3600)
+                )
 
         return night_hours
 
@@ -937,7 +1060,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         employee: Employee,
         salary,
         work_logs: List[WorkLog],
-        holidays: Dict[date, Dict]
+        holidays: Dict[date, Dict],
     ) -> PayrollResult:
         """
         Calculate payroll for hourly employees using critical points algorithm.
@@ -955,9 +1078,11 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         except Exception as e:
             print(f"ERROR in critical points calculation: {e}")
             import traceback
+
             traceback.print_exc()
             # Fallback to empty result to avoid crash
-            from ..contracts import create_empty_breakdown, PayrollResult
+            from ..contracts import PayrollResult, create_empty_breakdown
+
             return PayrollResult(
                 total_salary=0.0,
                 total_hours=0.0,
@@ -966,15 +1091,15 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 shabbat_hours=0.0,
                 holiday_hours=0.0,
                 night_hours=0.0,
-                breakdown=create_empty_breakdown()
+                breakdown=create_empty_breakdown(),
             )
-    
+
     def _calculate_monthly_employee(
         self,
         employee: Employee,
         salary,
         work_logs: List[WorkLog],
-        holidays: Dict[date, Dict]
+        holidays: Dict[date, Dict],
     ) -> PayrollResult:
         """
         Calculate payroll for monthly employees using critical points algorithm.
@@ -1002,7 +1127,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         employee: Employee,
         salary,
         work_logs: List[WorkLog],
-        holidays: Dict[date, Dict]
+        holidays: Dict[date, Dict],
     ) -> PayrollResult:
         """
         Calculate payroll for monthly employees using critical points algorithm
@@ -1014,11 +1139,12 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         3. Critical points algorithm for precise time categorization
         """
         from datetime import time, timedelta
+
         from ..contracts import create_empty_breakdown
 
         # Monthly salary parameters
         full_monthly_salary = Decimal(str(salary.base_salary or 0))
-        monthly_hours_norm = Decimal('182')  # Standard Israeli work month
+        monthly_hours_norm = Decimal("182")  # Standard Israeli work month
         effective_hourly_rate = full_monthly_salary / monthly_hours_norm
 
         # Initialize accumulated results
@@ -1027,10 +1153,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         # Process each work log using critical points algorithm
         for log in work_logs:
             shift_result = self._calculate_monthly_shift_premiums_critical_points(
-                log.check_in,
-                log.check_out,
-                effective_hourly_rate,
-                holidays
+                log.check_in, log.check_out, effective_hourly_rate, holidays
             )
 
             # Accumulate results
@@ -1043,30 +1166,32 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Calculate proportional base salary
         total_hours_worked = (
-            total_result.get("regular_hours", Decimal('0')) +
-            total_result.get("overtime_125_hours", Decimal('0')) +
-            total_result.get("overtime_150_hours", Decimal('0')) +
-            total_result.get("sabbath_regular_hours", Decimal('0')) +
-            total_result.get("sabbath_overtime_175_hours", Decimal('0')) +
-            total_result.get("sabbath_overtime_200_hours", Decimal('0')) +
-            total_result.get("holiday_regular_hours", Decimal('0')) +
-            total_result.get("holiday_overtime_175_hours", Decimal('0')) +
-            total_result.get("holiday_overtime_200_hours", Decimal('0'))
+            total_result.get("regular_hours", Decimal("0"))
+            + total_result.get("overtime_125_hours", Decimal("0"))
+            + total_result.get("overtime_150_hours", Decimal("0"))
+            + total_result.get("sabbath_regular_hours", Decimal("0"))
+            + total_result.get("sabbath_overtime_175_hours", Decimal("0"))
+            + total_result.get("sabbath_overtime_200_hours", Decimal("0"))
+            + total_result.get("holiday_regular_hours", Decimal("0"))
+            + total_result.get("holiday_overtime_175_hours", Decimal("0"))
+            + total_result.get("holiday_overtime_200_hours", Decimal("0"))
         )
 
         # Base proportional salary (no bonuses)
-        proportional_base = (total_hours_worked / monthly_hours_norm) * full_monthly_salary
+        proportional_base = (
+            total_hours_worked / monthly_hours_norm
+        ) * full_monthly_salary
 
         # Calculate total bonuses (premium amounts only)
         bonus_pay = (
-            total_result.get("overtime_125_amount", Decimal('0')) +
-            total_result.get("overtime_150_amount", Decimal('0')) +
-            total_result.get("sabbath_regular_amount", Decimal('0')) +
-            total_result.get("sabbath_overtime_175_amount", Decimal('0')) +
-            total_result.get("sabbath_overtime_200_amount", Decimal('0')) +
-            total_result.get("holiday_regular_amount", Decimal('0')) +
-            total_result.get("holiday_overtime_175_amount", Decimal('0')) +
-            total_result.get("holiday_overtime_200_amount", Decimal('0'))
+            total_result.get("overtime_125_amount", Decimal("0"))
+            + total_result.get("overtime_150_amount", Decimal("0"))
+            + total_result.get("sabbath_regular_amount", Decimal("0"))
+            + total_result.get("sabbath_overtime_175_amount", Decimal("0"))
+            + total_result.get("sabbath_overtime_200_amount", Decimal("0"))
+            + total_result.get("holiday_regular_amount", Decimal("0"))
+            + total_result.get("holiday_overtime_175_amount", Decimal("0"))
+            + total_result.get("holiday_overtime_200_amount", Decimal("0"))
         )
 
         # Total salary = proportional base + bonuses
@@ -1081,39 +1206,63 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         breakdown = PayrollBreakdown(
             # Base salary info
             base_monthly_salary=float(full_monthly_salary),
-            work_proportion=float(total_hours_worked / monthly_hours_norm) if monthly_hours_norm > 0 else 0.0,
+            work_proportion=(
+                float(total_hours_worked / monthly_hours_norm)
+                if monthly_hours_norm > 0
+                else 0.0
+            ),
             proportional_base=float(proportional_base),
             total_bonuses_monthly=float(bonus_pay),
-
             # Regular time (base proportional amount)
             regular_hours=float(total_result.get("regular_hours", 0)),
             regular_rate=float(effective_hourly_rate),
-            regular_pay=float(total_result.get("regular_hours", 0) * effective_hourly_rate),
-
+            regular_pay=float(
+                total_result.get("regular_hours", 0) * effective_hourly_rate
+            ),
             # Overtime 125% (base + premium)
             overtime_125_hours=float(total_result.get("overtime_125_hours", 0)),
             overtime_125_rate=float(effective_hourly_rate * self.OVERTIME_RATE_125),
-            overtime_125_pay=float(total_result.get("overtime_125_hours", 0) * effective_hourly_rate + total_result.get("overtime_125_amount", 0)),
-
+            overtime_125_pay=float(
+                total_result.get("overtime_125_hours", 0) * effective_hourly_rate
+                + total_result.get("overtime_125_amount", 0)
+            ),
             # Overtime 150% (base + premium)
             overtime_150_hours=float(total_result.get("overtime_150_hours", 0)),
             overtime_150_rate=float(effective_hourly_rate * self.OVERTIME_RATE_150),
-            overtime_150_pay=float(total_result.get("overtime_150_hours", 0) * effective_hourly_rate + total_result.get("overtime_150_amount", 0)),
-
+            overtime_150_pay=float(
+                total_result.get("overtime_150_hours", 0) * effective_hourly_rate
+                + total_result.get("overtime_150_amount", 0)
+            ),
             # Sabbath regular (base + premium)
             sabbath_hours=float(total_result.get("sabbath_regular_hours", 0)),
             sabbath_rate=float(effective_hourly_rate * self.SABBATH_RATE),
-            sabbath_pay=float(total_result.get("sabbath_regular_hours", 0) * effective_hourly_rate + total_result.get("sabbath_regular_amount", 0)),
-
+            sabbath_pay=float(
+                total_result.get("sabbath_regular_hours", 0) * effective_hourly_rate
+                + total_result.get("sabbath_regular_amount", 0)
+            ),
             # Sabbath overtime (base + premium)
-            sabbath_overtime_175_hours=float(total_result.get("sabbath_overtime_175_hours", 0)),
-            sabbath_overtime_175_rate=float(effective_hourly_rate * self.SABBATH_OVERTIME_RATE_175),
-            sabbath_overtime_175_pay=float(total_result.get("sabbath_overtime_175_hours", 0) * effective_hourly_rate + total_result.get("sabbath_overtime_175_amount", 0)),
-
-            sabbath_overtime_200_hours=float(total_result.get("sabbath_overtime_200_hours", 0)),
-            sabbath_overtime_200_rate=float(effective_hourly_rate * self.SABBATH_OVERTIME_RATE_200),
-            sabbath_overtime_200_pay=float(total_result.get("sabbath_overtime_200_hours", 0) * effective_hourly_rate + total_result.get("sabbath_overtime_200_amount", 0)),
-
+            sabbath_overtime_175_hours=float(
+                total_result.get("sabbath_overtime_175_hours", 0)
+            ),
+            sabbath_overtime_175_rate=float(
+                effective_hourly_rate * self.SABBATH_OVERTIME_RATE_175
+            ),
+            sabbath_overtime_175_pay=float(
+                total_result.get("sabbath_overtime_175_hours", 0)
+                * effective_hourly_rate
+                + total_result.get("sabbath_overtime_175_amount", 0)
+            ),
+            sabbath_overtime_200_hours=float(
+                total_result.get("sabbath_overtime_200_hours", 0)
+            ),
+            sabbath_overtime_200_rate=float(
+                effective_hourly_rate * self.SABBATH_OVERTIME_RATE_200
+            ),
+            sabbath_overtime_200_pay=float(
+                total_result.get("sabbath_overtime_200_hours", 0)
+                * effective_hourly_rate
+                + total_result.get("sabbath_overtime_200_amount", 0)
+            ),
             # Totals
             total_salary=float(total_salary),
             total_hours=float(total_hours_worked),
@@ -1122,32 +1271,35 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         return PayrollResult(
             total_salary=total_salary,
             total_hours=total_hours_worked,
-            regular_hours=total_result.get("regular_hours", Decimal('0')),
-            overtime_hours=total_result.get("overtime_125_hours", Decimal('0')) + total_result.get("overtime_150_hours", Decimal('0')),
-            shabbat_hours=total_result.get("sabbath_regular_hours", Decimal('0')) + total_result.get("sabbath_overtime_175_hours", Decimal('0')) + total_result.get("sabbath_overtime_200_hours", Decimal('0')),
-            holiday_hours=total_result.get("holiday_regular_hours", Decimal('0')) + total_result.get("holiday_overtime_175_hours", Decimal('0')) + total_result.get("holiday_overtime_200_hours", Decimal('0')),
-            night_hours=total_result.get("night_hours", Decimal('0')),  # Total night hours (22:00-06:00)
+            regular_hours=total_result.get("regular_hours", Decimal("0")),
+            overtime_hours=total_result.get("overtime_125_hours", Decimal("0"))
+            + total_result.get("overtime_150_hours", Decimal("0")),
+            shabbat_hours=total_result.get("sabbath_regular_hours", Decimal("0"))
+            + total_result.get("sabbath_overtime_175_hours", Decimal("0"))
+            + total_result.get("sabbath_overtime_200_hours", Decimal("0")),
+            holiday_hours=total_result.get("holiday_regular_hours", Decimal("0"))
+            + total_result.get("holiday_overtime_175_hours", Decimal("0"))
+            + total_result.get("holiday_overtime_200_hours", Decimal("0")),
+            night_hours=total_result.get(
+                "night_hours", Decimal("0")
+            ),  # Total night hours (22:00-06:00)
             breakdown=breakdown,
             metadata={
-                'calculation_strategy': 'enhanced_critical_points_monthly',
-                'employee_type': 'monthly',
-                'currency': 'ILS',
-                'base_monthly_salary': float(full_monthly_salary),
-                'effective_hourly_rate': float(effective_hourly_rate),
-                'monthly_hours_norm': float(monthly_hours_norm),
-                'proportional_base': float(proportional_base),
-                'bonus_pay': float(bonus_pay),
-                'has_cache': False,
-                'warnings': []
-            }
+                "calculation_strategy": "enhanced_critical_points_monthly",
+                "employee_type": "monthly",
+                "currency": "ILS",
+                "base_monthly_salary": float(full_monthly_salary),
+                "effective_hourly_rate": float(effective_hourly_rate),
+                "monthly_hours_norm": float(monthly_hours_norm),
+                "proportional_base": float(proportional_base),
+                "bonus_pay": float(bonus_pay),
+                "has_cache": False,
+                "warnings": [],
+            },
         )
 
     def _calculate_monthly_shift_premiums_critical_points(
-        self,
-        shift_start_datetime,
-        shift_end_datetime,
-        effective_hourly_rate,
-        holidays
+        self, shift_start_datetime, shift_end_datetime, effective_hourly_rate, holidays
     ):
         """
         Calculate shift premiums for monthly employees using critical points algorithm.
@@ -1165,6 +1317,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             Dictionary with premium amounts for different hour categories
         """
         from datetime import time, timedelta
+
         from ..contracts import create_empty_breakdown
 
         # Use existing critical points calculation but extract only premiums
@@ -1175,73 +1328,121 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             shift_end_datetime,
             effective_hourly_rate,
             holidays,
-            calculation_type="monthly"
+            calculation_type="monthly",
         )
 
         # Initialize breakdown for premiums only
         breakdown = create_empty_breakdown()
 
         # Extract hours from full result
-        breakdown['regular_hours'] = full_result.get('regular_hours', Decimal('0'))
-        breakdown['overtime_125_hours'] = full_result.get('overtime_125_hours', Decimal('0'))
-        breakdown['overtime_150_hours'] = full_result.get('overtime_150_hours', Decimal('0'))
-        breakdown['sabbath_regular_hours'] = full_result.get('sabbath_regular_hours', Decimal('0'))
-        breakdown['sabbath_overtime_175_hours'] = full_result.get('sabbath_overtime_175_hours', Decimal('0'))
-        breakdown['sabbath_overtime_200_hours'] = full_result.get('sabbath_overtime_200_hours', Decimal('0'))
-        breakdown['holiday_regular_hours'] = full_result.get('holiday_regular_hours', Decimal('0'))
-        breakdown['holiday_overtime_175_hours'] = full_result.get('holiday_overtime_175_hours', Decimal('0'))
-        breakdown['holiday_overtime_200_hours'] = full_result.get('holiday_overtime_200_hours', Decimal('0'))
+        breakdown["regular_hours"] = full_result.get("regular_hours", Decimal("0"))
+        breakdown["overtime_125_hours"] = full_result.get(
+            "overtime_125_hours", Decimal("0")
+        )
+        breakdown["overtime_150_hours"] = full_result.get(
+            "overtime_150_hours", Decimal("0")
+        )
+        breakdown["sabbath_regular_hours"] = full_result.get(
+            "sabbath_regular_hours", Decimal("0")
+        )
+        breakdown["sabbath_overtime_175_hours"] = full_result.get(
+            "sabbath_overtime_175_hours", Decimal("0")
+        )
+        breakdown["sabbath_overtime_200_hours"] = full_result.get(
+            "sabbath_overtime_200_hours", Decimal("0")
+        )
+        breakdown["holiday_regular_hours"] = full_result.get(
+            "holiday_regular_hours", Decimal("0")
+        )
+        breakdown["holiday_overtime_175_hours"] = full_result.get(
+            "holiday_overtime_175_hours", Decimal("0")
+        )
+        breakdown["holiday_overtime_200_hours"] = full_result.get(
+            "holiday_overtime_200_hours", Decimal("0")
+        )
 
         # Calculate ONLY the premium amounts (not base salary)
         # Regular hours - no premium
         # No premium payment for regular hours
 
         # Overtime premiums
-        breakdown['overtime_125_amount'] = breakdown['overtime_125_hours'] * effective_hourly_rate * self.OVERTIME_BONUS_125
-        breakdown['overtime_150_amount'] = breakdown['overtime_150_hours'] * effective_hourly_rate * self.OVERTIME_BONUS_150
+        breakdown["overtime_125_amount"] = (
+            breakdown["overtime_125_hours"]
+            * effective_hourly_rate
+            * self.OVERTIME_BONUS_125
+        )
+        breakdown["overtime_150_amount"] = (
+            breakdown["overtime_150_hours"]
+            * effective_hourly_rate
+            * self.OVERTIME_BONUS_150
+        )
 
         # Sabbath premiums
-        breakdown['sabbath_regular_amount'] = breakdown['sabbath_regular_hours'] * effective_hourly_rate * self.SPECIAL_DAY_BONUS
-        breakdown['sabbath_overtime_175_amount'] = breakdown['sabbath_overtime_175_hours'] * effective_hourly_rate * self.SABBATH_OVERTIME_BONUS_175
-        breakdown['sabbath_overtime_200_amount'] = breakdown['sabbath_overtime_200_hours'] * effective_hourly_rate * self.SABBATH_OVERTIME_BONUS_200
+        breakdown["sabbath_regular_amount"] = (
+            breakdown["sabbath_regular_hours"]
+            * effective_hourly_rate
+            * self.SPECIAL_DAY_BONUS
+        )
+        breakdown["sabbath_overtime_175_amount"] = (
+            breakdown["sabbath_overtime_175_hours"]
+            * effective_hourly_rate
+            * self.SABBATH_OVERTIME_BONUS_175
+        )
+        breakdown["sabbath_overtime_200_amount"] = (
+            breakdown["sabbath_overtime_200_hours"]
+            * effective_hourly_rate
+            * self.SABBATH_OVERTIME_BONUS_200
+        )
 
         # Holiday premiums
-        breakdown['holiday_regular_amount'] = breakdown['holiday_regular_hours'] * effective_hourly_rate * self.SPECIAL_DAY_BONUS
-        breakdown['holiday_overtime_175_amount'] = breakdown['holiday_overtime_175_hours'] * effective_hourly_rate * self.HOLIDAY_OVERTIME_BONUS_175
-        breakdown['holiday_overtime_200_amount'] = breakdown['holiday_overtime_200_hours'] * effective_hourly_rate * self.HOLIDAY_OVERTIME_BONUS_200
+        breakdown["holiday_regular_amount"] = (
+            breakdown["holiday_regular_hours"]
+            * effective_hourly_rate
+            * self.SPECIAL_DAY_BONUS
+        )
+        breakdown["holiday_overtime_175_amount"] = (
+            breakdown["holiday_overtime_175_hours"]
+            * effective_hourly_rate
+            * self.HOLIDAY_OVERTIME_BONUS_175
+        )
+        breakdown["holiday_overtime_200_amount"] = (
+            breakdown["holiday_overtime_200_hours"]
+            * effective_hourly_rate
+            * self.HOLIDAY_OVERTIME_BONUS_200
+        )
 
         return breakdown
 
     def _calculate_night_shift_hours(self, work_log: WorkLog) -> Decimal:
         """
         Calculate night shift hours (22:00-06:00) for a work log.
-        
+
         Args:
             work_log: Work log to analyze
-            
+
         Returns:
             Decimal: Number of night shift hours
         """
         if not work_log.check_out:
-            return Decimal('0.0')
-        
+            return Decimal("0.0")
+
         try:
             # Use our module-level night_hours function
             night_shift_hours = night_hours(work_log.check_in, work_log.check_out)
             return Decimal(str(night_shift_hours))
         except Exception as e:
             logger.warning(f"Night shift calculation failed: {e}")
-            return Decimal('0.0')
-    
+            return Decimal("0.0")
+
     def _is_night_segment(self, start: datetime, end: datetime) -> bool:
         """
         Determine if a work segment is night shift according to Israeli law.
         Night shift: >= 2 hours between 22:00-06:00
-        
+
         Args:
             start: Segment start time
             end: Segment end time
-            
+
         Returns:
             bool: True if segment qualifies as night shift
         """
@@ -1251,16 +1452,16 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         except Exception as e:
             logger.warning(f"Night shift detection failed: {e}")
             return False
-    
+
     def _get_bands(self, is_sabbath: bool, is_night: bool, is_holiday: bool = False):
         """
         Get hour bands and multipliers based on segment type.
-        
+
         Args:
             is_sabbath: Whether this is a Sabbath segment
             is_night: Whether this is a night shift segment
             is_holiday: Whether this is a holiday segment
-            
+
         Returns:
             tuple: (base_norm, bands)
             bands format: [(hours_limit, multiplier, hours_key, pay_key), ...]
@@ -1269,46 +1470,114 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             # Шаббат + ночь: до 7ч → 150%, 7-9 → 175%, >9 → 200%
             base_norm = self.NIGHT_NORM
             bands = [
-                (base_norm, self.SABBATH_RATE, "sabbath_regular_hours", "sabbath_regular_pay"),
-                (self.OVERTIME_TIER1_HOURS, self.SABBATH_OVERTIME_RATE_175, "sabbath_overtime_175_hours", "sabbath_overtime_175_pay"),
-                (Decimal("999"), self.SABBATH_OVERTIME_RATE_200, "sabbath_overtime_200_hours", "sabbath_overtime_200_pay"),
+                (
+                    base_norm,
+                    self.SABBATH_RATE,
+                    "sabbath_regular_hours",
+                    "sabbath_regular_pay",
+                ),
+                (
+                    self.OVERTIME_TIER1_HOURS,
+                    self.SABBATH_OVERTIME_RATE_175,
+                    "sabbath_overtime_175_hours",
+                    "sabbath_overtime_175_pay",
+                ),
+                (
+                    Decimal("999"),
+                    self.SABBATH_OVERTIME_RATE_200,
+                    "sabbath_overtime_200_hours",
+                    "sabbath_overtime_200_pay",
+                ),
             ]
         elif is_sabbath:
             # Шаббат день: до 8.6ч → 150%, +2ч → 175%, >10.6ч → 200%
             base_norm = self.DAY_NORM
             bands = [
-                (base_norm, self.SABBATH_RATE, "sabbath_regular_hours", "sabbath_regular_pay"),
-                (self.OVERTIME_TIER1_HOURS, self.SABBATH_OVERTIME_RATE_175, "sabbath_overtime_175_hours", "sabbath_overtime_175_pay"),
-                (Decimal("999"), self.SABBATH_OVERTIME_RATE_200, "sabbath_overtime_200_hours", "sabbath_overtime_200_pay"),
+                (
+                    base_norm,
+                    self.SABBATH_RATE,
+                    "sabbath_regular_hours",
+                    "sabbath_regular_pay",
+                ),
+                (
+                    self.OVERTIME_TIER1_HOURS,
+                    self.SABBATH_OVERTIME_RATE_175,
+                    "sabbath_overtime_175_hours",
+                    "sabbath_overtime_175_pay",
+                ),
+                (
+                    Decimal("999"),
+                    self.SABBATH_OVERTIME_RATE_200,
+                    "sabbath_overtime_200_hours",
+                    "sabbath_overtime_200_pay",
+                ),
             ]
         elif is_holiday:
             # Holiday work: same as Sabbath day rates (150% base, with overtime tiers)
             base_norm = self.DAY_NORM
             bands = [
                 (base_norm, self.HOLIDAY_RATE, "holiday_hours", "holiday_pay"),
-                (self.OVERTIME_TIER1_HOURS, self.SABBATH_OVERTIME_RATE_175, "overtime_125_hours", "overtime_125_pay"),
-                (Decimal("999"), self.SABBATH_OVERTIME_RATE_200, "overtime_150_hours", "overtime_150_pay"),
+                (
+                    self.OVERTIME_TIER1_HOURS,
+                    self.SABBATH_OVERTIME_RATE_175,
+                    "overtime_125_hours",
+                    "overtime_125_pay",
+                ),
+                (
+                    Decimal("999"),
+                    self.SABBATH_OVERTIME_RATE_200,
+                    "overtime_150_hours",
+                    "overtime_150_pay",
+                ),
             ]
         elif is_night:
             # Будни ночь: до 7ч → 100%, 7-9 → 125%, >9 → 150%
             base_norm = self.NIGHT_NORM
             bands = [
                 (base_norm, self.RATE_REGULAR, "regular_hours", "regular_pay"),
-                (self.OVERTIME_TIER1_HOURS, self.OVERTIME_RATE_125, "overtime_125_hours", "overtime_125_pay"),
-                (Decimal("999"), self.OVERTIME_RATE_150, "overtime_150_hours", "overtime_150_pay"),
+                (
+                    self.OVERTIME_TIER1_HOURS,
+                    self.OVERTIME_RATE_125,
+                    "overtime_125_hours",
+                    "overtime_125_pay",
+                ),
+                (
+                    Decimal("999"),
+                    self.OVERTIME_RATE_150,
+                    "overtime_150_hours",
+                    "overtime_150_pay",
+                ),
             ]
         else:
             # Будни день: до 8.6ч → 100%, +2ч → 125%, >10.6ч → 150%
             base_norm = self.DAY_NORM
             bands = [
                 (base_norm, self.RATE_REGULAR, "regular_hours", "regular_pay"),
-                (self.OVERTIME_TIER1_HOURS, self.OVERTIME_RATE_125, "overtime_125_hours", "overtime_125_pay"),
-                (Decimal("999"), self.OVERTIME_RATE_150, "overtime_150_hours", "overtime_150_pay"),
+                (
+                    self.OVERTIME_TIER1_HOURS,
+                    self.OVERTIME_RATE_125,
+                    "overtime_125_hours",
+                    "overtime_125_pay",
+                ),
+                (
+                    Decimal("999"),
+                    self.OVERTIME_RATE_150,
+                    "overtime_150_hours",
+                    "overtime_150_pay",
+                ),
             ]
-        
+
         return base_norm, bands
-    
-    def _apply_bands(self, segment_hours: Decimal, hourly_rate: Decimal, is_sabbath: bool, is_night: bool, is_holiday: bool = False, is_monthly_employee: bool = False):
+
+    def _apply_bands(
+        self,
+        segment_hours: Decimal,
+        hourly_rate: Decimal,
+        is_sabbath: bool,
+        is_night: bool,
+        is_holiday: bool = False,
+        is_monthly_employee: bool = False,
+    ):
         """
         Apply hour bands to a segment and calculate hours and pay breakdown.
 
@@ -1324,19 +1593,18 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             dict: Hours and pay breakdown by category
         """
         base_norm, bands = self._get_bands(is_sabbath, is_night, is_holiday)
-        
+
         # Initialize result with all possible keys
         result = {
             # Hours
             "regular_hours": Decimal("0"),
-            "overtime_125_hours": Decimal("0"), 
+            "overtime_125_hours": Decimal("0"),
             "overtime_150_hours": Decimal("0"),
             "sabbath_regular_hours": Decimal("0"),
             "sabbath_overtime_175_hours": Decimal("0"),
             "sabbath_overtime_200_hours": Decimal("0"),
             "holiday_hours": Decimal("0"),  # Holiday work hours
             "night_shift_hours": Decimal("0"),  # Diagnostic field
-            
             # Pay
             "regular_pay": Decimal("0"),
             "overtime_125_pay": Decimal("0"),
@@ -1347,18 +1615,18 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             "holiday_pay": Decimal("0"),  # Holiday work pay
             "night_shift_pay": Decimal("0"),  # Not used in new logic
         }
-        
+
         # Track night hours for diagnostics
         if is_night:
             result["night_shift_hours"] = segment_hours
-        
+
         # Apply bands sequentially
         remaining_hours = segment_hours
-        
+
         for i, (hours_limit, multiplier, hours_key, pay_key) in enumerate(bands):
             if remaining_hours <= Decimal("0"):
                 break
-                
+
             # Calculate hours in this band
             band_hours = min(remaining_hours, hours_limit)
 
@@ -1376,10 +1644,12 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                     band_hours,
                     is_monthly=is_monthly_employee,
                     is_weekday=is_weekday,
-                    fast_mode=self._fast_mode
+                    fast_mode=self._fast_mode,
                 )
                 result[hours_key] += normative_hours
-                result[pay_key] += band_hours * hourly_rate * multiplier  # Pay based on actual
+                result[pay_key] += (
+                    band_hours * hourly_rate * multiplier
+                )  # Pay based on actual
             else:
                 # All other bands (overtime, Sabbath, holidays) use actual hours - NO normalization
                 result[hours_key] += band_hours
@@ -1391,22 +1661,33 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         # DEBUG: Log segment breakdown to trace hour distribution
         if __debug__:  # Only in debug mode
             segment_total = (
-                result["regular_hours"] + result["overtime_125_hours"] + result["overtime_150_hours"]
-                + result["sabbath_regular_hours"] + result["sabbath_overtime_175_hours"] 
-                + result["sabbath_overtime_200_hours"] + result["holiday_hours"]
+                result["regular_hours"]
+                + result["overtime_125_hours"]
+                + result["overtime_150_hours"]
+                + result["sabbath_regular_hours"]
+                + result["sabbath_overtime_175_hours"]
+                + result["sabbath_overtime_200_hours"]
+                + result["holiday_hours"]
             )
-            logger.debug("seg hours: actual=%s -> reg=%s ot125=%s ot150=%s sab_reg=%s sab_175=%s sab_200=%s hol=%s | sum=%s",
-                        segment_hours, result["regular_hours"], result["overtime_125_hours"], 
-                        result["overtime_150_hours"], result["sabbath_regular_hours"], 
-                        result["sabbath_overtime_175_hours"], result["sabbath_overtime_200_hours"],
-                        result["holiday_hours"], segment_total)
-        
+            logger.debug(
+                "seg hours: actual=%s -> reg=%s ot125=%s ot150=%s sab_reg=%s sab_175=%s sab_200=%s hol=%s | sum=%s",
+                segment_hours,
+                result["regular_hours"],
+                result["overtime_125_hours"],
+                result["overtime_150_hours"],
+                result["sabbath_regular_hours"],
+                result["sabbath_overtime_175_hours"],
+                result["sabbath_overtime_200_hours"],
+                result["holiday_hours"],
+                segment_total,
+            )
+
         return result
-    
+
     def _validate_legal_compliance(self, work_logs: List[WorkLog]) -> None:
         """
         Validate work logs against Israeli labor law requirements.
-        
+
         Args:
             work_logs: Work logs to validate
         """
@@ -1416,17 +1697,22 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
             if log_hours > self.MAX_DAILY_HOURS:
                 warning = f"Daily hours ({log_hours}) exceed legal maximum ({self.MAX_DAILY_HOURS}) on {log.check_in.date()}"
                 self._warnings.append(warning)
-                logger.warning(warning, extra={
-                    "employee_id": self._employee_id,
-                    "work_date": log.check_in.date().isoformat(),
-                    "hours": float(log_hours),
-                    "action": "legal_compliance_warning"
-                })
-        
+                logger.warning(
+                    warning,
+                    extra={
+                        "employee_id": self._employee_id,
+                        "work_date": log.check_in.date().isoformat(),
+                        "hours": float(log_hours),
+                        "action": "legal_compliance_warning",
+                    },
+                )
+
         # Check monthly limits (simplified - would need more complex logic for full implementation)
         total_monthly_hours = sum(log.get_total_hours() for log in work_logs)
-        max_monthly_hours = self.MONTHLY_WORK_HOURS * Decimal("1.3")  # Allow 30% buffer for overtime
-        
+        max_monthly_hours = self.MONTHLY_WORK_HOURS * Decimal(
+            "1.3"
+        )  # Allow 30% buffer for overtime
+
         if total_monthly_hours > max_monthly_hours:
             warning = f"Monthly hours ({total_monthly_hours}) significantly exceed normal working time ({self.MONTHLY_WORK_HOURS})"
             self._warnings.append(warning)

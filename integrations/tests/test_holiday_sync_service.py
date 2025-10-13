@@ -21,13 +21,27 @@ class HolidaySyncServiceTest(TestCase):
         """Set up test environment - Iron Isolation pattern"""
         # Only clean specific dates used by integration tests + their eve dates, not all Holiday records
         integration_test_dates = [
-            date(2025, 9, 16), date(2025, 9, 15),  # Rosh Hashanah + eve
-            date(2025, 9, 25), date(2025, 9, 24),  # Yom Kippur + eve
-            date(2025, 10, 1), date(2025, 9, 30),  # Minor Holiday + eve
-            date(2025, 1, 3), date(2025, 1, 2),    # Shabbat + potential eve
-            date(2025, 1, 4), date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 9),
-            date(2025, 7, 12), date(2025, 7, 19), date(2025, 7, 5), date(2025, 7, 4),
-            date(2025, 1, 1), date(2025, 1, 17), date(2025, 1, 24), date(2025, 1, 31), date(2025, 2, 7)
+            date(2025, 9, 16),
+            date(2025, 9, 15),  # Rosh Hashanah + eve
+            date(2025, 9, 25),
+            date(2025, 9, 24),  # Yom Kippur + eve
+            date(2025, 10, 1),
+            date(2025, 9, 30),  # Minor Holiday + eve
+            date(2025, 1, 3),
+            date(2025, 1, 2),  # Shabbat + potential eve
+            date(2025, 1, 4),
+            date(2025, 1, 10),
+            date(2025, 1, 11),
+            date(2025, 1, 9),
+            date(2025, 7, 12),
+            date(2025, 7, 19),
+            date(2025, 7, 5),
+            date(2025, 7, 4),
+            date(2025, 1, 1),
+            date(2025, 1, 17),
+            date(2025, 1, 24),
+            date(2025, 1, 31),
+            date(2025, 2, 7),
         ]
         Holiday.objects.filter(date__in=integration_test_dates).delete()
 
@@ -35,20 +49,36 @@ class HolidaySyncServiceTest(TestCase):
         """Clean up after tests - Iron Isolation pattern"""
         # Only clean specific dates used by integration tests + their eve dates, not all Holiday records
         integration_test_dates = [
-            date(2025, 9, 16), date(2025, 9, 15),  # Rosh Hashanah + eve
-            date(2025, 9, 25), date(2025, 9, 24),  # Yom Kippur + eve
-            date(2025, 10, 1), date(2025, 9, 30),  # Minor Holiday + eve
-            date(2025, 1, 3), date(2025, 1, 2),    # Shabbat + potential eve
-            date(2025, 1, 4), date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 9),
-            date(2025, 7, 12), date(2025, 7, 19), date(2025, 7, 5), date(2025, 7, 4),
-            date(2025, 1, 1), date(2025, 1, 17), date(2025, 1, 24), date(2025, 1, 31), date(2025, 2, 7)
+            date(2025, 9, 16),
+            date(2025, 9, 15),  # Rosh Hashanah + eve
+            date(2025, 9, 25),
+            date(2025, 9, 24),  # Yom Kippur + eve
+            date(2025, 10, 1),
+            date(2025, 9, 30),  # Minor Holiday + eve
+            date(2025, 1, 3),
+            date(2025, 1, 2),  # Shabbat + potential eve
+            date(2025, 1, 4),
+            date(2025, 1, 10),
+            date(2025, 1, 11),
+            date(2025, 1, 9),
+            date(2025, 7, 12),
+            date(2025, 7, 19),
+            date(2025, 7, 5),
+            date(2025, 7, 4),
+            date(2025, 1, 1),
+            date(2025, 1, 17),
+            date(2025, 1, 24),
+            date(2025, 1, 31),
+            date(2025, 2, 7),
         ]
         Holiday.objects.filter(date__in=integration_test_dates).delete()
 
     @patch("integrations.services.holiday_sync_service.IsraeliHolidaysService")
     @patch("integrations.services.holiday_sync_service.get_shabbat_times")
     @patch("integrations.services.holiday_sync_service.HebcalAPIClient")
-    def test_sync_year_complete_workflow(self, mock_api_client, mock_shabbat_times, mock_israeli_service):
+    def test_sync_year_complete_workflow(
+        self, mock_api_client, mock_shabbat_times, mock_israeli_service
+    ):
         """Test complete year synchronization workflow"""
         # Mock API client response
         mock_api_client.fetch_holidays.return_value = [
@@ -63,13 +93,13 @@ class HolidaySyncServiceTest(TestCase):
                 "date": "2025-01-03",
                 "category": "holiday",
                 "subcat": "shabbat",
-            }
+            },
         ]
 
         # Mock Shabbat times generation
         mock_shabbat_times.return_value = {
             "shabbat_start": "2025-01-10T16:30:00+02:00",
-            "shabbat_end": "2025-01-11T17:30:00+02:00"
+            "shabbat_end": "2025-01-11T17:30:00+02:00",
         }
 
         # Mock Israeli holidays service
@@ -98,7 +128,7 @@ class HolidaySyncServiceTest(TestCase):
         # Mock Shabbat times
         mock_shabbat_times.return_value = {
             "shabbat_start": "2025-01-03T16:30:00+02:00",
-            "shabbat_end": "2025-01-04T17:30:00+02:00"
+            "shabbat_end": "2025-01-04T17:30:00+02:00",
         }
 
         # Generate Shabbats for a small date range (January 2025)
@@ -135,7 +165,7 @@ class HolidaySyncServiceTest(TestCase):
                 "date": "2025-12-26",
                 "category": "holiday",
                 "subcat": "shabbat",
-            }
+            },
         ]
 
         created, updated = HolidaySyncService._sync_special_shabbats(holidays)
@@ -158,7 +188,10 @@ class HolidaySyncServiceTest(TestCase):
     def test_sync_other_holidays(self, mock_is_official):
         """Test synchronization of regular holidays"""
         # Mock official holiday check
-        mock_is_official.side_effect = lambda title: title in ["Rosh Hashanah", "Yom Kippur"]
+        mock_is_official.side_effect = lambda title: title in [
+            "Rosh Hashanah",
+            "Yom Kippur",
+        ]
 
         holidays = [
             {
@@ -178,7 +211,7 @@ class HolidaySyncServiceTest(TestCase):
                 "date": "2025-09-25",
                 "category": "holiday",
                 "subcat": "major",
-            }
+            },
         ]
 
         created, updated = HolidaySyncService._sync_other_holidays(holidays)
@@ -219,7 +252,7 @@ class HolidaySyncServiceTest(TestCase):
                 "subcat": "shabbat",
                 "start_time": "2025-01-10T16:35:00+02:00",
                 "end_time": "2025-01-11T17:35:00+02:00",
-            }
+            },
         ]
 
         created, updated = HolidaySyncService._sync_weekly_shabbats(weekly_shabbats)
@@ -250,7 +283,7 @@ class HolidaySyncServiceTest(TestCase):
             name="Shabbat Rosh Chodesh",
             is_shabbat=True,
             is_special_shabbat=True,
-            is_holiday=False
+            is_holiday=False,
         )
 
         # Try to sync regular Shabbat on same date
@@ -295,7 +328,9 @@ class HolidaySyncServiceTest(TestCase):
     @patch("integrations.services.holiday_sync_service.IsraeliHolidaysService")
     def test_sync_national_holidays_error_handling(self, mock_israeli_service):
         """Test error handling in national holidays sync"""
-        mock_israeli_service.sync_national_holidays.side_effect = Exception("Service error")
+        mock_israeli_service.sync_national_holidays.side_effect = Exception(
+            "Service error"
+        )
 
         created, updated = HolidaySyncService._sync_national_holidays(2025)
 
@@ -311,7 +346,7 @@ class HolidaySyncServiceTest(TestCase):
             name="Old Name",
             is_holiday=False,
             is_shabbat=False,
-            is_special_shabbat=False
+            is_special_shabbat=False,
         )
 
         # Test with changes
@@ -319,7 +354,7 @@ class HolidaySyncServiceTest(TestCase):
             "name": "New Name",
             "is_holiday": True,
             "is_shabbat": False,
-            "is_special_shabbat": False
+            "is_special_shabbat": False,
         }
 
         updated = HolidaySyncService._update_holiday_if_changed(holiday, defaults)
@@ -343,8 +378,12 @@ class HolidaySyncServiceTest(TestCase):
         # Fix current year at test start to avoid timing issues
         current_year = date.today().year
 
-        with patch("integrations.services.holiday_sync_service.HebcalAPIClient") as mock_api:
-            with patch("integrations.services.holiday_sync_service.IsraeliHolidaysService") as mock_israeli:
+        with patch(
+            "integrations.services.holiday_sync_service.HebcalAPIClient"
+        ) as mock_api:
+            with patch(
+                "integrations.services.holiday_sync_service.IsraeliHolidaysService"
+            ) as mock_israeli:
                 mock_api.fetch_holidays.return_value = []
                 mock_israeli.sync_national_holidays.return_value = (0, 0)
 
@@ -356,8 +395,12 @@ class HolidaySyncServiceTest(TestCase):
 
     def test_sync_year_without_weekly_shabbats(self):
         """Test sync_year with weekly Shabbats disabled"""
-        with patch("integrations.services.holiday_sync_service.HebcalAPIClient") as mock_api:
-            with patch("integrations.services.holiday_sync_service.IsraeliHolidaysService") as mock_israeli:
+        with patch(
+            "integrations.services.holiday_sync_service.HebcalAPIClient"
+        ) as mock_api:
+            with patch(
+                "integrations.services.holiday_sync_service.IsraeliHolidaysService"
+            ) as mock_israeli:
                 mock_api.fetch_holidays.return_value = []
                 mock_israeli.sync_national_holidays.return_value = (0, 0)
 
@@ -371,13 +414,14 @@ class HolidaySyncServiceTest(TestCase):
     @patch("integrations.services.holiday_sync_service.get_shabbat_times")
     def test_generate_weekly_shabbats_error_handling(self, mock_shabbat_times):
         """Test error handling in weekly Shabbat generation"""
+
         # Mock Shabbat times to raise error for some dates
         def side_effect(date_obj):
             if date_obj.day == 10:  # Simulate error on specific date
                 raise Exception("API error")
             return {
                 "shabbat_start": "2025-01-03T16:30:00+02:00",
-                "shabbat_end": "2025-01-04T17:30:00+02:00"
+                "shabbat_end": "2025-01-04T17:30:00+02:00",
             }
 
         mock_shabbat_times.side_effect = side_effect

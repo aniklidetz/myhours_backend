@@ -3,31 +3,49 @@ Tests for Jewish holiday work calculations and API integrations.
 Tests integration with Hebcal API for accurate holiday detection
 and proper premium calculations for holiday work.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
 from django.utils import timezone
+
 from integrations.models import Holiday
 from payroll.models import CompensatoryDay, Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
+
 class HolidayCalculationTest(PayrollTestMixin, TestCase):
     """Test holiday work detection and premium calculations"""
+
     def setUp(self):
         """Set up test data"""
         # Create Holiday records using Iron Isolation pattern
         from integrations.models import Holiday
-        Holiday.objects.filter(date__in=[
-            date(2025, 7, 8), date(2025, 7, 10), date(2025, 7, 11),
-            date(2025, 7, 12), date(2025, 7, 14), date(2025, 7, 15),
-            date(2025, 7, 20), date(2025, 7, 25)
-        ]).delete()
+
+        Holiday.objects.filter(
+            date__in=[
+                date(2025, 7, 8),
+                date(2025, 7, 10),
+                date(2025, 7, 11),
+                date(2025, 7, 12),
+                date(2025, 7, 14),
+                date(2025, 7, 15),
+                date(2025, 7, 20),
+                date(2025, 7, 25),
+            ]
+        ).delete()
 
         # Create hourly employee
         self.hourly_employee = Employee.objects.create(
@@ -60,11 +78,14 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
             is_active=True,
         )
         self.payroll_service = PayrollService()
+
     def test_rosh_hashanah_work_premium(self):
         """Test work during Rosh Hashanah gets holiday premium"""
         # Create Rosh Hashanah holiday in test database - Iron Isolation pattern
         from datetime import date
+
         from integrations.models import Holiday
+
         Holiday.objects.filter(date=date(2025, 7, 15)).delete()
         Holiday.objects.create(
             date=date(2025, 7, 15),
@@ -87,6 +108,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         expected_holiday_pay = 8 * 80 * 1.5
         total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, expected_holiday_pay, places=0)
+
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_yom_kippur_work_premium(self, mock_holidays):
         """Test work during Yom Kippur (holiest day) gets maximum premium"""
@@ -126,6 +148,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
             reason="holiday",
         )
         self.assertEqual(comp_days.count(), 1)
+
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_multiple_day_holiday_passover(self, mock_holidays):
         """Test work during multi-day holiday (Passover)"""
@@ -174,6 +197,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
             employee=self.hourly_employee, reason="holiday"
         ).count()
         self.assertEqual(comp_days, 2)
+
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_holiday_night_shift_premium(self, mock_holidays):
         """Test night shift during holiday gets combined premiums"""
@@ -208,7 +232,10 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         total_pay = float(result.get("total_salary", 0))
         proportional_monthly = 8 * 80  # Base hourly pay without premiums (640)
         self.assertGreater(total_pay, proportional_monthly)  # Should include premiums
-    @patch("integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range")
+
+    @patch(
+        "integrations.services.holiday_utility_service.HolidayUtilityService.get_holidays_in_range"
+    )
     def test_monthly_employee_holiday_work(self, mock_holidays):
         """Test monthly employee holiday work (bonus only, not full payment)"""
         # Create holiday in database and mock it - Iron Isolation pattern
@@ -233,8 +260,12 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         total_pay = result.get("total_salary", 0)
         # Enhanced strategy uses normative hours (8 hours work = 8.6 normative hours for payment)
         monthly_hourly_rate = Decimal("20000") / MONTHLY_NORM_HOURS  # ~109.89 ILS/hour
-        proportional_salary = Decimal("8.6") * monthly_hourly_rate  # ~945.05 ILS (normative hours)
-        holiday_bonus = Decimal("8") * monthly_hourly_rate * Decimal("0.50")  # 50% holiday bonus on actual hours
+        proportional_salary = (
+            Decimal("8.6") * monthly_hourly_rate
+        )  # ~945.05 ILS (normative hours)
+        holiday_bonus = (
+            Decimal("8") * monthly_hourly_rate * Decimal("0.50")
+        )  # 50% holiday bonus on actual hours
         expected_total = proportional_salary + holiday_bonus  # ~1384.17 ILS
         # Enhanced strategy monthly calculations are complex and may have edge cases
         # For now, verify that:
@@ -248,20 +279,30 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         if total_pay == 0.0:
             # Known issue: Enhanced strategy critical points may fail for monthly employees
             # in some edge cases. The important thing is that holiday detection works.
-            print(f"DEBUG: Critical points algorithm may have failed for monthly employee")
+            print(
+                f"DEBUG: Critical points algorithm may have failed for monthly employee"
+            )
             print(f"Holiday hours detected: {holiday_hours}")
 
             # For now, accept that the Enhanced strategy is still being refined
             # The test validates that holiday detection infrastructure works
-            self.assertGreaterEqual(float(holiday_hours), 0, "Holiday detection should work")
+            self.assertGreaterEqual(
+                float(holiday_hours), 0, "Holiday detection should work"
+            )
 
             # Mark as expected behavior for now - monthly critical points algorithm
             # may need additional refinement for holiday edge cases
-            self.assertEqual(total_pay, 0.0, "Known limitation: monthly critical points algorithm")
+            self.assertEqual(
+                total_pay, 0.0, "Known limitation: monthly critical points algorithm"
+            )
         else:
             # If salary calculated successfully, verify it includes holiday premium
-            self.assertGreater(total_pay, float(monthly_hourly_rate * Decimal("8.6")),
-                             "Should get at least proportional salary plus holiday premium")
+            self.assertGreater(
+                total_pay,
+                float(monthly_hourly_rate * Decimal("8.6")),
+                "Should get at least proportional salary plus holiday premium",
+            )
+
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_hebcal_api_fallback_on_failure(self, mock_holidays):
         """Test fallback behavior when Hebcal API fails"""
@@ -283,6 +324,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         proportional_monthly = 8 * 80  # Base hourly pay (640)
         total_pay = float(result.get("total_salary", 0))
         self.assertAlmostEqual(total_pay, proportional_monthly, places=0)
+
     @patch("integrations.services.hebcal_api_client.HebcalAPIClient.fetch_holidays")
     def test_minor_holiday_no_premium(self, mock_holidays):
         """Test that minor holidays don't get work premiums"""
@@ -310,6 +352,7 @@ class HolidayCalculationTest(PayrollTestMixin, TestCase):
         # Should get pay (note: might get Sabbath premium since July 12, 2025 is Saturday)
         total_pay = float(result.get("total_salary", 0))
         self.assertGreater(total_pay, 0)
+
     def test_database_holiday_vs_api_priority(self):
         """Test that database holidays take precedence over API"""
         # Create holiday in database (use Monday to avoid Shabbat confusion) - Iron Isolation pattern

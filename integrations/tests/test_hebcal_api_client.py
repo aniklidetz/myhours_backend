@@ -9,6 +9,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import requests
+
 from django.core.cache import cache
 from django.test import TestCase
 
@@ -51,7 +52,7 @@ class HebcalAPIClientTest(TestCase):
                     "date": "2025-10-05",
                     "category": "other",
                     "subcat": "minor",
-                }
+                },
             ]
         }
         mock_get.return_value = mock_response
@@ -232,7 +233,7 @@ class HebcalAPIClientTest(TestCase):
                     "date": "2025-01-04",
                     "category": "holiday",
                     "subcat": "minor",
-                }
+                },
             ]
         }
 
@@ -268,7 +269,9 @@ class HebcalAPIClientTest(TestCase):
     def test_cache_key_generation(self):
         """Test cache key generation for different parameters"""
         with patch("integrations.services.hebcal_api_client.cache") as mock_cache:
-            with patch("integrations.services.hebcal_api_client.requests.get") as mock_get:
+            with patch(
+                "integrations.services.hebcal_api_client.requests.get"
+            ) as mock_get:
                 mock_cache.get.return_value = None
                 mock_response = MagicMock()
                 mock_response.raise_for_status.return_value = None

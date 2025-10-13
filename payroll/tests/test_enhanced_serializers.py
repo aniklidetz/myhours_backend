@@ -12,7 +12,6 @@ Tests the EnhancedEarningsSerializer and CompensatoryDayDetailSerializer coverin
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, Mock, patch
 
 from rest_framework import serializers
@@ -27,6 +26,11 @@ from payroll.enhanced_serializers import (
     EnhancedEarningsSerializer,
 )
 from payroll.models import CompensatoryDay, Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -689,4 +693,3 @@ class CompensatoryDayDetailSerializerTest(TestCase):
         self.assertEqual(data["reason"], "holiday")
         self.assertFalse(data["is_used"])
         self.assertIsNone(data["date_used"])
-

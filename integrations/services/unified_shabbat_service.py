@@ -19,9 +19,14 @@ from typing import Optional
 
 import pytz
 import requests
+
 from django.core.cache import cache
 
-from payroll.services.contracts import ShabbatTimes, validate_shabbat_times, create_fallback_shabbat_times
+from payroll.services.contracts import (
+    ShabbatTimes,
+    create_fallback_shabbat_times,
+    validate_shabbat_times,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,9 @@ class UnifiedShabbatService:
 
     # Jewish law constants
     SHABBAT_START_BUFFER_MINUTES = 18  # Candle lighting time (18 min before sunset)
-    SHABBAT_END_BUFFER_MINUTES = 42    # Havdalah time (42 min after sunset, 3 stars appear)
+    SHABBAT_END_BUFFER_MINUTES = (
+        42  # Havdalah time (42 min after sunset, 3 stars appear)
+    )
 
     def __init__(self):
         """Initialize service with logging setup"""
@@ -64,7 +71,7 @@ class UnifiedShabbatService:
         date_obj: date,
         lat: Optional[float] = None,
         lng: Optional[float] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> ShabbatTimes:
         """
         Get precise Shabbat start and end times in Israeli timezone.
@@ -118,7 +125,7 @@ class UnifiedShabbatService:
             logger.error(
                 f"Error in UnifiedShabbatService for {date_obj}",
                 extra={"error": str(e), "lat": lat, "lng": lng},
-                exc_info=True
+                exc_info=True,
             )
 
             # Return fallback times - always works
@@ -126,13 +133,15 @@ class UnifiedShabbatService:
             fallback_result = create_fallback_shabbat_times(
                 friday_date=friday_date.isoformat(),
                 calculation_method="api_failed",
-                coordinates={"lat": lat, "lng": lng}
+                coordinates={"lat": lat, "lng": lng},
             )
 
             # Cache fallback to prevent repeated API failures
             if use_cache:
                 cache_key = f"{self.CACHE_KEY_PREFIX}{friday_date}_{lat}_{lng}"
-                cache.set(cache_key, fallback_result, self.CACHE_TIMEOUT // 4)  # Shorter cache for fallbacks
+                cache.set(
+                    cache_key, fallback_result, self.CACHE_TIMEOUT // 4
+                )  # Shorter cache for fallbacks
 
             return fallback_result
 
@@ -148,11 +157,7 @@ class UnifiedShabbatService:
             return date_obj - timedelta(days=days_back_to_friday)
 
     def _calculate_precise_times(
-        self,
-        friday_date: date,
-        saturday_date: date,
-        lat: float,
-        lng: float
+        self, friday_date: date, saturday_date: date, lat: float, lng: float
     ) -> ShabbatTimes:
         """
         Calculate precise Shabbat times using two API calls.
@@ -178,7 +183,9 @@ class UnifiedShabbatService:
 
             # Parse Saturday sunset or estimate
             if saturday_sunset_str:
-                saturday_sunset = self._parse_and_convert_to_israel_tz(saturday_sunset_str)
+                saturday_sunset = self._parse_and_convert_to_israel_tz(
+                    saturday_sunset_str
+                )
                 calculation_method = "api_precise"
             else:
                 # Fallback: estimate Saturday sunset (typically 1-2 minutes later)
@@ -187,8 +194,12 @@ class UnifiedShabbatService:
                 logger.info(f"Using estimated Saturday sunset for {saturday_date}")
 
             # Calculate Shabbat times according to Jewish law
-            shabbat_start = friday_sunset - timedelta(minutes=self.SHABBAT_START_BUFFER_MINUTES)
-            shabbat_end = saturday_sunset + timedelta(minutes=self.SHABBAT_END_BUFFER_MINUTES)
+            shabbat_start = friday_sunset - timedelta(
+                minutes=self.SHABBAT_START_BUFFER_MINUTES
+            )
+            shabbat_end = saturday_sunset + timedelta(
+                minutes=self.SHABBAT_END_BUFFER_MINUTES
+            )
 
             # Build result conforming to ShabbatTimes contract
             result = ShabbatTimes(
@@ -201,7 +212,7 @@ class UnifiedShabbatService:
                 calculation_method=calculation_method,
                 coordinates={"lat": lat, "lng": lng},
                 friday_date=friday_date.isoformat(),
-                saturday_date=saturday_date.isoformat()
+                saturday_date=saturday_date.isoformat(),
             )
 
             logger.info(
@@ -225,7 +236,7 @@ class UnifiedShabbatService:
             "lat": lat,
             "lng": lng,
             "date": date_obj.isoformat(),
-            "formatted": 0  # Get UTC time in ISO format
+            "formatted": 0,  # Get UTC time in ISO format
         }
 
         try:
@@ -243,7 +254,9 @@ class UnifiedShabbatService:
             return data.get("results", {})
 
         except requests.RequestException as e:
-            logger.error(f"Network error calling sunrise-sunset API for {date_obj}: {e}")
+            logger.error(
+                f"Network error calling sunrise-sunset API for {date_obj}: {e}"
+            )
             return None
         except Exception as e:
             logger.error(f"Unexpected API error for {date_obj}: {e}")
@@ -280,7 +293,7 @@ class UnifiedShabbatService:
         self,
         check_time: datetime,
         lat: Optional[float] = None,
-        lng: Optional[float] = None
+        lng: Optional[float] = None,
     ) -> bool:
         """
         Check if a given datetime falls within Shabbat time.
@@ -296,7 +309,9 @@ class UnifiedShabbatService:
         try:
             # Ensure timezone-aware
             if check_time.tzinfo is None:
-                logger.warning("check_time should be timezone-aware, assuming Israeli time")
+                logger.warning(
+                    "check_time should be timezone-aware, assuming Israeli time"
+                )
                 check_time = self.ISRAEL_TZ.localize(check_time)
 
             # Convert to Israeli timezone for consistency
@@ -304,9 +319,7 @@ class UnifiedShabbatService:
 
             # Get Shabbat times for this week
             shabbat_times = self.get_shabbat_times(
-                date_obj=check_time.date(),
-                lat=lat,
-                lng=lng
+                date_obj=check_time.date(), lat=lat, lng=lng
             )
 
             # Parse Shabbat start/end times
@@ -325,7 +338,7 @@ class UnifiedShabbatService:
         return {
             "api_calls_made": self._api_calls_made,
             "cache_hits": self._cache_hits,
-            "service_version": "unified_v1.0"
+            "service_version": "unified_v1.0",
         }
 
 
@@ -335,10 +348,7 @@ unified_shabbat_service = UnifiedShabbatService()
 
 # Convenience functions for backward compatibility during migration
 def get_shabbat_times(
-    date_obj: date,
-    lat: float = 31.7683,
-    lng: float = 35.2137,
-    use_cache: bool = True
+    date_obj: date, lat: float = 31.7683, lng: float = 35.2137, use_cache: bool = True
 ) -> ShabbatTimes:
     """
     Convenience function that uses the global unified service instance.
@@ -346,30 +356,21 @@ def get_shabbat_times(
     This provides a simple import path during migration from old services.
     """
     return unified_shabbat_service.get_shabbat_times(
-        date_obj=date_obj,
-        lat=lat,
-        lng=lng,
-        use_cache=use_cache
+        date_obj=date_obj, lat=lat, lng=lng, use_cache=use_cache
     )
 
 
 def is_shabbat_time(
-    check_time: datetime,
-    lat: float = 31.7683,
-    lng: float = 35.2137
+    check_time: datetime, lat: float = 31.7683, lng: float = 35.2137
 ) -> bool:
     """Convenience function for Shabbat time checking"""
     return unified_shabbat_service.is_shabbat_time(
-        check_time=check_time,
-        lat=lat,
-        lng=lng
+        check_time=check_time, lat=lat, lng=lng
     )
 
 
 def get_sunset_time(
-    date_obj: date,
-    lat: float = 31.7683,
-    lng: float = 35.2137
+    date_obj: date, lat: float = 31.7683, lng: float = 35.2137
 ) -> Optional[datetime]:
     """
     Get sunset time for a specific date.
@@ -398,9 +399,7 @@ def get_sunset_time(
 
 
 def get_nightfall_time(
-    date_obj: date,
-    lat: float = 31.7683,
-    lng: float = 35.2137
+    date_obj: date, lat: float = 31.7683, lng: float = 35.2137
 ) -> Optional[datetime]:
     """
     Get nightfall (3 stars) time for a specific date.

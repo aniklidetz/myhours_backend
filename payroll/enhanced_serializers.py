@@ -1,18 +1,22 @@
 from decimal import Decimal, InvalidOperation
+
 from rest_framework import serializers
 
 # Tests patch this symbol: payroll.enhanced_serializers.PayrollCalculationService
 try:
-    from .services.payroll_service import PayrollService as _RealService  # will be mocked in tests
+    from .services.payroll_service import (
+        PayrollService as _RealService,  # will be mocked in tests
+    )
 except Exception:  # pragma: no cover - safe fallback
     _RealService = None
+
 
 class PayrollCalculationService:  # type: ignore
     def __init__(self, employee, year: int, month: int):
         self.employee = employee
         self.year = year
         self.month = month
-    
+
     def calculate_monthly_salary(self):
         if _RealService is None:
             return {}
@@ -24,7 +28,9 @@ class PayrollCalculationService:  # type: ignore
         except Exception:
             return {}
 
+
 from .models import CompensatoryDay, Salary
+
 
 def safe_decimal(value, default=Decimal("0")):
     """Safely convert any value to Decimal"""
@@ -36,6 +42,7 @@ def safe_decimal(value, default=Decimal("0")):
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return default
+
 
 ISRAELI_DAILY_NORM_HOURS = Decimal("8.6")
 DAILY_NORM_HOURS = Decimal("8.6")
@@ -65,23 +72,27 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         try:
             salary = Salary.objects.filter(employee=employee, is_active=True).first()
             if not salary:
-                salary = Salary.objects.filter(employee=employee).order_by("-id").first()
+                salary = (
+                    Salary.objects.filter(employee=employee).order_by("-id").first()
+                )
         except:
             pass
 
         # 4) Build response minimally sufficient for tests
-        calc_type = getattr(salary, "calculation_type", "monthly") if salary else "monthly"
-        
+        calc_type = (
+            getattr(salary, "calculation_type", "monthly") if salary else "monthly"
+        )
+
         # Get daily calculations
         daily_calculations = result.get("daily_calculations", [])
-        
+
         # Build compensatory balance
         comp_balance = result.get("compensatory_balance", {})
         if not comp_balance:
             comp_balance = {
                 "total_unused": 0,
                 "holiday": {"unused": 0},
-                "sabbath": {"unused": 0}
+                "sabbath": {"unused": 0},
             }
 
         return {
@@ -97,14 +108,31 @@ class EnhancedEarningsSerializer(serializers.Serializer):
                 "currency": result.get("currency", "ILS"),
                 "total_hours": float(result.get("total_hours", 0) or 0),
                 "total_salary": float(result.get("total_salary", 0) or 0),
-                "worked_days": len([d for d in daily_calculations if float(d.get("hours_worked", 0) or 0) > 0]),
-                "compensatory_days_earned": int(result.get("compensatory_days_earned", 0) or len([d for d in daily_calculations if bool(d.get("compensatory_day_created", False))])),
+                "worked_days": len(
+                    [
+                        d
+                        for d in daily_calculations
+                        if float(d.get("hours_worked", 0) or 0) > 0
+                    ]
+                ),
+                "compensatory_days_earned": int(
+                    result.get("compensatory_days_earned", 0)
+                    or len(
+                        [
+                            d
+                            for d in daily_calculations
+                            if bool(d.get("compensatory_day_created", False))
+                        ]
+                    )
+                ),
                 "work_sessions": int(result.get("work_sessions", 0) or 0),
                 "period": f"{year:04d}-{month:02d}",
             },
             "hours_breakdown": self._build_hours_breakdown(result),
             "pay_breakdown": self._build_pay_breakdown(result, salary),
-            "compensatory_days": self._build_compensatory_breakdown(comp_balance, daily_calculations),
+            "compensatory_days": self._build_compensatory_breakdown(
+                comp_balance, daily_calculations
+            ),
             "legal_compliance": self._build_compliance_info(result),
             "rates_applied": self._build_rates_info(instance),
             "daily_breakdown": self._build_daily_breakdown(daily_calculations),
@@ -117,11 +145,31 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         return {
             "regular_hours": float(result.get("regular_hours", 0) or 0),
             "overtime": {
-                "first_two_hours": float(result.get("overtime_hours_1", 0) or breakdown.get("overtime_hours_1", 0) or 0),
-                "beyond": float(result.get("overtime_hours_2", 0) or breakdown.get("overtime_hours_2", 0) or 0),
-                "first_2h_per_day": float(result.get("overtime_hours_1", 0) or breakdown.get("overtime_hours_1", 0) or 0),
-                "additional_hours": float(result.get("overtime_hours_2", 0) or breakdown.get("overtime_hours_2", 0) or 0),
-                "beyond_2h": float(result.get("overtime_hours_2", 0) or breakdown.get("overtime_hours_2", 0) or 0),
+                "first_two_hours": float(
+                    result.get("overtime_hours_1", 0)
+                    or breakdown.get("overtime_hours_1", 0)
+                    or 0
+                ),
+                "beyond": float(
+                    result.get("overtime_hours_2", 0)
+                    or breakdown.get("overtime_hours_2", 0)
+                    or 0
+                ),
+                "first_2h_per_day": float(
+                    result.get("overtime_hours_1", 0)
+                    or breakdown.get("overtime_hours_1", 0)
+                    or 0
+                ),
+                "additional_hours": float(
+                    result.get("overtime_hours_2", 0)
+                    or breakdown.get("overtime_hours_2", 0)
+                    or 0
+                ),
+                "beyond_2h": float(
+                    result.get("overtime_hours_2", 0)
+                    or breakdown.get("overtime_hours_2", 0)
+                    or 0
+                ),
             },
             "night": {
                 "first_hours": float(result.get("night_hours_1", 0) or 0),
@@ -138,30 +186,48 @@ class EnhancedEarningsSerializer(serializers.Serializer):
     def _build_pay_breakdown(self, result, salary=None):
         # Handle both salary object and mock/context instance
         actual_salary = salary
-        if hasattr(salary, 'employee'):
+        if hasattr(salary, "employee"):
             # It's a context instance, get the actual salary
             try:
-                actual_salary = Salary.objects.filter(employee=salary.employee, is_active=True).first()
+                actual_salary = Salary.objects.filter(
+                    employee=salary.employee, is_active=True
+                ).first()
                 if not actual_salary:
-                    actual_salary = Salary.objects.filter(employee=salary.employee).order_by("-id").first()
+                    actual_salary = (
+                        Salary.objects.filter(employee=salary.employee)
+                        .order_by("-id")
+                        .first()
+                    )
             except:
                 actual_salary = None
-        
+
         # Use result fields directly to avoid decimal conversion errors
         rates = result.get("rates", {})
-        
+
         # Get base rates and payments from result
-        base_regular = safe_decimal(result.get("base_salary", 0) or result.get("proportional_monthly", 0))
-        holiday_base = safe_decimal(result.get("holiday_base", 0) or result.get("holiday_extra", 0))
-        sabbath_base = safe_decimal(result.get("sabbath_base", 0) or result.get("shabbat_extra", 0))
-        
+        base_regular = safe_decimal(
+            result.get("base_salary", 0) or result.get("proportional_monthly", 0)
+        )
+        holiday_base = safe_decimal(
+            result.get("holiday_base", 0) or result.get("holiday_extra", 0)
+        )
+        sabbath_base = safe_decimal(
+            result.get("sabbath_base", 0) or result.get("shabbat_extra", 0)
+        )
+
         # Get overtime payments
         overtime_125 = safe_decimal(result.get("overtime_125_pay", 0))
         overtime_150 = safe_decimal(result.get("overtime_150_pay", 0))
-        
+
         # For hourly employees, calculate from salary rate directly if available
-        if actual_salary and getattr(actual_salary, "calculation_type", "monthly") == "hourly":
-            hourly_rate = safe_decimal(getattr(actual_salary, "hourly_rate", 0) or getattr(actual_salary, "monthly_hourly", 0))
+        if (
+            actual_salary
+            and getattr(actual_salary, "calculation_type", "monthly") == "hourly"
+        ):
+            hourly_rate = safe_decimal(
+                getattr(actual_salary, "hourly_rate", 0)
+                or getattr(actual_salary, "monthly_hourly", 0)
+            )
             if hourly_rate > 0:
                 regular_hours = safe_decimal(result.get("regular_hours", 0))
                 holiday_hours = safe_decimal(result.get("holiday_hours", 0))
@@ -171,7 +237,7 @@ class EnhancedEarningsSerializer(serializers.Serializer):
                 sabbath_hours = safe_decimal(result.get("sabbath_hours", 0))
                 overtime_1_hours = safe_decimal(result.get("overtime_hours_1", 0))
                 overtime_2_hours = safe_decimal(result.get("overtime_hours_2", 0))
-                
+
                 base_regular = hourly_rate * regular_hours
                 holiday_base = hourly_rate * holiday_hours * safe_decimal("1.50")
                 sabbath_base = hourly_rate * sabbath_hours * safe_decimal("1.50")
@@ -189,7 +255,7 @@ class EnhancedEarningsSerializer(serializers.Serializer):
                 sabbath_hours = safe_decimal(result.get("sabbath_hours", 0))
                 overtime_1_hours = safe_decimal(result.get("overtime_hours_1", 0))
                 overtime_2_hours = safe_decimal(result.get("overtime_hours_2", 0))
-                
+
                 base_regular = hourly_rate * regular_hours
                 holiday_base = hourly_rate * holiday_hours * safe_decimal("1.50")
                 sabbath_base = hourly_rate * sabbath_hours * safe_decimal("1.50")
@@ -197,7 +263,7 @@ class EnhancedEarningsSerializer(serializers.Serializer):
                 overtime_150 = hourly_rate * overtime_2_hours * safe_decimal("1.50")
 
         minimum_wage = safe_decimal(result.get("minimum_wage_supplement", 0))
-        
+
         return {
             "base_regular_pay": float(base_regular),
             "special_day_pay": {
@@ -219,17 +285,19 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         for daily_result in daily_calculations:
             is_holiday = bool(daily_result.get("is_holiday"))
             is_sabbath = bool(daily_result.get("is_sabbath"))
-            day_type = "holiday" if is_holiday else ("sabbath" if is_sabbath else "regular")
-            
+            day_type = (
+                "holiday" if is_holiday else ("sabbath" if is_sabbath else "regular")
+            )
+
             day_breakdown = daily_result.get("breakdown", {})
-            
+
             # Only include positive values in breakdown (as tests expect)
             breakdown_data = {}
             if day_type == "regular":
                 regular = float(day_breakdown.get("regular_hours", 0) or 0)
                 overtime_125 = float(day_breakdown.get("overtime_hours_1", 0) or 0)
                 overtime_150 = float(day_breakdown.get("overtime_hours_2", 0) or 0)
-                
+
                 if regular > 0:
                     breakdown_data["regular"] = regular
                 if overtime_125 > 0:
@@ -255,15 +323,25 @@ class EnhancedEarningsSerializer(serializers.Serializer):
             day_info = {
                 "date": date,
                 "type": day_type,
-                "sabbath_type": daily_result.get("sabbath_type") if is_sabbath else None,
-                "holiday_name": daily_result.get("holiday_name") if is_holiday else None,
+                "sabbath_type": (
+                    daily_result.get("sabbath_type") if is_sabbath else None
+                ),
+                "holiday_name": (
+                    daily_result.get("holiday_name") if is_holiday else None
+                ),
                 "hours_worked": float(daily_result.get("hours_worked", 0) or 0),
-                "gross_pay": float(daily_result.get("total_salary", 0) or daily_result.get("total_pay", 0) or 0),
+                "gross_pay": float(
+                    daily_result.get("total_salary", 0)
+                    or daily_result.get("total_pay", 0)
+                    or 0
+                ),
                 "breakdown": breakdown_data,
-                "compensatory_day": bool(daily_result.get("compensatory_day_created", False)),
+                "compensatory_day": bool(
+                    daily_result.get("compensatory_day_created", False)
+                ),
             }
             breakdown.append(day_info)
-            
+
         return breakdown
 
     def _build_compliance_info(self, result):
@@ -280,7 +358,8 @@ class EnhancedEarningsSerializer(serializers.Serializer):
             "warnings": warnings,
             "weekly_overtime_status": status,
             "within_daily_limits": len(violations) == 0,
-            "within_weekly_limits": status["current_week_overtime"] <= status["max_allowed"],
+            "within_weekly_limits": status["current_week_overtime"]
+            <= status["max_allowed"],
         }
 
     # NB: tests call with two arguments
@@ -288,60 +367,83 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         # Handle both dict balance and CompensatoryDay objects list
         if isinstance(current_period_days, list) and current_period_days:
             # If current_period_days contains CompensatoryDay objects
-            if hasattr(current_period_days[0], 'reason'):
+            if hasattr(current_period_days[0], "reason"):
                 earned = len(current_period_days)
-                used = sum(1 for day in current_period_days if hasattr(day, 'date_used') and day.date_used)
-                
+                used = sum(
+                    1
+                    for day in current_period_days
+                    if hasattr(day, "date_used") and day.date_used
+                )
+
                 details = []
                 for comp_day in current_period_days:
                     detail = {
-                        "date": comp_day.date_earned.isoformat() if hasattr(comp_day.date_earned, 'isoformat') else str(comp_day.date_earned),
+                        "date": (
+                            comp_day.date_earned.isoformat()
+                            if hasattr(comp_day.date_earned, "isoformat")
+                            else str(comp_day.date_earned)
+                        ),
                         "reason": comp_day.reason,
                         "is_used": bool(comp_day.date_used),
                     }
-                    
+
                     # Add holiday name if it's a holiday
                     if comp_day.reason == "holiday":
                         try:
                             from integrations.models import Holiday
-                            holiday = Holiday.objects.filter(date=comp_day.date_earned).first()
-                            if holiday and hasattr(holiday, 'name'):
+
+                            holiday = Holiday.objects.filter(
+                                date=comp_day.date_earned
+                            ).first()
+                            if holiday and hasattr(holiday, "name"):
                                 detail["holiday_name"] = holiday.name
                         except:
                             pass
-                    
+
                     details.append(detail)
-                
+
                 # Use balance parameter for total_balance if provided, otherwise calculate
                 if isinstance(balance, dict) and balance:
                     total_balance = {
-                        "unused_holiday": int(balance.get("holiday", {}).get("unused", 0) or 0),
-                        "unused_sabbath": int(balance.get("sabbath", {}).get("unused", 0) or 0), 
+                        "unused_holiday": int(
+                            balance.get("holiday", {}).get("unused", 0) or 0
+                        ),
+                        "unused_sabbath": int(
+                            balance.get("sabbath", {}).get("unused", 0) or 0
+                        ),
                         "total_unused": int(balance.get("unused", 0) or 0),
                     }
                 else:
                     total_balance = {
-                        "unused_holiday": sum(1 for d in current_period_days if d.reason == "holiday" and not d.date_used),
-                        "unused_sabbath": sum(1 for d in current_period_days if d.reason == "sabbath" and not d.date_used),
+                        "unused_holiday": sum(
+                            1
+                            for d in current_period_days
+                            if d.reason == "holiday" and not d.date_used
+                        ),
+                        "unused_sabbath": sum(
+                            1
+                            for d in current_period_days
+                            if d.reason == "sabbath" and not d.date_used
+                        ),
                         "total_unused": earned - used,
                     }
-                
+
                 return {
                     "earned_this_period": earned,
                     "used_this_period": used,
                     "total_balance": total_balance,
                     "details": details,
                 }
-        
+
         # Handle regular dict-based approach
         total_unused = int(balance.get("total_unused", 0) or 0)
         unused_holiday = int(balance.get("holiday", {}).get("unused", 0) or 0)
         unused_sabbath = int(balance.get("sabbath", {}).get("unused", 0) or 0)
-        
+
         details = []
         earned = 0
         used = 0
-        
+
         # Count earned days from daily calculations
         for day in current_period_days or []:
             if day.get("compensatory_day_created"):
@@ -363,14 +465,16 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         }
 
     def _build_attendance_info(self, result):
-        working_days = int(result.get("working_days", 0) or result.get("total_working_days", 0) or 0)
+        working_days = int(
+            result.get("working_days", 0) or result.get("total_working_days", 0) or 0
+        )
         worked_days = int(result.get("worked_days", 0) or 0)
         days_missed = max(0, working_days - worked_days)
-        
+
         attendance_rate = 0
         if working_days > 0:
             attendance_rate = round((worked_days / working_days) * 100, 2)
-        
+
         return {
             "working_days_in_period": working_days,
             "days_worked": worked_days,
@@ -383,16 +487,26 @@ class EnhancedEarningsSerializer(serializers.Serializer):
         salary = None
         if employee:
             try:
-                salary = Salary.objects.filter(employee=employee, is_active=True).first()
+                salary = Salary.objects.filter(
+                    employee=employee, is_active=True
+                ).first()
                 if not salary:
-                    salary = Salary.objects.filter(employee=employee).order_by("-id").first()
+                    salary = (
+                        Salary.objects.filter(employee=employee).order_by("-id").first()
+                    )
             except:
                 pass
 
         base_hourly = Decimal("0")
         if salary:
             if getattr(salary, "calculation_type", "hourly") == "hourly":
-                base_hourly = Decimal(str(getattr(salary, "monthly_hourly", 0) or getattr(salary, "hourly_rate", 0) or 0))
+                base_hourly = Decimal(
+                    str(
+                        getattr(salary, "monthly_hourly", 0)
+                        or getattr(salary, "hourly_rate", 0)
+                        or 0
+                    )
+                )
             else:
                 base_salary = Decimal(str(getattr(salary, "base_salary", 0) or 0))
                 if MONTHLY_NORM_HOURS and MONTHLY_NORM_HOURS > 0:
@@ -414,7 +528,7 @@ class EnhancedEarningsSerializer(serializers.Serializer):
 
 class CompensatoryDayDetailSerializer(serializers.ModelSerializer):
     """Detailed compensatory day serializer"""
-    
+
     employee_name = serializers.ReadOnlyField(source="employee.get_full_name")
     is_used = serializers.SerializerMethodField()
     holiday_info = serializers.SerializerMethodField()

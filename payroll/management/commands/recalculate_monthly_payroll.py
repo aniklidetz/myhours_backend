@@ -4,9 +4,9 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from payroll.models import DailyPayrollCalculation
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -77,13 +77,17 @@ class Command(BaseCommand):
                 # Store old values for comparison
                 old_total_pay = calc.total_pay
                 old_total_gross = calc.total_gross_pay
-                old_bonus_ot1_pay = getattr(calc, 'bonus_overtime_pay_1', Decimal('0'))
-                old_bonus_ot2_pay = getattr(calc, 'bonus_overtime_pay_2', Decimal('0'))
+                old_bonus_ot1_pay = getattr(calc, "bonus_overtime_pay_1", Decimal("0"))
+                old_bonus_ot2_pay = getattr(calc, "bonus_overtime_pay_2", Decimal("0"))
 
                 # Determine employee type
-                employee_type = EmployeeType.HOURLY if calc.employee.salaries.filter(
-                    is_active=True, calculation_type='hourly'
-                ).exists() else EmployeeType.MONTHLY
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if calc.employee.salaries.filter(
+                        is_active=True, calculation_type="hourly"
+                    ).exists()
+                    else EmployeeType.MONTHLY
+                )
 
                 # Recalculate using new PayrollService
                 service = PayrollService()
@@ -94,7 +98,7 @@ class Command(BaseCommand):
                     user_id=1,  # System user for management commands
                     employee_type=employee_type,
                     force_recalculate=True,
-                    fast_mode=False  # Enable database persistence
+                    fast_mode=False,  # Enable database persistence
                 )
 
                 # Calculate new values
@@ -110,16 +114,21 @@ class Command(BaseCommand):
                         # Update the record with new unified structure
                         calc.total_pay = new_total_salary  # Legacy field
                         calc.total_gross_pay = new_total_salary  # Main field
-                        
+
                         # Update base_pay and bonus_pay from calculation result
                         # Note: New service calculates these automatically
                         # We approximate breakdown for compatibility
                         regular_hours = Decimal(str(result.get("regular_hours", 0)))
                         overtime_hours = Decimal(str(result.get("overtime_hours", 0)))
-                        
+
                         if calc.employee.salaries.filter(is_active=True).first():
-                            salary = calc.employee.salaries.filter(is_active=True).first()
-                            if salary.calculation_type == 'hourly' and salary.hourly_rate:
+                            salary = calc.employee.salaries.filter(
+                                is_active=True
+                            ).first()
+                            if (
+                                salary.calculation_type == "hourly"
+                                and salary.hourly_rate
+                            ):
                                 hourly_rate = salary.hourly_rate
                                 calc.base_pay = regular_hours * hourly_rate
                                 calc.bonus_pay = new_total_salary - calc.base_pay
@@ -127,11 +136,15 @@ class Command(BaseCommand):
                                 # For monthly employees, split based on hours proportion
                                 total_hours = regular_hours + overtime_hours
                                 if total_hours > 0:
-                                    calc.base_pay = new_total_salary * (regular_hours / total_hours)
-                                    calc.bonus_pay = new_total_salary * (overtime_hours / total_hours)
+                                    calc.base_pay = new_total_salary * (
+                                        regular_hours / total_hours
+                                    )
+                                    calc.bonus_pay = new_total_salary * (
+                                        overtime_hours / total_hours
+                                    )
                                 else:
                                     calc.base_pay = new_total_salary
-                                    calc.bonus_pay = Decimal('0')
+                                    calc.bonus_pay = Decimal("0")
 
                         # Ensure updated_at is updated
                         import time

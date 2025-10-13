@@ -9,8 +9,8 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from django.db.models import Q, Sum
 from django.db import DatabaseError, OperationalError
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from users.models import Employee
@@ -28,10 +28,12 @@ from .models import (
     Salary,
 )
 from .serializers import SalarySerializer
-# Import new PayrollService from services package
-from .services.payroll_service import PayrollService
 from .services.contracts import CalculationContext, PayrollResult
 from .services.enums import CalculationStrategy
+
+# Import new PayrollService from services package
+from .services.payroll_service import PayrollService
+
 # Legacy service import removed - migration to new PayrollService completed
 
 # Legacy adapters removed - migration to PayrollService completed
@@ -64,7 +66,7 @@ def payroll_list(request):
         page = int(request.GET.get("page", 1))
         limit = int(request.GET.get("limit", 10))
         search = request.GET.get("search", "").strip()
-        
+
         # Calculate offset for pagination
         offset = (page - 1) * limit
 
@@ -88,17 +90,19 @@ def payroll_list(request):
 
         user = request.user
         employee_profile = get_user_employee_profile(request.user)
-        
+
         # Check if user has admin/accountant privileges through employee role or Django staff status
         is_admin_by_staff = getattr(user, "is_staff", False)
         is_accountant_by_attr = getattr(user, "is_accountant", False)
         is_admin_by_role = employee_profile and employee_profile.role == "admin"
-        is_accountant_by_role = employee_profile and employee_profile.role == "accountant"
-        
+        is_accountant_by_role = (
+            employee_profile and employee_profile.role == "accountant"
+        )
+
         # Combined admin/accountant check
         is_admin = is_admin_by_staff or is_admin_by_role
         is_accountant = is_accountant_by_attr or is_accountant_by_role
-        
+
         # All users need employee profile for payroll access
         if not employee_profile:
             logger.warning(f"User {request.user.username} has no employee profile")
@@ -106,7 +110,7 @@ def payroll_list(request):
                 {"error": "User does not have an employee profile"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-            
+
         user_role = employee_profile.role
 
         logger.info("User role checked", extra={"role": user_role})
@@ -115,38 +119,42 @@ def payroll_list(request):
         _ = Employee.objects.filter(pk__isnull=False).exists()
 
         # Build base queryset
-        employees_queryset = Employee.objects.with_optimized_annotations().filter(salaries__is_active=True)
-        
+        employees_queryset = Employee.objects.with_optimized_annotations().filter(
+            salaries__is_active=True
+        )
+
         # Check if specific employee is requested
         employee_id_filter = request.GET.get("employee_id")
-        
+
         if user_role in ["admin", "accountant"]:
             # Admin - can filter by employee_id or search
             if employee_id_filter:
                 # Filter by specific employee
                 try:
                     employee_id_filter = int(employee_id_filter)
-                    employees_queryset = employees_queryset.filter(id=employee_id_filter)
+                    employees_queryset = employees_queryset.filter(
+                        id=employee_id_filter
+                    )
                     logger.info(
-                        "Admin filtering by employee_id", 
-                        extra={"employee_id": employee_id_filter}
+                        "Admin filtering by employee_id",
+                        extra={"employee_id": employee_id_filter},
                     )
                 except (ValueError, TypeError):
-                    logger.warning(f"Invalid employee_id parameter: {employee_id_filter}")
+                    logger.warning(
+                        f"Invalid employee_id parameter: {employee_id_filter}"
+                    )
             elif search:
                 # Add search functionality - search by name or email
                 from django.db.models import Q
+
                 employees_queryset = employees_queryset.filter(
-                    Q(first_name__icontains=search) |
-                    Q(last_name__icontains=search) |
-                    Q(email__icontains=search)
+                    Q(first_name__icontains=search)
+                    | Q(last_name__icontains=search)
+                    | Q(email__icontains=search)
                 )
             logger.info(
-                "Admin payroll view", 
-                extra={
-                    "search_term": search,
-                    "employee_filter": employee_id_filter
-                }
+                "Admin payroll view",
+                extra={"search_term": search, "employee_filter": employee_id_filter},
             )
         else:
             # Regular employee - can only see their own data
@@ -157,16 +165,12 @@ def payroll_list(request):
 
         # Get total count for pagination metadata
         total_count = employees_queryset.count()
-        
+
         # Apply pagination with proper prefetching to avoid N+1
         employees = (
-            employees_queryset
-            .select_related('user')  # Avoid N+1 for user data
-            .prefetch_related(
-                'salaries',
-                'work_logs'  # Pre-fetch work logs if needed
-            )
-            .distinct()[offset:offset + limit]
+            employees_queryset.select_related("user")  # Avoid N+1 for user data
+            .prefetch_related("salaries", "work_logs")  # Pre-fetch work logs if needed
+            .distinct()[offset : offset + limit]
         )
 
         # Get year and month from parameters
@@ -200,7 +204,9 @@ def payroll_list(request):
         try:
             existing_summaries = (
                 MonthlyPayrollSummary.objects.filter(
-                    employee__in=employees, year=current_date.year, month=current_date.month
+                    employee__in=employees,
+                    year=current_date.year,
+                    month=current_date.month,
                 )
                 .select_related("employee")
                 .prefetch_related("employee__salaries")
@@ -213,8 +219,8 @@ def payroll_list(request):
                     "year": current_date.year,
                     "month": current_date.month,
                     "error": str(db_error),
-                    "action": "db_fetch_error"
-                }
+                    "action": "db_fetch_error",
+                },
             )
             return Response(
                 {"error": "Database error occurred"},
@@ -226,7 +232,9 @@ def payroll_list(request):
 
         # If we have ready data for all employees - use it
         # Count employees without converting to list yet
-        employees_count = employees.count() if hasattr(employees, 'count') else len(employees)
+        employees_count = (
+            employees.count() if hasattr(employees, "count") else len(employees)
+        )
         if len(summary_dict) == employees_count:
             logger.info("Using cached payroll data for all employees")
             payroll_data = []
@@ -263,15 +271,19 @@ def payroll_list(request):
                 )
         else:
             # Use new PayrollService to calculate and save to DB
-            logger.info(f"Calculating payroll with new PayrollService for {current_date.year}-{current_date.month:02d}")
-            
+            logger.info(
+                f"Calculating payroll with new PayrollService for {current_date.year}-{current_date.month:02d}"
+            )
+
             payroll_data = []
             calculations_performed = 0
             errors_encountered = 0
-            
+
             try:
-                payroll_service = PayrollService(enable_fallback=True, enable_caching=True)
-                
+                payroll_service = PayrollService(
+                    enable_fallback=True, enable_caching=True
+                )
+
                 for employee in employees:
                     try:
                         # Create calculation context
@@ -283,37 +295,45 @@ def payroll_list(request):
                             force_recalculate=False,  # Use cache if available
                             fast_mode=False,  # Full calculation with DB save
                             include_breakdown=True,
-                            include_daily_details=False
+                            include_daily_details=False,
                         )
-                        
+
                         # Calculate using the new service
                         result = payroll_service.calculate(context)
                         calculations_performed += 1
-                        
+
                         # Convert result to API format (result is a dict, not PayrollResult object)
-                        payroll_data.append({
-                            "id": employee.id,
-                            "employee": {
+                        payroll_data.append(
+                            {
                                 "id": employee.id,
-                                "name": employee.get_full_name(),
-                                "email": employee.email,
-                                "role": employee.role,
-                            },
-                            "calculation_type": result["metadata"].get("employee_type", "unknown"),
-                            "currency": result["metadata"].get("currency", "ILS"),
-                            "total_salary": float(result["total_salary"]),
-                            "total_hours": float(result["total_hours"]),
-                            "worked_days": result["breakdown"].get("worked_days", 0),
-                            "work_sessions": result["breakdown"].get("work_sessions_count", 0),
-                            "period": f"{current_date.year}-{current_date.month:02d}",
-                            "status": "calculated_and_saved",
-                            "calculation_method": "new_payroll_service",
-                            "regular_hours": float(result["regular_hours"]),
-                            "overtime_hours": float(result["overtime_hours"]),
-                            "holiday_hours": float(result["holiday_hours"]),
-                            "sabbath_hours": float(result["shabbat_hours"]),
-                        })
-                        
+                                "employee": {
+                                    "id": employee.id,
+                                    "name": employee.get_full_name(),
+                                    "email": employee.email,
+                                    "role": employee.role,
+                                },
+                                "calculation_type": result["metadata"].get(
+                                    "employee_type", "unknown"
+                                ),
+                                "currency": result["metadata"].get("currency", "ILS"),
+                                "total_salary": float(result["total_salary"]),
+                                "total_hours": float(result["total_hours"]),
+                                "worked_days": result["breakdown"].get(
+                                    "worked_days", 0
+                                ),
+                                "work_sessions": result["breakdown"].get(
+                                    "work_sessions_count", 0
+                                ),
+                                "period": f"{current_date.year}-{current_date.month:02d}",
+                                "status": "calculated_and_saved",
+                                "calculation_method": "new_payroll_service",
+                                "regular_hours": float(result["regular_hours"]),
+                                "overtime_hours": float(result["overtime_hours"]),
+                                "holiday_hours": float(result["holiday_hours"]),
+                                "sabbath_hours": float(result["shabbat_hours"]),
+                            }
+                        )
+
                     except Exception as employee_error:
                         errors_encountered += 1
                         logger.error(
@@ -321,29 +341,31 @@ def payroll_list(request):
                             extra={
                                 "employee_id": employee.id,
                                 "error": str(employee_error),
-                            }
+                            },
                         )
                         # Add error result for this employee
-                        payroll_data.append({
-                            "id": employee.id,
-                            "employee": {
+                        payroll_data.append(
+                            {
                                 "id": employee.id,
-                                "name": employee.get_full_name(),
-                                "email": employee.email,
-                                "role": employee.role,
-                            },
-                            "calculation_type": "unknown",
-                            "currency": "ILS",
-                            "total_salary": 0,
-                            "total_hours": 0,
-                            "worked_days": 0,
-                            "work_sessions": 0,
-                            "period": f"{current_date.year}-{current_date.month:02d}",
-                            "status": "error",
-                            "error_message": str(employee_error),
-                            "calculation_method": "new_payroll_service_error",
-                        })
-                
+                                "employee": {
+                                    "id": employee.id,
+                                    "name": employee.get_full_name(),
+                                    "email": employee.email,
+                                    "role": employee.role,
+                                },
+                                "calculation_type": "unknown",
+                                "currency": "ILS",
+                                "total_salary": 0,
+                                "total_hours": 0,
+                                "worked_days": 0,
+                                "work_sessions": 0,
+                                "period": f"{current_date.year}-{current_date.month:02d}",
+                                "status": "error",
+                                "error_message": str(employee_error),
+                                "calculation_method": "new_payroll_service_error",
+                            }
+                        )
+
                 logger.info(
                     "New PayrollService calculation completed",
                     extra={
@@ -353,7 +375,7 @@ def payroll_list(request):
                         "total_employees": len(payroll_data),
                         "year": current_date.year,
                         "month": current_date.month,
-                    }
+                    },
                 )
 
             except Exception as e:
@@ -368,7 +390,7 @@ def payroll_list(request):
         # Calculate pagination metadata
         has_next = offset + limit < total_count
         has_previous = page > 1
-        
+
         # Create paginated response
         paginated_response = {
             "results": payroll_data,
@@ -381,9 +403,9 @@ def payroll_list(request):
                 "has_previous": has_previous,
                 "next_page": page + 1 if has_next else None,
                 "previous_page": page - 1 if has_previous else None,
-            }
+            },
         }
-        
+
         logger.info(
             "Payroll list completed",
             extra={
@@ -403,6 +425,7 @@ def payroll_list(request):
 
     except (DatabaseError, OperationalError) as e:
         from core.logging_utils import err_tag
+
         logger.error(f"Database error in payroll_list: {err_tag(e)}")
         return Response(
             {"detail": "Database error occurred"},
@@ -410,6 +433,7 @@ def payroll_list(request):
         )
     except Exception as e:
         from core.logging_utils import err_tag
+
         logger.error(f"Error in payroll_list: {err_tag(e)}")
         return Response(
             {"detail": "Unable to process the request"},
@@ -469,21 +493,27 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                 try:
                     # Use new PayrollService instead of undefined PayrollCalculationService
                     from .services.enums import EmployeeType
-                    
-                    employee_type = EmployeeType.HOURLY if salary.calculation_type == "hourly" else EmployeeType.MONTHLY
+
+                    employee_type = (
+                        EmployeeType.HOURLY
+                        if salary.calculation_type == "hourly"
+                        else EmployeeType.MONTHLY
+                    )
                     context = CalculationContext(
                         employee_id=employee.id,
                         year=current_date.year,
                         month=current_date.month,
                         user_id=request.user.id,
                         employee_type=employee_type,
-                        fast_mode=True
+                        fast_mode=True,
                     )
                     payroll_service = PayrollService()
                     # Example: To support HTTP query parameter strategy=optimized, use:
                     # strategy = CalculationStrategy.from_string(request.GET.get('strategy', 'enhanced'))
                     # result = payroll_service.calculate(context, strategy)
-                    result = payroll_service.calculate(context, CalculationStrategy.ENHANCED)
+                    result = payroll_service.calculate(
+                        context, CalculationStrategy.ENHANCED
+                    )
                     estimated_salary = float(result.get("total_salary", 0))
                     logger.info(
                         "Enhanced calculation completed",
@@ -509,15 +539,19 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
             else:
                 # For monthly employees, use PayrollService for proper calculation
                 try:
-                    from payroll.services.payroll_service import PayrollService
                     from payroll.services.contracts import CalculationContext
+                    from payroll.services.payroll_service import PayrollService
 
                     context = CalculationContext(
                         employee_id=employee.id,
                         year=current_date.year,
                         month=current_date.month,
-                        user_id=self.request.user.id if self.request.user.is_authenticated else None,
-                        fast_mode=True
+                        user_id=(
+                            self.request.user.id
+                            if self.request.user.is_authenticated
+                            else None
+                        ),
+                        fast_mode=True,
                     )
                     service = PayrollService(context)
                     result = service.calculate()
@@ -593,8 +627,9 @@ def enhanced_earnings(request):
     """
     try:
         from types import SimpleNamespace
+
         from django.shortcuts import get_object_or_404
-        
+
         user = request.user
 
         # Safely read parameters
@@ -615,7 +650,10 @@ def enhanced_earnings(request):
         # Select employee safely
         if employee_id:
             # Admin/accountant can view any employee
-            if not (getattr(user, "is_staff", False) or getattr(user, "is_accountant", False)):
+            if not (
+                getattr(user, "is_staff", False)
+                or getattr(user, "is_accountant", False)
+            ):
                 return Response({"detail": "Forbidden"}, status=403)
             employee = get_object_or_404(Employee, pk=employee_id)
         else:
@@ -626,53 +664,61 @@ def enhanced_earnings(request):
 
         # Check if employee has salary configuration
         from .models import Salary
+
         salary = employee.salaries.filter(is_active=True).first()
         if not salary:
             # No salary configuration - return special response
-            return Response({
-                "employee": {
-                    "id": employee.id,
-                    "name": employee.get_full_name(),
-                    "role": employee.role,
+            return Response(
+                {
+                    "employee": {
+                        "id": employee.id,
+                        "name": employee.get_full_name(),
+                        "role": employee.role,
+                    },
+                    "calculation_type": "not_configured",
+                    "currency": "ILS",
+                    "month": month,
+                    "year": year,
+                    "total_hours": 0,
+                    "total_salary": 0,
+                    "regular_hours": 0,
+                    "overtime_hours": 0,
+                    "holiday_hours": 0,
+                    "shabbat_hours": 0,
+                    "worked_days": 0,
+                    "compensatory_days": 0,
+                    "bonus": 0,
+                    "error": "No salary configuration",
+                    "message": f"Employee {employee.get_full_name()} has no salary configuration",
                 },
-                "calculation_type": "not_configured",
-                "currency": "ILS",
-                "month": month,
-                "year": year,
-                "total_hours": 0,
-                "total_salary": 0,
-                "regular_hours": 0,
-                "overtime_hours": 0,
-                "holiday_hours": 0,
-                "shabbat_hours": 0,
-                "worked_days": 0,
-                "compensatory_days": 0,
-                "bonus": 0,
-                "error": "No salary configuration",
-                "message": f"Employee {employee.get_full_name()} has no salary configuration",
-            }, status=200)
-        
+                status=200,
+            )
+
         # Calculate through serializer
         instance = SimpleNamespace(employee=employee, year=year, month=month)
         from .enhanced_serializers import EnhancedEarningsSerializer
+
         serializer = EnhancedEarningsSerializer()
         result = serializer.to_representation(instance)
-        
+
         # Ensure year and month are always in the response
         result["year"] = year
         result["month"] = month
 
         # If cache exists - override summary fields
         summary = (
-            MonthlyPayrollSummary.objects
-            .filter(employee=employee, year=year, month=month)
+            MonthlyPayrollSummary.objects.filter(
+                employee=employee, year=year, month=month
+            )
             .order_by("-id")
             .first()
         )
         if summary:
             result["total_salary"] = float(summary.total_salary or Decimal("0"))
             # This field is also sometimes needed by tests
-            result["proportional_monthly"] = float(summary.proportional_monthly or Decimal("0"))
+            result["proportional_monthly"] = float(
+                summary.proportional_monthly or Decimal("0")
+            )
 
         return Response(result, status=200)
 
@@ -683,6 +729,7 @@ def enhanced_earnings(request):
         return Response({"detail": "Employee not found"}, status=404)
     except Exception as e:
         from django.http import Http404
+
         if isinstance(e, Http404):
             return Response({"detail": "Not found"}, status=404)
         logger.exception("enhanced_earnings failed", exc_info=e)
@@ -826,20 +873,24 @@ def recalculate_payroll(request):
 
             try:
                 target_employee = Employee.objects.get(id=employee_id)
-                
+
                 # Use PayrollService with new architecture
                 from .services.enums import EmployeeType
-                
+
                 active_salary = target_employee.salaries.filter(is_active=True).first()
-                employee_type = EmployeeType.HOURLY if active_salary and active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-                
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if active_salary and active_salary.calculation_type == "hourly"
+                    else EmployeeType.MONTHLY
+                )
+
                 context = CalculationContext(
                     employee_id=target_employee.id,
                     year=year,
                     month=month,
                     user_id=1,  # System user
                     employee_type=employee_type,
-                    force_recalculate=True
+                    force_recalculate=True,
                 )
                 service = PayrollService()
                 result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -864,17 +915,21 @@ def recalculate_payroll(request):
                 try:
                     # Use PayrollService with new architecture
                     from .services.enums import EmployeeType
-                    
+
                     active_salary = employee.salaries.filter(is_active=True).first()
-                    employee_type = EmployeeType.HOURLY if active_salary and active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-                    
+                    employee_type = (
+                        EmployeeType.HOURLY
+                        if active_salary and active_salary.calculation_type == "hourly"
+                        else EmployeeType.MONTHLY
+                    )
+
                     context = CalculationContext(
                         employee_id=employee.id,
                         year=year,
                         month=month,
                         user_id=1,  # System user
                         employee_type=employee_type,
-                        force_recalculate=True
+                        force_recalculate=True,
                     )
                     service = PayrollService()
                     service.calculate(context, CalculationStrategy.ENHANCED)
@@ -1186,17 +1241,21 @@ def backward_compatible_earnings(request):
         try:
             # Use PayrollService directly instead of adapter
             from .services.enums import EmployeeType
-            
+
             active_salary = target_employee.salaries.filter(is_active=True).first()
-            employee_type = EmployeeType.HOURLY if active_salary and active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-            
+            employee_type = (
+                EmployeeType.HOURLY
+                if active_salary and active_salary.calculation_type == "hourly"
+                else EmployeeType.MONTHLY
+            )
+
             context = CalculationContext(
                 employee_id=target_employee.id,
                 year=current_date.year,
                 month=current_date.month,
                 user_id=1,  # System user
                 employee_type=employee_type,
-                fast_mode=False
+                fast_mode=False,
             )
             service = PayrollService()
             enhanced_result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -1286,20 +1345,26 @@ def backward_compatible_earnings(request):
             # FIXED: Using PayrollService with new architecture
             try:
                 from .services.enums import EmployeeType
-                
+
                 active_salary = target_employee.salaries.filter(is_active=True).first()
-                employee_type = EmployeeType.HOURLY if active_salary and active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-                
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if active_salary and active_salary.calculation_type == "hourly"
+                    else EmployeeType.MONTHLY
+                )
+
                 context = CalculationContext(
                     employee_id=target_employee.id,
                     year=current_date.year,
                     month=current_date.month,
                     user_id=1,  # System user
                     employee_type=employee_type,
-                    fast_mode=True
+                    fast_mode=True,
                 )
                 service = PayrollService()
-                service_result = service.calculate(context, CalculationStrategy.ENHANCED)
+                service_result = service.calculate(
+                    context, CalculationStrategy.ENHANCED
+                )
 
                 # Use result directly (no separate detailed_breakdown method needed)
                 detailed_breakdown = service_result

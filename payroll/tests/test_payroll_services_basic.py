@@ -2,25 +2,39 @@
 Basic smoke tests for payroll services with new PayrollService architecture.
 These tests focus on core scenarios: regular work, overtime, and Sabbath work.
 """
-from datetime import datetime, date
+
+from datetime import date, datetime
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
+
 import pytz
+
 from django.test import TestCase
 from django.utils import timezone
+
+from integrations.models import Holiday
 from payroll.models import Salary
 from payroll.services.enums import CalculationStrategy
 from payroll.services.payroll_service import PayrollService
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
-from integrations.models import Holiday
+
 from .test_helpers import create_shabbat_for_date
+
+
 class PayrollServicesBasicTest(PayrollTestMixin, TestCase):
     """Basic smoke tests for PayrollService - core scenarios only"""
+
     def setUp(self):
         # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
         from integrations.models import Holiday
+
         Holiday.objects.filter(date=date(2025, 7, 5)).delete()
         Holiday.objects.create(date=date(2025, 7, 5), name="Shabbat", is_shabbat=True)
         Holiday.objects.filter(date=date(2025, 7, 12)).delete()
@@ -183,8 +197,10 @@ class PayrollServicesBasicTest(PayrollTestMixin, TestCase):
         self.assertGreater(float(result["total_salary"]), 0)
         self.assertTrue(context["fast_mode"])
 
+
 class PayrollCalculationIntegrityTest(PayrollTestMixin, TestCase):
     """Basic integrity tests for calculation results"""
+
     def setUp(self):
         self.payroll_service = PayrollService()
 
@@ -210,8 +226,14 @@ class PayrollCalculationIntegrityTest(PayrollTestMixin, TestCase):
 
         # Check required top-level fields
         required_fields = [
-            "total_salary", "total_hours", "regular_hours", "overtime_hours",
-            "holiday_hours", "shabbat_hours", "breakdown", "metadata"
+            "total_salary",
+            "total_hours",
+            "regular_hours",
+            "overtime_hours",
+            "holiday_hours",
+            "shabbat_hours",
+            "breakdown",
+            "metadata",
         ]
         for field in required_fields:
             self.assertIn(field, result, f"Missing required field: {field}")

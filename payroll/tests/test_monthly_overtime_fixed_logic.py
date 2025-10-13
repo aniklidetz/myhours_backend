@@ -4,25 +4,38 @@ This test file specifically validates that monthly employees now receive:
 - Base hourly pay (100%) + overtime bonus (25%/50%) = 125%/150% total
 - Instead of the old incorrect logic of only bonus percentages
 """
-from datetime import datetime, date
+
+from datetime import date, datetime
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
+
 from django.test import TestCase
 from django.utils import timezone
+
+from integrations.models import Holiday
 from payroll.models import DailyPayrollCalculation, Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
-from integrations.models import Holiday
+
 from .test_helpers import create_shabbat_for_date
+
+
 class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
     """Test the fixed overtime calculation logic for monthly employees"""
+
     def setUp(self):
         """Set up test data"""
         # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
         from integrations.models import Holiday
+
         Holiday.objects.filter(date=date(2025, 7, 5)).delete()
         Holiday.objects.create(date=date(2025, 7, 5), name="Shabbat", is_shabbat=True)
 
@@ -43,6 +56,7 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
             is_active=True,
         )
         self.payroll_service = PayrollService()
+
     def test_overtime_125_percent_full_rate(self):
         """Test 10 hours: 8.6 regular + 1.4 overtime at 125%"""
         # 10-hour workday (8.6 regular + 1.4 overtime at 125%)
@@ -73,6 +87,7 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         # Should have overtime hours recorded
         overtime_hours = result.get("overtime_hours", 0)
         self.assertAlmostEqual(float(overtime_hours), 1.4, places=1)
+
     def test_overtime_150_percent_full_rate(self):
         """Test 12 hours: 8.6 regular + 2.0 at 125% + 1.4 at 150%"""
         # 12-hour workday (8.6 regular + 2h at 125% + 1.4h at 150%)
@@ -103,6 +118,7 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         # Should have significant overtime hours
         overtime_hours = result.get("overtime_hours", 0)
         self.assertAlmostEqual(float(overtime_hours), 3.4, places=1)  # 2.0 + 1.4 = 3.4
+
     def test_sabbath_150_percent_full_rate(self):
         """Test Sabbath work: proportional salary + 50% bonus for all hours"""
         # Saturday work (8 hours)
@@ -120,8 +136,14 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         total_hours = result.get("total_hours", 0)
         # Allow for variation in hour calculation depending on context
         if float(total_hours) == 0:
-            self.skipTest("Payroll calculation returned zero - likely missing Holiday data")
-        self.assertIn(float(total_hours), [8.0, 8.6], "Should return either actual or normative hours")
+            self.skipTest(
+                "Payroll calculation returned zero - likely missing Holiday data"
+            )
+        self.assertIn(
+            float(total_hours),
+            [8.0, 8.6],
+            "Should return either actual or normative hours",
+        )
 
         # Monthly employee philosophy: proportional salary + Sabbath bonus
         # Calculate based on actual work hours: 8.0 hours
@@ -132,11 +154,14 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         expected_total = proportional_salary + sabbath_bonus  # ~1648.3 ILS (150% total)
 
         total_salary = result.get("total_salary", 0)
-        self.assertAlmostEqual(float(total_salary), float(expected_total), delta=130)  # Enhanced Strategy applies normative hours and different Sabbath calculation
+        self.assertAlmostEqual(
+            float(total_salary), float(expected_total), delta=130
+        )  # Enhanced Strategy applies normative hours and different Sabbath calculation
 
         # Verify Sabbath hours are tracked
         shabbat_hours = result.get("shabbat_hours", 0)
         self.assertGreater(float(shabbat_hours), 0)
+
     def test_comparison_old_vs_new_logic(self):
         """Test extreme overtime: 14.55 hours = 8.6 + 2.0@125% + 3.95@150%"""
         # Long workday similar to real case: 14.55 hours
@@ -158,7 +183,9 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         # 14.55 hours = 8.6 regular + 2.0h@125% + 3.95h@150%
         proportional_salary = monthly_hourly_rate * Decimal("14.55")  # ~1998.6 ILS
         bonus_125 = Decimal("2.0") * monthly_hourly_rate * Decimal("0.25")  # ~68.7 ILS
-        bonus_150 = Decimal("3.95") * monthly_hourly_rate * Decimal("0.50")  # ~271.4 ILS
+        bonus_150 = (
+            Decimal("3.95") * monthly_hourly_rate * Decimal("0.50")
+        )  # ~271.4 ILS
         expected_total = proportional_salary + bonus_125 + bonus_150  # ~2338.7 ILS
 
         total_salary = result.get("total_salary", 0)
@@ -169,7 +196,10 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
 
         # Should have significant overtime hours
         overtime_hours = result.get("overtime_hours", 0)
-        self.assertAlmostEqual(float(overtime_hours), 5.95, places=1)  # 2.0 + 3.95 = 5.95
+        self.assertAlmostEqual(
+            float(overtime_hours), 5.95, places=1
+        )  # 2.0 + 3.95 = 5.95
+
     def test_regular_day_no_overtime(self):
         """Test regular 8-hour day: no overtime since 8 < 8.6"""
         # Regular 8-hour workday
@@ -187,8 +217,14 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
         total_hours = result.get("total_hours", 0)
         # Allow for variation in hour calculation depending on context
         if float(total_hours) == 0:
-            self.skipTest("Payroll calculation returned zero - likely missing Holiday data")
-        self.assertIn(float(total_hours), [8.0, 8.6], "Should return either actual or normative hours")
+            self.skipTest(
+                "Payroll calculation returned zero - likely missing Holiday data"
+            )
+        self.assertIn(
+            float(total_hours),
+            [8.0, 8.6],
+            "Should return either actual or normative hours",
+        )
 
         # Verify no overtime hours (since 8 < 8.6)
         overtime_hours = result.get("overtime_hours", 0)
@@ -196,10 +232,14 @@ class MonthlyOvertimeFixedLogicTest(PayrollTestMixin, TestCase):
 
         # Monthly employee philosophy: only proportional salary, no bonuses
         # Proportional = (25000/182) * 8 = ~1098.9 ILS
-        expected_proportional = monthly_hourly_rate * Decimal("8.6")  # Enhanced Strategy uses normative hours
+        expected_proportional = monthly_hourly_rate * Decimal(
+            "8.6"
+        )  # Enhanced Strategy uses normative hours
 
         total_salary = result.get("total_salary", 0)
-        self.assertAlmostEqual(float(total_salary), float(expected_proportional), delta=30)
+        self.assertAlmostEqual(
+            float(total_salary), float(expected_proportional), delta=30
+        )
 
         # Should be around 1181 ILS for 8.6 normative hours
         self.assertGreater(float(total_salary), 1150)

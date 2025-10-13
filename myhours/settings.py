@@ -354,8 +354,13 @@ FEATURE_FLAGS = {
 
 # Celery Configuration
 # Use REDIS_URL from environment if available, otherwise fall back to CELERY_BROKER_URL
-CELERY_BROKER_URL = config("REDIS_URL", default=config("CELERY_BROKER_URL", default="redis://localhost:6379/0"))
-CELERY_RESULT_BACKEND = config("REDIS_URL", default=config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0"))
+CELERY_BROKER_URL = config(
+    "REDIS_URL", default=config("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+)
+CELERY_RESULT_BACKEND = config(
+    "REDIS_URL",
+    default=config("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0"),
+)
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

@@ -4,9 +4,9 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from payroll.models import DailyPayrollCalculation
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -81,37 +81,41 @@ class Command(BaseCommand):
                 calculation_type = calc.employee.salary_info.calculation_type
 
                 if calculation_type == "monthly":
-                    active_salary = calc.employee.salaries.filter(is_active=True).first()
+                    active_salary = calc.employee.salaries.filter(
+                        is_active=True
+                    ).first()
                     if not active_salary:
                         continue
-                    
+
                     employee_type = EmployeeType.MONTHLY
-                    
+
                     context = CalculationContext(
                         employee_id=calc.employee.id,
                         year=calc.work_date.year,
                         month=calc.work_date.month,
                         user_id=1,  # System user
                         employee_type=employee_type,
-                        fast_mode=False
+                        fast_mode=False,
                     )
                     service = PayrollService()
                     result = service.calculate(context, CalculationStrategy.ENHANCED)
 
                 elif calculation_type == "hourly":
-                    active_salary = calc.employee.salaries.filter(is_active=True).first()
+                    active_salary = calc.employee.salaries.filter(
+                        is_active=True
+                    ).first()
                     if not active_salary:
                         continue
-                    
+
                     employee_type = EmployeeType.HOURLY
-                    
+
                     context = CalculationContext(
                         employee_id=calc.employee.id,
                         year=calc.work_date.year,
                         month=calc.work_date.month,
                         user_id=1,  # System user
                         employee_type=employee_type,
-                        fast_mode=False
+                        fast_mode=False,
                     )
                     service = PayrollService()
                     result = service.calculate(context, CalculationStrategy.ENHANCED)

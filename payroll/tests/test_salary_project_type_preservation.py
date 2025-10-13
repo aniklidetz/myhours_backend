@@ -4,12 +4,16 @@ Unit tests specifically for project calculation_type preservation logic
 
 from datetime import date, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
 from payroll.models import Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -188,4 +192,3 @@ class SalaryProjectTypePreservationTest(TestCase):
             # Contract should convert to monthly, full_time to monthly
             self.assertEqual(contract_salary.calculation_type, "monthly")
             self.assertEqual(hourly_salary.calculation_type, "monthly")
-

@@ -1,29 +1,49 @@
 """
 Tests for payroll compensation features with new PayrollService architecture
 """
+
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import Mock, patch
+
 import pytz
+
 from django.test import TestCase
 from django.utils import timezone
+
+from integrations.models import Holiday
 from payroll.models import CompensatoryDay, DailyPayrollCalculation, Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
-from integrations.models import Holiday
+
 from .test_helpers import create_shabbat_for_date
+
+
 class PayrollCalculationIntegrationTest(PayrollTestMixin, TestCase):
     """Test payroll calculations with actual work logs using new PayrollService"""
+
     def setUp(self):
         # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
         from integrations.models import Holiday
+
         sabbath_dates = [
-            date(2025, 7, 5), date(2025, 7, 6), date(2025, 7, 12), date(2025, 7, 13),
-            date(2025, 7, 19), date(2025, 7, 20), date(2025, 7, 26), date(2025, 7, 27)
+            date(2025, 7, 5),
+            date(2025, 7, 6),
+            date(2025, 7, 12),
+            date(2025, 7, 13),
+            date(2025, 7, 19),
+            date(2025, 7, 20),
+            date(2025, 7, 26),
+            date(2025, 7, 27),
         ]
         for sabbath_date in sabbath_dates:
             Holiday.objects.filter(date=sabbath_date).delete()
@@ -180,12 +200,16 @@ class PayrollCalculationIntegrationTest(PayrollTestMixin, TestCase):
         actual_pay = float(result["total_salary"])
         self.assertAlmostEqual(actual_pay, expected_total, delta=50)
 
+
 class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
     """Test weekly limits validation with actual work patterns"""
+
     def setUp(self):
         # Create Shabbat Holiday records for July 2025
         create_shabbat_for_date(date(2025, 7, 5))  # Saturday
-        create_shabbat_for_date(date(2025, 7, 6))  # Sunday (for test_extreme_weekly_overtime)
+        create_shabbat_for_date(
+            date(2025, 7, 6)
+        )  # Sunday (for test_extreme_weekly_overtime)
         create_shabbat_for_date(date(2025, 7, 12))
         create_shabbat_for_date(date(2025, 7, 19))
         create_shabbat_for_date(date(2025, 7, 26))
@@ -225,7 +249,9 @@ class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
 
         # Should have regular hours (Enhanced Strategy may apply different overtime thresholds)
         regular_hours = float(result.get("regular_hours", 0))
-        self.assertGreater(regular_hours, 25)  # Enhanced Strategy applies normative hours: 5 days * 8.6 normative = 43, minus any overtime
+        self.assertGreater(
+            regular_hours, 25
+        )  # Enhanced Strategy applies normative hours: 5 days * 8.6 normative = 43, minus any overtime
 
     def test_weekly_work_with_overtime(self):
         """Test work week with overtime: 5 days × 10 hours = 50 hours"""
@@ -246,12 +272,16 @@ class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
 
         # Should have significant overtime
         overtime_hours = float(result.get("overtime_hours", 0))
-        self.assertGreater(overtime_hours, 4)  # Enhanced Strategy calculates overtime differently
+        self.assertGreater(
+            overtime_hours, 4
+        )  # Enhanced Strategy calculates overtime differently
 
         # Should get overtime premiums
         total_pay = float(result.get("total_salary", 0))
         proportional_monthly = 50 * 80  # If all regular
-        self.assertGreater(total_pay, proportional_monthly)  # Should be more due to overtime
+        self.assertGreater(
+            total_pay, proportional_monthly
+        )  # Should be more due to overtime
 
     def test_extreme_weekly_overtime(self):
         """Test extreme work week: 6 days × 12 hours = 72 hours"""
@@ -273,7 +303,9 @@ class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
         # Should have massive overtime (each day has 3.4h OT = 20.4h total)
         overtime_hours = float(result.get("overtime_hours", 0))
         # Updated expected value to match enhanced algorithm: 13.13
-        self.assertAlmostEqual(overtime_hours, 10.2, places=1)  # Enhanced Strategy calculation
+        self.assertAlmostEqual(
+            overtime_hours, 10.2, places=1
+        )  # Enhanced Strategy calculation
 
         # Should include Sabbath work (Saturday)
         sabbath_hours = result.get("shabbat_hours", 0)
@@ -282,10 +314,14 @@ class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
         # Should get substantial premium pay
         total_pay = float(result.get("total_salary", 0))
         proportional_monthly = 72 * 80  # If all regular
-        self.assertGreater(total_pay, proportional_monthly * 1.18)  # At least 18% premium (matching Enhanced Strategy)
+        self.assertGreater(
+            total_pay, proportional_monthly * 1.18
+        )  # At least 18% premium (matching Enhanced Strategy)
+
 
 class CompensatoryDayIntegrationTest(PayrollTestMixin, TestCase):
     """Test compensatory day creation through PayrollService side effects (if implemented)"""
+
     def setUp(self):
         self.employee = Employee.objects.create(
             first_name="Holiday",
@@ -305,10 +341,14 @@ class CompensatoryDayIntegrationTest(PayrollTestMixin, TestCase):
 
     def test_compensatory_day_creation_detection(self):
         """Test if compensatory days are created as side effect of holiday work calculation"""
-        initial_comp_days = CompensatoryDay.objects.filter(employee=self.employee).count()
+        initial_comp_days = CompensatoryDay.objects.filter(
+            employee=self.employee
+        ).count()
 
         # Create holiday work log (assuming July 4th is a holiday for testing)
-        check_in = timezone.make_aware(datetime(2025, 7, 4, 9, 0))  # Friday (could be holiday)
+        check_in = timezone.make_aware(
+            datetime(2025, 7, 4, 9, 0)
+        )  # Friday (could be holiday)
         check_out = timezone.make_aware(datetime(2025, 7, 4, 17, 0))  # 8 hours
         WorkLog.objects.create(
             employee=self.employee, check_in=check_in, check_out=check_out

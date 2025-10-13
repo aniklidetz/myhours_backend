@@ -10,9 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -134,12 +134,18 @@ class Command(BaseCommand):
                         # Generate daily calculation using new PayrollService
                         active_salary = employee.salaries.filter(is_active=True).first()
                         if not active_salary:
-                            self.stdout.write(f"  ERROR: No active salary for {employee.get_full_name()}")
+                            self.stdout.write(
+                                f"  ERROR: No active salary for {employee.get_full_name()}"
+                            )
                             errors += 1
                             continue
-                        
-                        employee_type = EmployeeType.HOURLY if active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-                        
+
+                        employee_type = (
+                            EmployeeType.HOURLY
+                            if active_salary.calculation_type == "hourly"
+                            else EmployeeType.MONTHLY
+                        )
+
                         service = PayrollService()
                         context = CalculationContext(
                             employee_id=employee.id,
@@ -147,7 +153,7 @@ class Command(BaseCommand):
                             month=work_date.month,
                             user_id=1,  # System user for commands
                             employee_type=employee_type,
-                            force_recalculate=force
+                            force_recalculate=force,
                             # Remove fast_mode=True to enable database persistence
                         )
 
@@ -159,28 +165,38 @@ class Command(BaseCommand):
 
                         try:
                             # Calculate using new unified service
-                            result = service.calculate(context, CalculationStrategy.ENHANCED)
+                            result = service.calculate(
+                                context, CalculationStrategy.ENHANCED
+                            )
 
-                            if result and result.get('total_salary', 0) > 0:
+                            if result and result.get("total_salary", 0) > 0:
                                 # Create or update DailyPayrollCalculation record
                                 daily_defaults = {
-                                    'regular_hours': result.get('regular_hours', 0),
-                                    'overtime_hours_1': result.get('overtime_hours', 0),
-                                    'overtime_hours_2': result.get('overtime_hours_2', 0),
-                                    'night_hours': result.get('night_hours', 0),
-                                    'shabbat_hours': result.get('shabbat_hours', 0),
-                                    'holiday_hours': result.get('holiday_hours', 0),
+                                    "regular_hours": result.get("regular_hours", 0),
+                                    "overtime_hours_1": result.get("overtime_hours", 0),
+                                    "overtime_hours_2": result.get(
+                                        "overtime_hours_2", 0
+                                    ),
+                                    "night_hours": result.get("night_hours", 0),
+                                    "shabbat_hours": result.get("shabbat_hours", 0),
+                                    "holiday_hours": result.get("holiday_hours", 0),
                                     # Don't set total_hours - it's a computed property
-                                    'total_salary': result.get('total_salary', 0),
-                                    'compensatory_days_earned': result.get('compensatory_days_earned', 0),
-                                    'daily_calculation_breakdown': result.get('breakdown', {}),
-                                    'updated_at': timezone.now(),
+                                    "total_salary": result.get("total_salary", 0),
+                                    "compensatory_days_earned": result.get(
+                                        "compensatory_days_earned", 0
+                                    ),
+                                    "daily_calculation_breakdown": result.get(
+                                        "breakdown", {}
+                                    ),
+                                    "updated_at": timezone.now(),
                                 }
 
-                                daily_calc, created = DailyPayrollCalculation.objects.update_or_create(
-                                    employee=employee,
-                                    work_date=work_date,
-                                    defaults=daily_defaults
+                                daily_calc, created = (
+                                    DailyPayrollCalculation.objects.update_or_create(
+                                        employee=employee,
+                                        work_date=work_date,
+                                        defaults=daily_defaults,
+                                    )
                                 )
 
                                 if created:
@@ -194,9 +210,11 @@ class Command(BaseCommand):
                                         f"   Updated daily calc for {work_date} - salary: {result['total_salary']}"
                                     )
                             else:
-                                self.stdout.write(f"  ERROR: No result from calculation for {work_date}")
+                                self.stdout.write(
+                                    f"  ERROR: No result from calculation for {work_date}"
+                                )
                                 errors += 1
-                                
+
                         except Exception as e:
                             self.stdout.write(
                                 f"  ERROR: Error creating daily calc for {work_date}: {e}"
@@ -231,12 +249,18 @@ class Command(BaseCommand):
                         # Generate monthly summary using new PayrollService
                         active_salary = employee.salaries.filter(is_active=True).first()
                         if not active_salary:
-                            self.stdout.write(f"  ERROR: No active salary for {employee.get_full_name()}")
+                            self.stdout.write(
+                                f"  ERROR: No active salary for {employee.get_full_name()}"
+                            )
                             errors += 1
                             continue
-                        
-                        employee_type = EmployeeType.HOURLY if active_salary.calculation_type == 'hourly' else EmployeeType.MONTHLY
-                        
+
+                        employee_type = (
+                            EmployeeType.HOURLY
+                            if active_salary.calculation_type == "hourly"
+                            else EmployeeType.MONTHLY
+                        )
+
                         service = PayrollService()
                         context = CalculationContext(
                             employee_id=employee.id,
@@ -245,13 +269,18 @@ class Command(BaseCommand):
                             user_id=1,  # System user for commands
                             employee_type=employee_type,
                             force_recalculate=force,
-                            fast_mode=False
+                            fast_mode=False,
                         )
-                        
-                        try:
-                            monthly_result = service.calculate(context, CalculationStrategy.ENHANCED)
 
-                            if monthly_result and monthly_result.get('status') == 'success':
+                        try:
+                            monthly_result = service.calculate(
+                                context, CalculationStrategy.ENHANCED
+                            )
+
+                            if (
+                                monthly_result
+                                and monthly_result.get("status") == "success"
+                            ):
                                 if existing_monthly:
                                     monthly_updated += 1
                                     self.stdout.write(
@@ -263,7 +292,9 @@ class Command(BaseCommand):
                                         f"   Created monthly summary for {summary_year}-{summary_month:02d}"
                                     )
                             else:
-                                self.stdout.write(f"  ERROR: No result from monthly calculation for {summary_year}-{summary_month:02d}")
+                                self.stdout.write(
+                                    f"  ERROR: No result from monthly calculation for {summary_year}-{summary_month:02d}"
+                                )
                                 errors += 1
 
                         except Exception as e:

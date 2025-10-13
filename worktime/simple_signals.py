@@ -17,11 +17,15 @@ def send_work_notifications(sender, instance, created, **kwargs):
     """Send simple notifications when work log is created or updated"""
 
     # Skip if this WorkLog has special handling flags (avoid duplicate processing)
-    if (hasattr(instance, "_was_soft_deleted") or 
-        hasattr(instance, "_was_restored") or 
-        hasattr(instance, "_times_modified")):
+    if (
+        hasattr(instance, "_was_soft_deleted")
+        or hasattr(instance, "_was_restored")
+        or hasattr(instance, "_times_modified")
+    ):
         # The enhanced recalculation signal will handle payroll
-        logger.debug(f"Skipping notification signal - enhanced signal will handle WorkLog {instance.id}")
+        logger.debug(
+            f"Skipping notification signal - enhanced signal will handle WorkLog {instance.id}"
+        )
         return
 
     # Send notifications only if:
@@ -44,18 +48,22 @@ def send_work_notifications(sender, instance, created, **kwargs):
         # If this is a check-out, trigger payroll calculation
         if instance.check_out:
             try:
-                from payroll.services.payroll_service import PayrollService
                 from payroll.services.contracts import CalculationContext
                 from payroll.services.enums import CalculationStrategy, EmployeeType
+                from payroll.services.payroll_service import PayrollService
 
                 # Calculate payroll for this work session
                 year = instance.check_in.year
                 month = instance.check_in.month
 
                 # Determine employee type
-                employee_type = EmployeeType.HOURLY if instance.employee.salaries.filter(
-                    is_active=True, calculation_type='hourly'
-                ).exists() else EmployeeType.MONTHLY
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if instance.employee.salaries.filter(
+                        is_active=True, calculation_type="hourly"
+                    ).exists()
+                    else EmployeeType.MONTHLY
+                )
 
                 service = PayrollService()
                 context = CalculationContext(
@@ -64,13 +72,15 @@ def send_work_notifications(sender, instance, created, **kwargs):
                     month=month,
                     user_id=1,  # System user for automatic calculations
                     employee_type=employee_type,
-                    force_recalculate=True
+                    force_recalculate=True,
                 )
                 result = service.calculate(context, CalculationStrategy.ENHANCED)
-                
+
                 # Monthly summary is handled automatically by PayrollService
-                
-                logger.debug(f"Payroll and monthly summary calculated for WorkLog {instance.id} via notification signal")
+
+                logger.debug(
+                    f"Payroll and monthly summary calculated for WorkLog {instance.id} via notification signal"
+                )
 
             except ImportError:
                 pass  # Payroll service not available
@@ -114,7 +124,9 @@ def handle_worklog_changes(sender, instance, **kwargs):
 
                 # Check if check_in time changed (significant change = more than 1 minute)
                 if original.check_in != instance.check_in:
-                    time_diff = abs((original.check_in - instance.check_in).total_seconds())
+                    time_diff = abs(
+                        (original.check_in - instance.check_in).total_seconds()
+                    )
                     if time_diff > 60:  # More than 1 minute change
                         time_changed = True
                         affected_dates.add(original.check_in.date())
@@ -126,7 +138,9 @@ def handle_worklog_changes(sender, instance, **kwargs):
                 # Check if check_out time changed (significant change = more than 1 minute)
                 if original.check_out != instance.check_out:
                     if original.check_out and instance.check_out:
-                        time_diff = abs((original.check_out - instance.check_out).total_seconds())
+                        time_diff = abs(
+                            (original.check_out - instance.check_out).total_seconds()
+                        )
                         if time_diff > 60:  # More than 1 minute change
                             time_changed = True
                             affected_dates.add(original.check_out.date())
@@ -162,24 +176,26 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
     """Handle payroll recalculation for soft delete/restore operations and time modifications"""
 
     # Check if this was a soft delete, restore, or time modification
-    if (hasattr(instance, "_was_soft_deleted") or 
-        hasattr(instance, "_was_restored") or 
-        hasattr(instance, "_times_modified")):
-        
+    if (
+        hasattr(instance, "_was_soft_deleted")
+        or hasattr(instance, "_was_restored")
+        or hasattr(instance, "_times_modified")
+    ):
+
         try:
             from payroll.models import DailyPayrollCalculation
-            from payroll.services.payroll_service import PayrollService
             from payroll.services.contracts import CalculationContext
             from payroll.services.enums import CalculationStrategy, EmployeeType
+            from payroll.services.payroll_service import PayrollService
 
             # Determine affected dates
             affected_dates = set()
-            
+
             if hasattr(instance, "_original_date"):
                 affected_dates.add(instance._original_date)
             if hasattr(instance, "_affected_dates"):
                 affected_dates.update(instance._affected_dates)
-            
+
             # Always include current date
             affected_dates.add(instance.check_in.date())
 
@@ -188,8 +204,15 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
             year = instance.check_in.year
             month = instance.check_in.month
 
-            operation_type = "soft delete" if hasattr(instance, "_was_soft_deleted") else \
-                           "restore" if hasattr(instance, "_was_restored") else "time modification"
+            operation_type = (
+                "soft delete"
+                if hasattr(instance, "_was_soft_deleted")
+                else (
+                    "restore"
+                    if hasattr(instance, "_was_restored")
+                    else "time modification"
+                )
+            )
 
             logger.info(
                 f"Recalculating payroll for employee {employee.get_full_name()} "
@@ -197,9 +220,13 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
             )
 
             # Determine employee type
-            employee_type = EmployeeType.HOURLY if employee.salaries.filter(
-                is_active=True, calculation_type='hourly'
-            ).exists() else EmployeeType.MONTHLY
+            employee_type = (
+                EmployeeType.HOURLY
+                if employee.salaries.filter(
+                    is_active=True, calculation_type="hourly"
+                ).exists()
+                else EmployeeType.MONTHLY
+            )
 
             # Initialize new payroll service
             service = PayrollService()
@@ -209,7 +236,7 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
                 month=month,
                 user_id=1,  # System user for automatic calculations
                 employee_type=employee_type,
-                force_recalculate=True
+                force_recalculate=True,
             )
 
             # Handle specific WorkLog soft delete - remove its calculation immediately
@@ -219,41 +246,54 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
                         worklog=instance
                     ).delete()
                     if deleted_count > 0:
-                        logger.info(f"Deleted {deleted_count} payroll calculation(s) for soft-deleted WorkLog {instance.id}")
+                        logger.info(
+                            f"Deleted {deleted_count} payroll calculation(s) for soft-deleted WorkLog {instance.id}"
+                        )
                 except Exception as e:
-                    logger.warning(f"Could not delete payroll calculation for WorkLog {instance.id}: {e}")
+                    logger.warning(
+                        f"Could not delete payroll calculation for WorkLog {instance.id}: {e}"
+                    )
 
             # For each affected date, recalculate or clean up
             for affected_date in affected_dates:
                 # Get all active worklogs for this date in one query
-                date_worklogs = list(WorkLog.objects.filter(
-                    employee=employee,
-                    check_in__date=affected_date,
-                    is_deleted=False
-                ))
+                date_worklogs = list(
+                    WorkLog.objects.filter(
+                        employee=employee,
+                        check_in__date=affected_date,
+                        is_deleted=False,
+                    )
+                )
 
                 if date_worklogs:
                     # Recalculate payroll for this specific date
-                    logger.info(f"Recalculating payroll for {affected_date} - has {len(date_worklogs)} active WorkLogs")
-                    
+                    logger.info(
+                        f"Recalculating payroll for {affected_date} - has {len(date_worklogs)} active WorkLogs"
+                    )
+
                     # Recalculate payroll for the full period using new service
                     # (The new PayrollService handles all work logs for the period automatically)
                     service.calculate(context, CalculationStrategy.ENHANCED)
 
                 else:
                     # No active WorkLogs for this date - remove all payroll calculations for this date
-                    logger.info(f"No active WorkLogs for {affected_date} - removing payroll calculations")
-                    
+                    logger.info(
+                        f"No active WorkLogs for {affected_date} - removing payroll calculations"
+                    )
+
                     # Delete all calculations for this employee and date (shift-based)
                     deleted_count, _ = DailyPayrollCalculation.objects.filter(
-                        employee=employee,
-                        work_date=affected_date
+                        employee=employee, work_date=affected_date
                     ).delete()
-                    
+
                     if deleted_count > 0:
-                        logger.info(f"Deleted {deleted_count} orphaned payroll calculation(s) for {affected_date}")
+                        logger.info(
+                            f"Deleted {deleted_count} orphaned payroll calculation(s) for {affected_date}"
+                        )
                     else:
-                        logger.info(f"No payroll calculations found for {affected_date} - nothing to clean up")
+                        logger.info(
+                            f"No payroll calculations found for {affected_date} - nothing to clean up"
+                        )
 
             # Only recalculate monthly summary if we processed any dates
             if affected_dates:
@@ -263,7 +303,13 @@ def handle_payroll_recalculation(sender, instance, created, **kwargs):
                 )
 
             # Clean up flags
-            for flag in ["_was_soft_deleted", "_was_restored", "_times_modified", "_original_date", "_affected_dates"]:
+            for flag in [
+                "_was_soft_deleted",
+                "_was_restored",
+                "_times_modified",
+                "_original_date",
+                "_affected_dates",
+            ]:
                 if hasattr(instance, flag):
                     delattr(instance, flag)
 

@@ -11,7 +11,6 @@ Tests the SalarySerializer and CompensatoryDaySerializer covering:
 
 from datetime import date, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import Mock, patch
 
 from rest_framework import serializers
@@ -21,6 +20,11 @@ from django.test import TestCase, override_settings
 
 from payroll.models import CompensatoryDay, Salary
 from payroll.serializers import CompensatoryDaySerializer, SalarySerializer
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -571,4 +575,3 @@ class CompensatoryDaySerializerIntegrationTest(CompensatoryDaySerializerTest):
         # Should show as used
         self.assertTrue(data["is_used"])
         self.assertIsNotNone(data["date_used"])
-

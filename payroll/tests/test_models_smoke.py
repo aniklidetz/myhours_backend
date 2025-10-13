@@ -6,7 +6,6 @@ Tests core model behavior without deep integration complexity.
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import User
@@ -20,6 +19,11 @@ from payroll.models import (
     DailyPayrollCalculation,
     MonthlyPayrollSummary,
     Salary,
+)
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
 )
 from users.models import Employee
 from worktime.models import WorkLog
@@ -269,7 +273,10 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
     def test_monthly_payroll_summary_unique_constraint(self):
         """Test unique constraint on employee/year/month"""
         MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, proportional_monthly=Decimal("8000.00")
+            employee=self.employee,
+            year=2025,
+            month=1,
+            proportional_monthly=Decimal("8000.00"),
         )
 
         # Creating another summary for same employee/month should be allowed
@@ -439,11 +446,17 @@ class ModelIntegrationSmokeTest(TestCase):
         """Test creating multiple monthly payroll summaries for employee"""
         # Create summaries for different months
         summary1 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, proportional_monthly=Decimal("8000.00")
+            employee=self.employee,
+            year=2025,
+            month=1,
+            proportional_monthly=Decimal("8000.00"),
         )
 
         summary2 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=2, proportional_monthly=Decimal("8500.00")
+            employee=self.employee,
+            year=2025,
+            month=2,
+            proportional_monthly=Decimal("8500.00"),
         )
 
         # Test that both summaries exist
@@ -466,4 +479,3 @@ class ModelIntegrationSmokeTest(TestCase):
         # Test that created_at and updated_at are close
         time_diff = salary.updated_at - salary.created_at
         self.assertLess(time_diff.total_seconds(), 1)  # Less than 1 second difference
-

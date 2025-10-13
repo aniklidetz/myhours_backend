@@ -7,7 +7,6 @@ import calendar
 import json
 from datetime import date, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import MagicMock, patch
 
 from rest_framework import status
@@ -24,8 +23,15 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+)
 from users.models import Employee
 from worktime.models import WorkLog
+
 
 class PayrollViewsSmokeTest(PayrollTestMixin, TestCase):
     """Smoke tests for payroll views - basic functionality"""
@@ -84,6 +90,7 @@ class PayrollViewsSmokeTest(PayrollTestMixin, TestCase):
 
         self.admin_client.force_authenticate(user=self.admin_user)
         self.employee_client.force_authenticate(user=self.employee_user)
+
 
 class HelperFunctionsSmokeTest(PayrollViewsSmokeTest):
     """Test helper functions in payroll views"""
@@ -161,6 +168,7 @@ class HelperFunctionsSmokeTest(PayrollViewsSmokeTest):
 
         result = check_admin_or_accountant_role(user_without_profile)
         self.assertFalse(result)
+
 
 class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll list endpoint"""
@@ -311,6 +319,7 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
             )
             mock_logger.error.assert_called_once()
 
+
 class EnhancedEarningsViewSmokeTest(PayrollViewsSmokeTest):
     """Test enhanced earnings endpoint"""
 
@@ -439,6 +448,7 @@ class EnhancedEarningsViewSmokeTest(PayrollViewsSmokeTest):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+
 class DailyPayrollCalculationsViewSmokeTest(PayrollViewsSmokeTest):
     """Test daily payroll calculations functions"""
 
@@ -461,6 +471,7 @@ class DailyPayrollCalculationsViewSmokeTest(PayrollViewsSmokeTest):
         self.assertEqual(calculation.employee, self.regular_employee)
         self.assertEqual(calculation.regular_hours, ISRAELI_DAILY_NORM_HOURS)
         self.assertEqual(calculation.total_salary, Decimal("400.0"))
+
 
 class RecalculatePayrollViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll recalculation endpoint"""
@@ -535,6 +546,7 @@ class RecalculatePayrollViewSmokeTest(PayrollViewsSmokeTest):
             response.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST]
         )
 
+
 class PayrollAnalyticsViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll analytics endpoint"""
 
@@ -581,6 +593,7 @@ class PayrollAnalyticsViewSmokeTest(PayrollViewsSmokeTest):
             response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_200_OK]
         )
 
+
 class MonthlyPayrollSummaryViewSmokeTest(PayrollViewsSmokeTest):
     """Test monthly payroll summary function"""
 
@@ -623,6 +636,7 @@ class MonthlyPayrollSummaryViewSmokeTest(PayrollViewsSmokeTest):
         self.assertEqual(summary.year, 2025)
         self.assertEqual(summary.month, 1)
         self.assertEqual(summary.worked_days, 22)
+
 
 class BackwardCompatibleEarningsViewSmokeTest(PayrollViewsSmokeTest):
     """Test backward compatible earnings function (not exposed via URL)"""
@@ -677,6 +691,7 @@ class BackwardCompatibleEarningsViewSmokeTest(PayrollViewsSmokeTest):
 
         # Function should exist and be callable
         self.assertTrue(callable(_calculate_hourly_daily_earnings))
+
 
 class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
     """Test calculate hourly daily earnings helper function"""
@@ -826,6 +841,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
         self.assertIn("breakdown", result)
         # Friday may have different calculation, so just check basic structure
 
+
 class LegacyPayrollCalculationSmokeTest(PayrollViewsSmokeTest):
     """Test legacy payroll calculation function"""
 
@@ -887,6 +903,7 @@ class LegacyPayrollCalculationSmokeTest(PayrollViewsSmokeTest):
         )
 
         self.assertIsInstance(result, list)
+
 
 class PayrollViewsExceptionHandlingSmokeTest(PayrollViewsSmokeTest):
     """Test exception handling across payroll views"""
@@ -958,6 +975,7 @@ class PayrollViewsExceptionHandlingSmokeTest(PayrollViewsSmokeTest):
                 f"URL {url} should require authentication",
             )
 
+
 class PayrollViewsPermissionsSmokeTest(PayrollViewsSmokeTest):
     """Test permission handling across payroll views"""
 
@@ -1001,6 +1019,7 @@ class PayrollViewsPermissionsSmokeTest(PayrollViewsSmokeTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["employee"]["id"], self.regular_employee.id)
 
+
 class PayrollCalculationViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll calculation views"""
 
@@ -1019,6 +1038,7 @@ class PayrollCalculationViewSmokeTest(PayrollViewsSmokeTest):
         response = self.admin_client.get(url, {"year": 2025, "month": 1})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
 
 class PayrollAnalyticsViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll analytics views"""
@@ -1043,6 +1063,7 @@ class PayrollAnalyticsViewSmokeTest(PayrollViewsSmokeTest):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+
 class PayrollRecalculateViewSmokeTest(PayrollViewsSmokeTest):
     """Test payroll recalculation views"""
 
@@ -1055,6 +1076,7 @@ class PayrollRecalculateViewSmokeTest(PayrollViewsSmokeTest):
             response.status_code,
             [status.HTTP_403_FORBIDDEN, status.HTTP_405_METHOD_NOT_ALLOWED],
         )
+
 
 class PayrollViewsFilteringSmokeTest(PayrollViewsSmokeTest):
     """Test filtering functionality in payroll views"""
@@ -1075,6 +1097,7 @@ class PayrollViewsFilteringSmokeTest(PayrollViewsSmokeTest):
         response = self.admin_client.get(reverse("payroll-list"), params)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
 
 class PayrollViewsUtilityFunctionsSmokeTest(PayrollViewsSmokeTest):
     """Test utility functions in payroll views"""
@@ -1147,4 +1170,3 @@ class PayrollViewsUtilityFunctionsSmokeTest(PayrollViewsSmokeTest):
                 status.HTTP_400_BAD_REQUEST,  # Validates dates
             ],
         )
-

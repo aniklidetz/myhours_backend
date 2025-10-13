@@ -3,27 +3,39 @@ Tests for monthly employee salary calculations using PayrollService.
 Tests edge cases and integration with PayrollService for monthly employees
 following the philosophy: proportional_salary (base_salary/182 * hours) + bonuses.
 """
+
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
 from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils import timezone
+
+from integrations.models import Holiday
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary, Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.enums import CalculationStrategy
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
-from integrations.models import Holiday
+
 from .test_helpers import create_shabbat_for_date
+
 
 class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
     """Test monthly employee calculations with PayrollService following proportional + bonus philosophy"""
+
     def setUp(self):
         """Set up test data"""
         # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
         from integrations.models import Holiday
+
         Holiday.objects.filter(date=date(2025, 7, 5)).delete()
         Holiday.objects.create(date=date(2025, 7, 5), name="Shabbat", is_shabbat=True)
 
@@ -59,6 +71,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
             is_active=True,
         )
         self.payroll_service = PayrollService()
+
     def test_monthly_employee_basic_calculation(self):
         """Test basic monthly salary calculation"""
         # Create work logs for the month
@@ -77,6 +90,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         total_pay = result.get("total_salary", 0)
         self.assertGreater(total_pay, 0)
         self.assertLess(total_pay, 15000)  # Less than full monthly salary
+
     def test_monthly_employee_null_hourly_rate_no_error(self):
         """Test that monthly employees with null monthly_hourly don't cause errors"""
         # Ensure hourly_rate is None (should be by default for monthly type)
@@ -93,6 +107,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         self.assertIsNotNone(result)
         self.assertIn("total_salary", result)
         self.assertGreater(result.get("total_salary", 0), 0)
+
     def test_monthly_employee_proportional_calculation(self):
         """Test proportional salary calculation for partial month work"""
         # Work only 3 out of ~23 working days in July
@@ -108,10 +123,15 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         # Monthly employee philosophy: proportional salary based on hours worked
         total_pay = result.get("total_salary", 0)
         monthly_hourly_rate = Decimal("15000") / MONTHLY_NORM_HOURS  # ~82.42 ILS/hour
-        total_hours_worked = Decimal("3") * Decimal("8.6")  # 3 days × 8.6 normative hours = 25.8 hours
-        expected_pay = total_hours_worked * monthly_hourly_rate  # ~2126.37 ILS (with normative)
+        total_hours_worked = Decimal("3") * Decimal(
+            "8.6"
+        )  # 3 days × 8.6 normative hours = 25.8 hours
+        expected_pay = (
+            total_hours_worked * monthly_hourly_rate
+        )  # ~2126.37 ILS (with normative)
         # Allow for small calculation differences
         self.assertAlmostEqual(float(total_pay), float(expected_pay), delta=50)
+
     def test_monthly_employee_overtime_handling(self):
         """Test that monthly employees get proportional salary + overtime bonuses"""
         # Create work log with > 8.6 hours: 12 hours
@@ -142,6 +162,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         total_pay = result.get("total_salary", 0)
         self.assertAlmostEqual(float(total_pay), float(expected_total), delta=30)
         self.assertGreater(float(result.get("overtime_hours", 0)), 0)
+
     def test_monthly_employee_zero_base_salary(self):
         """Test handling of monthly employee with very low base salary"""
         # Create employee with minimal base salary (since 0 is not allowed)
@@ -174,6 +195,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         # System may round to 0, so just check it doesn't crash
         self.assertGreaterEqual(total_pay, 0)  # Should be 0 or greater
         self.assertLess(total_pay, 1)  # But very small
+
     def test_monthly_employee_sabbath_work(self):
         """Test monthly employee working on Sabbath gets proportional salary + Sabbath bonus"""
         # Saturday work
@@ -193,14 +215,21 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
 
         # Calculate based on actual work hours: 8.0 hours
         proportional_salary = Decimal("8") * monthly_hourly_rate  # ~659.34 ILS
-        sabbath_bonus = Decimal("8") * monthly_hourly_rate * Decimal("0.50")  # 50% bonus for actual Sabbath hours
+        sabbath_bonus = (
+            Decimal("8") * monthly_hourly_rate * Decimal("0.50")
+        )  # 50% bonus for actual Sabbath hours
         expected_total = proportional_salary + sabbath_bonus  # ~989.01 ILS (150% total)
 
         # If Sabbath detection is not working, we may get zero calculation
         # Allow for test isolation issues
         if float(total_pay) == 0:
-            self.skipTest("Sabbath calculation returned zero - likely missing Holiday data")
-        self.assertGreater(float(total_pay), 500, "Should have reasonable salary calculation")
+            self.skipTest(
+                "Sabbath calculation returned zero - likely missing Holiday data"
+            )
+        self.assertGreater(
+            float(total_pay), 500, "Should have reasonable salary calculation"
+        )
+
     def test_monthly_employee_with_work_logs_creates_summaries(self):
         """Test that monthly calculations create proper database summaries"""
         # Create multiple work logs
@@ -225,6 +254,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
             self.assertIsNotNone(monthly_summary)
             # self.assertGreater(monthly_summary.total_salary, 0)  # TODO: Fix summary persistence
             # self.assertEqual(monthly_summary.worked_days, 10)
+
     def test_division_by_zero_protection(self):
         """Test that division by zero is properly handled"""
         # Create employee with potentially problematic data
@@ -250,6 +280,7 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         self.assertIn("total_salary", result)
         # With no work, should get zero pay for monthly proportional calculation
         self.assertEqual(result.get("total_salary", 0), 0)
+
     def test_monthly_vs_hourly_calculation_difference(self):
         """Test that monthly and hourly employees are calculated differently"""
         # Same work pattern for both employees
@@ -263,9 +294,13 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         )
         # Calculate for both
         monthly_context = make_context(self.monthly_employee, 2025, 7)
-        monthly_result = self.payroll_service.calculate(monthly_context, CalculationStrategy.ENHANCED)
+        monthly_result = self.payroll_service.calculate(
+            monthly_context, CalculationStrategy.ENHANCED
+        )
         hourly_context = make_context(self.hourly_employee, 2025, 7)
-        hourly_result = self.payroll_service.calculate(hourly_context, CalculationStrategy.ENHANCED)
+        hourly_result = self.payroll_service.calculate(
+            hourly_context, CalculationStrategy.ENHANCED
+        )
         # Should have different calculation approaches
         monthly_pay = monthly_result.get("total_salary", 0)
         hourly_pay = hourly_result.get("total_salary", 0)
@@ -274,8 +309,11 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         self.assertAlmostEqual(hourly_pay, expected_hourly, places=0)
         # Monthly: proportional salary calculation (15000/182 * 8.6)
         monthly_hourly_rate = Decimal("15000") / MONTHLY_NORM_HOURS  # ~82.42 ILS/hour
-        expected_monthly = Decimal("8.6") * monthly_hourly_rate  # ~708.79 ILS (with normative)
+        expected_monthly = (
+            Decimal("8.6") * monthly_hourly_rate
+        )  # ~708.79 ILS (with normative)
         self.assertAlmostEqual(float(monthly_pay), float(expected_monthly), delta=30)
+
     def test_monthly_employee_service_integration(self):
         """Test integration with PayrollService"""
         # Create comprehensive work pattern
@@ -309,8 +347,12 @@ class MonthlyEmployeeCalculationTest(PayrollTestMixin, TestCase):
         base_proportional = total_hours * monthly_hourly_rate
 
         # Bonuses: overtime (10h-8.6h=1.4h @25%, 9h-8.6h=0.4h @25%) + Sabbath (6h @50%)
-        overtime_bonus = (Decimal("1.4") + Decimal("0.4")) * monthly_hourly_rate * Decimal("0.25")
+        overtime_bonus = (
+            (Decimal("1.4") + Decimal("0.4")) * monthly_hourly_rate * Decimal("0.25")
+        )
         sabbath_bonus = Decimal("6") * monthly_hourly_rate * Decimal("0.50")
 
         expected_minimum = base_proportional + overtime_bonus + sabbath_bonus
-        self.assertGreater(total_pay, float(expected_minimum) * 0.5)  # Allow for significant calculation variations with Enhanced Strategy
+        self.assertGreater(
+            total_pay, float(expected_minimum) * 0.5
+        )  # Allow for significant calculation variations with Enhanced Strategy

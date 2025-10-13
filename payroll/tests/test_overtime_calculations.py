@@ -6,22 +6,33 @@ Tests detailed overtime rate applications:
 - Daily vs weekly overtime limits
 - Overtime during special days (Sabbath, holidays)
 """
-from datetime import datetime, timedelta, date
+
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from payroll.tests.helpers import PayrollTestMixin, MONTHLY_NORM_HOURS, ISRAELI_DAILY_NORM_HOURS, NIGHT_NORM_HOURS, MONTHLY_NORM_HOURS
+
 from django.test import TestCase
 from django.utils import timezone
+
+from integrations.models import Holiday
 from payroll.models import Salary
 from payroll.services.enums import CalculationStrategy
 from payroll.services.payroll_service import PayrollService
-from payroll.tests.helpers import PayrollTestMixin, make_context, ISRAELI_DAILY_NORM_HOURS
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+    make_context,
+)
 from users.models import Employee
 from worktime.models import WorkLog
-from integrations.models import Holiday
+
 from .test_helpers import create_shabbat_for_date
+
 
 class OvertimeCalculationTest(PayrollTestMixin, TestCase):
     """Test overtime rate calculations and transitions"""
+
     def setUp(self):
         """Set up test data"""
         # Initialize PayrollService
@@ -64,6 +75,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
             currency="ILS",
             is_active=True,
         )
+
     def test_no_overtime_regular_day(self):
         """Test regular 8-hour day with no overtime"""
         # Regular 8-hour workday
@@ -81,6 +93,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         # Total pay should be 8 * 100 = 800
         expected_pay = 8 * 100
         self.assertAlmostEqual(float(result["total_salary"]), expected_pay, places=2)
+
     def test_first_overtime_125_percent(self):
         """Test first 2 overtime hours get 125% rate"""
         # 10-hour workday (8.6 regular + 1.4 overtime at 125%)
@@ -106,6 +119,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         expected_pay = (8.6 * 100) + (1.4 * 125)
         actual_pay = float(result["total_salary"])
         self.assertAlmostEqual(actual_pay, expected_pay, places=0)
+
     def test_extended_overtime_150_percent(self):
         """Test 12 hours: 8.6 regular + 2h@125% + 1.4h@150%"""
         # 12-hour workday (8.6 regular + 2.0h@125% + 1.4h@150%)
@@ -126,6 +140,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         expected_pay = (8.6 * 100) + (2.0 * 125) + (1.4 * 150)
         actual_pay = float(result["total_salary"])
         self.assertAlmostEqual(actual_pay, expected_pay, delta=20)
+
     def test_extreme_overtime_day(self):
         """Test 16 hours: 8.6 regular + 2h@125% + 5.4h@150%"""
         # 16-hour workday (8.6 regular + 2.0h@125% + 5.4h@150%)
@@ -146,13 +161,14 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         expected_pay = (8.6 * 100) + (2.0 * 125) + (5.4 * 150)
         actual_pay = float(result["total_salary"])
         self.assertAlmostEqual(actual_pay, expected_pay, delta=30)
+
     def test_multiple_overtime_days_in_week(self):
         """Test overtime calculations across multiple days"""
         # Create 3 days with overtime
         overtime_days = [
             (1, 10),  # 1.4 hours overtime (10 - 8.6)
             (2, 11),  # 2.4 hours overtime (11 - 8.6)
-            (3, 9),   # 0.4 hours overtime (9 - 8.6)
+            (3, 9),  # 0.4 hours overtime (9 - 8.6)
         ]
         for day, total_hours in overtime_days:
             check_in = timezone.make_aware(datetime(2025, 7, day, 8, 0))
@@ -172,6 +188,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         # Total: 2580 + 175 + 310 + 50 = 3115
         expected_min = 25.8 * 100 + 175 + 310 + 50  # 3115
         self.assertGreaterEqual(total_pay, expected_min * 0.95)  # Allow small variance
+
     def test_overtime_during_sabbath(self):
         """Test Sabbath overtime: 8.6h@150% + 2h@175% + 1.4h@200%"""
         # Long Saturday work (12 hours)
@@ -193,6 +210,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         expected_total = sabbath_base + sabbath_ot_125 + sabbath_ot_150  # 1920
         total_pay = float(result["total_salary"])
         self.assertAlmostEqual(total_pay, expected_total, delta=50)
+
     def test_monthly_employee_with_overtime(self):
         """Test that monthly employees DO get overtime premiums with fixed logic"""
         # Long workday for monthly employee
@@ -215,6 +233,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         expected_total = proportional + bonus_125 + bonus_150  # ~1305.5 ILS
         total_pay = result.get("total_salary", 0)
         self.assertAlmostEqual(float(total_pay), float(expected_total), delta=50)
+
     def test_overtime_rate_accuracy(self):
         """Test exact overtime rate calculations"""
         # 10-hour day with known rates (Israeli norm: 8.6 regular + 1.4 overtime)
@@ -248,6 +267,7 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
                     expected_overtime_pay,
                     places=2,
                 )
+
     def test_friday_short_day_overtime(self):
         """Test overtime calculation on Friday (shorter standard day)"""
         # Friday work - 10 hours = 8.6 regular + 1.4 overtime @125%
@@ -267,7 +287,9 @@ class OvertimeCalculationTest(PayrollTestMixin, TestCase):
         # Expected: 8.6 regular + 1.4 overtime = 10.0 total
         # Actual: Getting error fallback with 0 values
         if float(regular_hours) == 0:
-            self.skipTest("PayrollService returning error fallback - calculation strategy needs debugging")
+            self.skipTest(
+                "PayrollService returning error fallback - calculation strategy needs debugging"
+            )
         self.assertAlmostEqual(float(overtime_hours), 1.4, places=1)
         # Check total hours
         total_hours = result.get("total_hours", 0)

@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from integrations.models import Holiday
+
 # Removed import to avoid circular dependency - will import lazily when needed
 from users.models import Employee
 from worktime.models import WorkLog
@@ -237,13 +238,14 @@ class Salary(models.Model):
             DeprecationWarning: This method is deprecated
         """
         import warnings
-        from payroll.services.payroll_service import get_payroll_service
+
         from payroll.services.contracts import CalculationContext
+        from payroll.services.payroll_service import get_payroll_service
 
         warnings.warn(
             "Salary.calculate_monthly_salary() is deprecated. Use PayrollService directly.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
         service = get_payroll_service()
@@ -251,59 +253,100 @@ class Salary(models.Model):
             employee_id=self.employee.id,
             year=year,
             month=month,
-            user_id=0  # user_id=0 for system call
+            user_id=0,  # user_id=0 for system call
         )
 
         # The result from the service is already a dictionary in the correct format
         return service.calculate(context)
 
-
     def clean(self):
         """Validate Salary model fields based on calculation_type"""
         from django.core.exceptions import ValidationError
+
         errors = {}
 
         # Monthly calculation requires base_salary
         if self.calculation_type == "monthly":
             if not self.base_salary or self.base_salary <= 0:
-                errors['base_salary'] = "Monthly calculation type requires a positive base salary."
+                errors["base_salary"] = (
+                    "Monthly calculation type requires a positive base salary."
+                )
             if self.hourly_rate and self.hourly_rate > 0:
-                errors['hourly_rate'] = "Monthly calculation type should not have hourly rate."
+                errors["hourly_rate"] = (
+                    "Monthly calculation type should not have hourly rate."
+                )
 
         # Hourly calculation requires hourly_rate
         elif self.calculation_type == "hourly":
             if not self.hourly_rate or self.hourly_rate <= 0:
-                errors['hourly_rate'] = "Hourly calculation type requires a positive hourly rate."
+                errors["hourly_rate"] = (
+                    "Hourly calculation type requires a positive hourly rate."
+                )
             if self.base_salary and self.base_salary > 0:
-                errors['base_salary'] = "Hourly calculation type should not have base salary."
+                errors["base_salary"] = (
+                    "Hourly calculation type should not have base salary."
+                )
 
         # Project calculation requires dates and either base_salary or hourly_rate
         elif self.calculation_type == "project":
             if not self.project_start_date:
-                errors['project_start_date'] = "Project calculation type requires start date."
+                errors["project_start_date"] = (
+                    "Project calculation type requires start date."
+                )
             if not self.project_end_date:
-                errors['project_end_date'] = "Project calculation type requires end date."
-            if self.project_start_date and self.project_end_date and self.project_start_date > self.project_end_date:
-                errors['project_end_date'] = "Project end date must be after start date."
-            if not ((self.base_salary and self.base_salary > 0) or (self.hourly_rate and self.hourly_rate > 0)):
-                errors['base_salary'] = "Project calculation type requires either base salary or hourly rate."
+                errors["project_end_date"] = (
+                    "Project calculation type requires end date."
+                )
+            if (
+                self.project_start_date
+                and self.project_end_date
+                and self.project_start_date > self.project_end_date
+            ):
+                errors["project_end_date"] = (
+                    "Project end date must be after start date."
+                )
+            if not (
+                (self.base_salary and self.base_salary > 0)
+                or (self.hourly_rate and self.hourly_rate > 0)
+            ):
+                errors["base_salary"] = (
+                    "Project calculation type requires either base salary or hourly rate."
+                )
 
         # Check for conflicting fields (both base_salary and hourly_rate positive)
-        if (self.base_salary and self.base_salary > 0) and (self.hourly_rate and self.hourly_rate > 0):
-            errors['__all__'] = "Cannot have both base salary and hourly rate positive."
+        if (self.base_salary and self.base_salary > 0) and (
+            self.hourly_rate and self.hourly_rate > 0
+        ):
+            errors["__all__"] = "Cannot have both base salary and hourly rate positive."
 
         # Check for zero values on active salaries (context-specific)
         if self.is_active:
             # For monthly salaries, base_salary must be positive
-            if self.calculation_type == "monthly" and self.base_salary is not None and self.base_salary == 0:
-                errors['base_salary'] = "Active monthly salary cannot have zero base salary."
+            if (
+                self.calculation_type == "monthly"
+                and self.base_salary is not None
+                and self.base_salary == 0
+            ):
+                errors["base_salary"] = (
+                    "Active monthly salary cannot have zero base salary."
+                )
             # For hourly salaries, hourly_rate must be positive
-            if self.calculation_type == "hourly" and self.hourly_rate is not None and self.hourly_rate == 0:
-                errors['hourly_rate'] = "Active hourly salary cannot have zero hourly rate."
+            if (
+                self.calculation_type == "hourly"
+                and self.hourly_rate is not None
+                and self.hourly_rate == 0
+            ):
+                errors["hourly_rate"] = (
+                    "Active hourly salary cannot have zero hourly rate."
+                )
             # For project salaries, either base_salary or hourly_rate must be positive
             if self.calculation_type == "project":
-                if (self.base_salary is None or self.base_salary == 0) and (self.hourly_rate is None or self.hourly_rate == 0):
-                    errors['base_salary'] = "Active project salary must have either positive base salary or hourly rate."
+                if (self.base_salary is None or self.base_salary == 0) and (
+                    self.hourly_rate is None or self.hourly_rate == 0
+                ):
+                    errors["base_salary"] = (
+                        "Active project salary must have either positive base salary or hourly rate."
+                    )
 
         if errors:
             raise ValidationError(errors)
@@ -320,7 +363,7 @@ class Salary(models.Model):
 
         validate = kwargs.pop("validate", True)
         skip_validation = kwargs.pop("skip_validation", False)
-        
+
         # Track if this is a brand new record
         is_new_record = not self.pk
 
@@ -396,9 +439,17 @@ class Salary(models.Model):
 
         # Sync related fields for test compatibility - только при валидации
         if validate and not skip_validation:
-            if self.calculation_type == "hourly" and self.monthly_hourly and not self.hourly_rate:
+            if (
+                self.calculation_type == "hourly"
+                and self.monthly_hourly
+                and not self.hourly_rate
+            ):
                 self.hourly_rate = self.monthly_hourly
-            elif self.calculation_type == "hourly" and self.hourly_rate and not self.monthly_hourly:
+            elif (
+                self.calculation_type == "hourly"
+                and self.hourly_rate
+                and not self.monthly_hourly
+            ):
                 self.monthly_hourly = self.hourly_rate
 
         # Validate salary fields based on calculation_type
@@ -510,16 +561,22 @@ class DailyPayrollCalculation(models.Model):
 
     # Payment amounts - renamed to clarify relationship to base_pay and bonus_pay
     base_regular_pay = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0"),
-        help_text="Regular pay component of base_pay"
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Regular pay component of base_pay",
     )
     bonus_overtime_pay_1 = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0"),
-        help_text="First 2 overtime hours at 125% - component of bonus_pay"
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="First 2 overtime hours at 125% - component of bonus_pay",
     )
     bonus_overtime_pay_2 = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0"),
-        help_text="Additional overtime hours at 150% - component of bonus_pay"
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Additional overtime hours at 150% - component of bonus_pay",
     )
     # Sabbath-specific overtime payments
     bonus_sabbath_overtime_pay_1 = models.DecimalField(
@@ -550,8 +607,10 @@ class DailyPayrollCalculation(models.Model):
 
     # Legacy fields - keep for backward compatibility
     total_pay = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0"),
-        help_text="DEPRECATED - use total_gross_pay instead"
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="DEPRECATED - use total_gross_pay instead",
     )
     total_gross_pay = models.DecimalField(
         max_digits=12,
@@ -580,12 +639,12 @@ class DailyPayrollCalculation(models.Model):
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    calculated_by_service = models.CharField(
-        max_length=50, default="PayrollService"
-    )
+    calculated_by_service = models.CharField(max_length=50, default="PayrollService")
     proportional_monthly = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0"),
-        help_text="Proportional monthly salary portion for this calculation"
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Proportional monthly salary portion for this calculation",
     )
 
     class Meta:
@@ -661,16 +720,22 @@ class MonthlyPayrollSummary(models.Model):
         max_digits=12, decimal_places=2, default=Decimal("0")
     )
     total_salary = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0"),
-        help_text="Total salary amount for the month"
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Total salary amount for the month",
     )
     proportional_monthly = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0"),
-        help_text="Proportional monthly salary based on hours worked"
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Proportional monthly salary based on hours worked",
     )
     total_bonuses_monthly = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0"),
-        help_text="Total bonus payments for monthly employees (overtime, sabbath, etc.)"
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Total bonus payments for monthly employees (overtime, sabbath, etc.)",
     )
 
     # Additional info

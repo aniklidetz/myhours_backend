@@ -21,9 +21,9 @@ from django.utils import timezone
 from integrations.config.israeli_holidays import is_official_holiday
 from integrations.models import Holiday
 from integrations.services.hebcal_api_client import HebcalAPIClient
+from integrations.services.holiday_times_service import HolidayTimesService
 from integrations.services.israeli_holidays_service import IsraeliHolidaysService
 from integrations.services.unified_shabbat_service import get_shabbat_times
-from integrations.services.holiday_times_service import HolidayTimesService
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +78,12 @@ class HolidaySyncService:
         national_created, national_updated = cls._sync_national_holidays(year)
 
         # Aggregate results
-        total_created = special_created + other_created + weekly_created + national_created
-        total_updated = special_updated + other_updated + weekly_updated + national_updated
+        total_created = (
+            special_created + other_created + weekly_created + national_created
+        )
+        total_updated = (
+            special_updated + other_updated + weekly_updated + national_updated
+        )
 
         logger.info(
             f"Holiday sync completed for {year}: "
@@ -100,16 +104,19 @@ class HolidaySyncService:
             if current_date.weekday() == 4:  # Friday
                 try:
                     shabbat_times = get_shabbat_times(current_date)
-                    shabbats.append({
-                        "title": "Shabbat",
-                        "date": current_date.isoformat(),
-                        "category": "holiday",
-                        "subcat": "shabbat",
-                        "start_time": shabbat_times["shabbat_start"],
-                        "end_time": shabbat_times["shabbat_end"],
-                    })
+                    shabbats.append(
+                        {
+                            "title": "Shabbat",
+                            "date": current_date.isoformat(),
+                            "category": "holiday",
+                            "subcat": "shabbat",
+                            "start_time": shabbat_times["shabbat_start"],
+                            "end_time": shabbat_times["shabbat_end"],
+                        }
+                    )
                 except Exception as e:
                     from core.logging_utils import err_tag
+
                     logger.error(
                         "Error generating Shabbat",
                         extra={"err": err_tag(e), "date": str(current_date)},
@@ -126,7 +133,8 @@ class HolidaySyncService:
         updated_count = 0
 
         special_shabbats = [
-            holiday for holiday in holidays
+            holiday
+            for holiday in holidays
             if holiday.get("category") == "holiday"
             and holiday.get("subcat") == "shabbat"
         ]
@@ -145,8 +153,7 @@ class HolidaySyncService:
                 }
 
                 holiday, created = Holiday.objects.get_or_create(
-                    date=holiday_date,
-                    defaults=defaults
+                    date=holiday_date, defaults=defaults
                 )
 
                 if created:
@@ -157,13 +164,16 @@ class HolidaySyncService:
                     updated = cls._update_holiday_if_changed(holiday, defaults)
                     if updated:
                         updated_count += 1
-                        logger.debug(f"Updated special Shabbat: {title} on {holiday_date}")
+                        logger.debug(
+                            f"Updated special Shabbat: {title} on {holiday_date}"
+                        )
 
             except Exception as e:
                 from core.logging_utils import err_tag
+
                 logger.error(
                     "Error syncing special Shabbat",
-                    extra={"err": err_tag(e), "holiday": holiday_data}
+                    extra={"err": err_tag(e), "holiday": holiday_data},
                 )
 
         return created_count, updated_count
@@ -175,7 +185,8 @@ class HolidaySyncService:
         updated_count = 0
 
         other_holidays = [
-            holiday for holiday in holidays
+            holiday
+            for holiday in holidays
             if holiday.get("category") == "holiday"
             and holiday.get("subcat") in ["major", "minor", "modern"]
             and holiday.get("subcat") != "shabbat"
@@ -211,6 +222,7 @@ class HolidaySyncService:
                             eve_date = start_time.date()
                             # End at midnight (start of next day) in Israeli timezone
                             import pytz
+
                             israel_tz = pytz.timezone("Asia/Jerusalem")
                             eve_end = israel_tz.localize(
                                 datetime.combine(holiday_date, datetime.min.time())
@@ -226,17 +238,25 @@ class HolidaySyncService:
 
                             # Check if there's already an "Erev" holiday for this date
                             existing_eve = Holiday.objects.filter(
-                                date=eve_date,
-                                name__contains="Erev"
+                                date=eve_date, name__contains="Erev"
                             ).first()
 
                             if not existing_eve:
                                 # Only create the "Start of" entry if there's no Erev holiday
-                                eve_holiday, eve_created = Holiday.objects.get_or_create(
-                                    date=eve_date,
-                                    name=f"Start of {title}",  # Use name in get_or_create
-                                    defaults=eve_defaults
-                                )
+                                # Use get() by date only to match UNIQUE constraint
+                                try:
+                                    eve_holiday = Holiday.objects.get(date=eve_date)
+                                    eve_created = False
+                                    # Update existing record with eve_defaults
+                                    for field, value in eve_defaults.items():
+                                        setattr(eve_holiday, field, value)
+                                    eve_holiday.save()
+                                except Holiday.DoesNotExist:
+                                    # Create new record if date doesn't exist
+                                    eve_holiday = Holiday.objects.create(
+                                        date=eve_date, **eve_defaults
+                                    )
+                                    eve_created = True
                             else:
                                 # If there's already an Erev holiday, update it with times
                                 eve_holiday = existing_eve
@@ -248,10 +268,14 @@ class HolidaySyncService:
 
                             if eve_created:
                                 created_count += 1
-                                logger.debug(f"Created holiday eve: Start of {title} on {eve_date}")
+                                logger.debug(
+                                    f"Created holiday eve: Start of {title} on {eve_date}"
+                                )
                             else:
                                 # Update if needed
-                                eve_updated = cls._update_holiday_if_changed(eve_holiday, eve_defaults)
+                                eve_updated = cls._update_holiday_if_changed(
+                                    eve_holiday, eve_defaults
+                                )
                                 if eve_updated:
                                     updated_count += 1
 
@@ -262,8 +286,7 @@ class HolidaySyncService:
                             )
 
                 holiday, created = Holiday.objects.get_or_create(
-                    date=holiday_date,
-                    defaults=defaults
+                    date=holiday_date, defaults=defaults
                 )
 
                 if created:
@@ -278,9 +301,11 @@ class HolidaySyncService:
 
             except Exception as e:
                 from core.logging_utils import err_tag
+
                 logger.error(
                     "Error syncing holiday",
-                    extra={"err": err_tag(e), "holiday": holiday_data}
+                    extra={"err": err_tag(e), "holiday": holiday_data},
+                    exc_info=True,  # Include full traceback
                 )
 
         return created_count, updated_count
@@ -311,9 +336,12 @@ class HolidaySyncService:
                 if start_time and end_time:
                     # Friday evening portion
                     import pytz
+
                     israel_tz = pytz.timezone("Asia/Jerusalem")
                     friday_end = israel_tz.localize(
-                        datetime.combine(holiday_date + timedelta(days=1), datetime.min.time())
+                        datetime.combine(
+                            holiday_date + timedelta(days=1), datetime.min.time()
+                        )
                     )
 
                     friday_defaults = {
@@ -329,10 +357,14 @@ class HolidaySyncService:
                         holiday = Holiday.objects.get(date=holiday_date)
                         # Only update if it's still a regular Shabbat (preserve special/holiday status)
                         if not holiday.is_special_shabbat and not holiday.is_holiday:
-                            updated = cls._update_holiday_if_changed(holiday, friday_defaults)
+                            updated = cls._update_holiday_if_changed(
+                                holiday, friday_defaults
+                            )
                             if updated:
                                 updated_count += 1
-                                logger.debug(f"Updated Friday Shabbat on {holiday_date}")
+                                logger.debug(
+                                    f"Updated Friday Shabbat on {holiday_date}"
+                                )
 
                     except Holiday.DoesNotExist:
                         # Create new Friday Shabbat
@@ -359,10 +391,14 @@ class HolidaySyncService:
                         saturday = Holiday.objects.get(date=saturday_date)
                         # Only update if it's still a regular Shabbat
                         if not saturday.is_special_shabbat and not saturday.is_holiday:
-                            updated = cls._update_holiday_if_changed(saturday, saturday_defaults)
+                            updated = cls._update_holiday_if_changed(
+                                saturday, saturday_defaults
+                            )
                             if updated:
                                 updated_count += 1
-                                logger.debug(f"Updated Saturday Shabbat on {saturday_date}")
+                                logger.debug(
+                                    f"Updated Saturday Shabbat on {saturday_date}"
+                                )
 
                     except Holiday.DoesNotExist:
                         # Create new Saturday Shabbat
@@ -372,9 +408,10 @@ class HolidaySyncService:
 
             except Exception as e:
                 from core.logging_utils import err_tag
+
                 logger.error(
                     "Error syncing weekly Shabbat",
-                    extra={"err": err_tag(e), "date": shabbat_data.get("date")}
+                    extra={"err": err_tag(e), "date": shabbat_data.get("date")},
                 )
 
         return created_count, updated_count
@@ -386,9 +423,10 @@ class HolidaySyncService:
             return IsraeliHolidaysService.sync_national_holidays(year)
         except Exception as e:
             from core.logging_utils import err_tag
+
             logger.error(
                 "Error syncing Israeli national holidays",
-                extra={"err": err_tag(e), "year": year}
+                extra={"err": err_tag(e), "year": year},
             )
             return 0, 0
 

@@ -6,10 +6,10 @@ This script tests UnifiedShabbatService logic without requiring Django setup.
 Useful for quick validation when database is not available.
 """
 
-import sys
 import os
-from pathlib import Path
+import sys
 from datetime import date, datetime
+from pathlib import Path
 
 # Add project root to Python path
 script_dir = Path(__file__).resolve().parent
@@ -29,12 +29,12 @@ def test_basic_imports():
 
         # Mock Django modules
         django_mock = MagicMock()
-        sys.modules['django'] = django_mock
-        sys.modules['django.core'] = django_mock
-        sys.modules['django.core.cache'] = django_mock
-        sys.modules['django.core.cache.cache'] = django_mock
-        sys.modules['django.conf'] = django_mock
-        sys.modules['django.conf.settings'] = django_mock
+        sys.modules["django"] = django_mock
+        sys.modules["django.core"] = django_mock
+        sys.modules["django.core.cache"] = django_mock
+        sys.modules["django.core.cache.cache"] = django_mock
+        sys.modules["django.conf"] = django_mock
+        sys.modules["django.conf.settings"] = django_mock
 
         # Mock cache
         cache_mock = MagicMock()
@@ -76,7 +76,9 @@ def test_service_logic():
         if friday_for_monday == expected_friday:
             print(" Correctly finds Friday for any date")
         else:
-            print(f" Friday calculation wrong: got {friday_for_monday}, expected {expected_friday}")
+            print(
+                f" Friday calculation wrong: got {friday_for_monday}, expected {expected_friday}"
+            )
             return False
 
         # Test timezone conversion logic
@@ -101,14 +103,17 @@ def test_fallback_creation():
     print("=" * 40)
 
     try:
-        from payroll.services.contracts import create_fallback_shabbat_times, validate_shabbat_times
+        from payroll.services.contracts import (
+            create_fallback_shabbat_times,
+            validate_shabbat_times,
+        )
 
         # Test fallback creation for different seasons
         seasons = [
             ("2024-06-14", "summer"),
             ("2024-12-13", "winter"),
             ("2024-03-15", "spring"),
-            ("2024-09-13", "fall")
+            ("2024-09-13", "fall"),
         ]
 
         for date_str, season in seasons:
@@ -141,7 +146,7 @@ def test_contract_validation():
     print("=" * 40)
 
     try:
-        from payroll.services.contracts import validate_shabbat_times, ValidationError
+        from payroll.services.contracts import ValidationError, validate_shabbat_times
 
         # Test valid contract
         valid_contract = {
@@ -152,7 +157,7 @@ def test_contract_validation():
             "timezone": "Asia/Jerusalem",
             "is_estimated": False,
             "calculation_method": "api_precise",
-            "coordinates": {"lat": 31.7683, "lng": 35.2137}
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
         }
 
         validate_shabbat_times(valid_contract)
@@ -181,8 +186,9 @@ def test_time_calculations():
     print("=" * 40)
 
     try:
-        from payroll.services.contracts import create_fallback_shabbat_times
         from datetime import datetime, timedelta
+
+        from payroll.services.contracts import create_fallback_shabbat_times
 
         # Test that Shabbat start is 18 minutes before sunset
         fallback = create_fallback_shabbat_times("2024-06-14")

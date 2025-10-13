@@ -3,6 +3,7 @@ from django.utils.html import format_html
 
 from .models import BiometricAttempt, BiometricLog, BiometricProfile, FaceQualityCheck
 
+
 @admin.register(BiometricProfile)
 class BiometricProfileAdmin(admin.ModelAdmin):
     list_display = [

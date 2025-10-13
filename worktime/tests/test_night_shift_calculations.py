@@ -2,20 +2,26 @@
 Tests for night shift detection and calculation.
 Night shifts are typically defined as work between 22:00 (10 PM) and 06:00 (6 AM).
 """
+
 from datetime import date, datetime, time
 from decimal import Decimal
+
 from django.test import TestCase
 from django.utils import timezone
+
 from integrations.models import Holiday
-from payroll.tests.conftest import ISRAELI_DAILY_NORM_HOURS
 from payroll.models import Salary
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy
+from payroll.services.payroll_service import PayrollService
+from payroll.tests.conftest import ISRAELI_DAILY_NORM_HOURS
 from users.models import Employee
 from worktime.models import WorkLog
+
+
 class NightShiftCalculationTest(TestCase):
     """Test night shift detection and payment calculations"""
+
     def setUp(self):
         """Set up test data"""
         # Create hourly employee
@@ -40,9 +46,14 @@ class NightShiftCalculationTest(TestCase):
             name="Shabbat",
             is_holiday=True,
             is_shabbat=True,
-            start_time=timezone.make_aware(datetime(2025, 7, 4, 18, 30)),  # Friday ~6:30 PM
-            end_time=timezone.make_aware(datetime(2025, 7, 5, 19, 30)),  # Saturday ~7:30 PM
+            start_time=timezone.make_aware(
+                datetime(2025, 7, 4, 18, 30)
+            ),  # Friday ~6:30 PM
+            end_time=timezone.make_aware(
+                datetime(2025, 7, 5, 19, 30)
+            ),  # Saturday ~7:30 PM
         )
+
     def test_full_night_shift(self):
         """Test full night shift from 22:00 to 06:00"""
         # Create work log for full night shift (use Wednesday to avoid any Sabbath logic)
@@ -56,7 +67,7 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -68,6 +79,7 @@ class NightShiftCalculationTest(TestCase):
         # Night pay = overtime pay (1h): 1 hour * 50 * 0.25 = 12.5 (just the bonus part)
         # expected_night_pay = Decimal("12.50")
         # self.assertEqual(result.get("night_pay", 0), expected_night_pay)
+
     def test_partial_night_shift_evening(self):
         """Test shift that starts in evening and goes into night"""
         # Work from 8 PM to 2 AM (4 hours regular, 4 hours night)
@@ -81,7 +93,7 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -89,6 +101,7 @@ class NightShiftCalculationTest(TestCase):
         self.assertEqual(result.get("night_hours", 0), 4)
         # Total 6h shift with 4h night - all 6h are regular (under 7h limit)
         self.assertEqual(result.get("regular_hours", 0), 6)
+
     def test_partial_night_shift_morning(self):
         """Test shift that starts at night and ends in morning"""
         # Work from 4 AM to 10 AM (2 hours night, 4 hours regular)
@@ -102,7 +115,7 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -110,6 +123,7 @@ class NightShiftCalculationTest(TestCase):
         self.assertEqual(result.get("night_hours", 0), 2)
         # Total 6h shift with 2h night - all 6h are regular (under 7h limit)
         self.assertEqual(result.get("regular_hours", 0), 6)
+
     def test_overnight_shift_crossing_midnight(self):
         """Test shift that crosses midnight"""
         # Work from 11 PM to 3 AM
@@ -123,12 +137,13 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
         # All 4 hours should be night shift
         self.assertEqual(result.get("night_hours", 0), 4)
+
     def test_sabbath_night_shift(self):
         """Test night shift during Sabbath (Friday night/Saturday)"""
         # Friday night shift starting at 11 PM
@@ -142,7 +157,7 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
@@ -154,6 +169,7 @@ class NightShiftCalculationTest(TestCase):
         # TODO: Separate Sabbath night premium tracking not yet implemented
         # self.assertGreater(result.get("sabbath_night_hours", 0), 0)
         # self.assertGreater(result.get("sabbath_night_pay", 0), result.get("night_pay", 0))
+
     def test_no_night_shift_configuration(self):
         """Test handling when night shift times are not configured"""
         # Create night work log
@@ -167,12 +183,13 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)
         # For now, all hours treated as regular - night shift functionality depends on service implementation
         self.assertGreater(result.get("total_hours", 0), 0)
+
     def test_max_16_hour_shift(self):
         """Test calculation for maximum allowed 16-hour shift"""
         # Maximum 16-hour shift (legal limit)
@@ -186,7 +203,7 @@ class NightShiftCalculationTest(TestCase):
             year=2025,
             month=7,
             user_id=None,
-            force_recalculate=True
+            force_recalculate=True,
         )
         service = PayrollService()
         result = service.calculate(context, CalculationStrategy.ENHANCED)

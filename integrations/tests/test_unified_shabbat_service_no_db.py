@@ -5,9 +5,10 @@ These tests can run without PostgreSQL/MongoDB and focus on core logic validatio
 Use these when database is not available but you need to test the service logic.
 """
 
-import pytest
 from datetime import date, datetime, timedelta
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
+import pytest
 import pytz
 
 # Prevent Django database access
@@ -20,6 +21,7 @@ class TestUnifiedShabbatServiceNoDb:
     def test_service_imports_successfully(self):
         """Test that service can be imported without database"""
         from integrations.services.unified_shabbat_service import UnifiedShabbatService
+
         service = UnifiedShabbatService()
         assert service is not None
 
@@ -36,7 +38,7 @@ class TestUnifiedShabbatServiceNoDb:
             "timezone": "Asia/Jerusalem",
             "is_estimated": False,
             "calculation_method": "api_precise",
-            "coordinates": {"lat": 31.7683, "lng": 35.2137}
+            "coordinates": {"lat": 31.7683, "lng": 35.2137},
         }
 
         # Should not raise exception
@@ -76,13 +78,16 @@ class TestUnifiedShabbatServiceNoDb:
 
     def test_fallback_creation_logic(self):
         """Test fallback time creation for different seasons"""
-        from payroll.services.contracts import create_fallback_shabbat_times, validate_shabbat_times
+        from payroll.services.contracts import (
+            create_fallback_shabbat_times,
+            validate_shabbat_times,
+        )
 
         seasons = [
-            ("2024-06-14", "summer"),   # June - summer
-            ("2024-12-13", "winter"),   # December - winter
-            ("2024-03-15", "spring"),   # March - spring
-            ("2024-09-13", "fall")      # September - fall
+            ("2024-06-14", "summer"),  # June - summer
+            ("2024-12-13", "winter"),  # December - winter
+            ("2024-03-15", "spring"),  # March - spring
+            ("2024-09-13", "fall"),  # September - fall
         ]
 
         for date_str, season_name in seasons:
@@ -105,8 +110,9 @@ class TestUnifiedShabbatServiceNoDb:
 
     def test_jewish_law_compliance_in_fallback(self):
         """Test that fallback times follow Jewish law (18/42 minute rules)"""
-        from payroll.services.contracts import create_fallback_shabbat_times
         from datetime import timedelta
+
+        from payroll.services.contracts import create_fallback_shabbat_times
 
         fallback = create_fallback_shabbat_times("2024-06-14")
 
@@ -126,7 +132,7 @@ class TestUnifiedShabbatServiceNoDb:
         expected_end = timedelta(minutes=42)
         assert abs(end_diff - expected_end) < timedelta(minutes=1)
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_service_handles_api_failure_gracefully(self, mock_get):
         """Test that service handles API failures and returns fallback"""
         from integrations.services.unified_shabbat_service import UnifiedShabbatService
@@ -144,7 +150,7 @@ class TestUnifiedShabbatServiceNoDb:
         # Should be marked as fallback
         assert result["is_estimated"] is True
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_service_uses_api_when_available(self, mock_get):
         """Test that service tries to use API when available"""
         from integrations.services.unified_shabbat_service import UnifiedShabbatService
@@ -153,7 +159,7 @@ class TestUnifiedShabbatServiceNoDb:
         mock_response = Mock()
         mock_response.json.return_value = {
             "status": "OK",
-            "results": {"sunset": "2024-06-14T16:30:15+00:00"}
+            "results": {"sunset": "2024-06-14T16:30:15+00:00"},
         }
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
@@ -166,6 +172,7 @@ class TestUnifiedShabbatServiceNoDb:
 
         # Should return valid result
         from payroll.services.contracts import validate_shabbat_times
+
         validate_shabbat_times(result)
 
     def test_seasonal_fallback_variation(self):
@@ -187,14 +194,14 @@ class TestUnifiedShabbatServiceNoDb:
 
     def test_contract_validation_rejects_invalid_data(self):
         """Test that contract validation properly rejects invalid data"""
-        from payroll.services.contracts import validate_shabbat_times, ValidationError
+        from payroll.services.contracts import ValidationError, validate_shabbat_times
 
         invalid_contracts = [
             {},  # Empty
             {"invalid": "data"},  # Wrong fields
             {  # Missing required fields
                 "shabbat_start": "2024-06-14T17:12:00+03:00",
-                "timezone": "Asia/Jerusalem"
+                "timezone": "Asia/Jerusalem",
             },
             {  # Wrong timezone
                 "shabbat_start": "2024-06-14T17:12:00+03:00",
@@ -204,8 +211,8 @@ class TestUnifiedShabbatServiceNoDb:
                 "timezone": "US/Eastern",  # Wrong timezone
                 "is_estimated": False,
                 "calculation_method": "api_precise",
-                "coordinates": {"lat": 31.7683, "lng": 35.2137}
-            }
+                "coordinates": {"lat": 31.7683, "lng": 35.2137},
+            },
         ]
 
         for invalid_contract in invalid_contracts:

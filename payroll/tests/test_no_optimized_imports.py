@@ -5,9 +5,11 @@ This test ensures that no new code imports optimized_service outside of
 legacy modules, preventing accidental usage of the removed service with
 incorrect calculation formula (hours × rate × 1.3).
 """
+
 import importlib
 import inspect
 import pkgutil
+
 
 def test_no_optimized_imports_in_non_legacy():
     """
@@ -26,16 +28,20 @@ def test_no_optimized_imports_in_non_legacy():
 
     # Scan all payroll package modules
     import payroll
+
     for module_info in pkgutil.walk_packages(payroll.__path__, payroll.__name__ + "."):
         module_name = module_info.name
 
         # Skip explicitly allowed legacy locations
-        if any(pattern in module_name for pattern in [
-            ".tests.legacy.",
-            ".management.commands.test_payroll_optimization",
-            "archive",
-            "backup"
-        ]):
+        if any(
+            pattern in module_name
+            for pattern in [
+                ".tests.legacy.",
+                ".management.commands.test_payroll_optimization",
+                "archive",
+                "backup",
+            ]
+        ):
             continue
 
         # Skip test modules in general (they may reference it for mocking)
@@ -66,6 +72,7 @@ def test_no_optimized_imports_in_non_legacy():
         f"Use PayrollService with CalculationStrategy.ENHANCED instead."
     )
 
+
 def test_legacy_files_cleanup_completed():
     """
     Verify that legacy files have been properly removed.
@@ -76,7 +83,7 @@ def test_legacy_files_cleanup_completed():
     removed_legacy_files = [
         "payroll.tests.legacy.test_optimized_service",
         "payroll.tests.legacy.test_optimized_service_equivalency",
-        "payroll.management.commands.test_payroll_optimization"
+        "payroll.management.commands.test_payroll_optimization",
     ]
 
     still_present = []

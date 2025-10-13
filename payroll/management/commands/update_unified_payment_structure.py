@@ -4,9 +4,9 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from payroll.models import DailyPayrollCalculation
-from payroll.services.payroll_service import PayrollService
 from payroll.services.contracts import CalculationContext
 from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -82,12 +82,18 @@ class Command(BaseCommand):
                 active_salary = calc.employee.salaries.filter(is_active=True).first()
                 if not active_salary:
                     self.stdout.write(
-                        self.style.ERROR(f"No active salary found for {calc.employee.get_full_name()}")
+                        self.style.ERROR(
+                            f"No active salary found for {calc.employee.get_full_name()}"
+                        )
                     )
                     continue
 
                 calculation_type = active_salary.calculation_type
-                employee_type = EmployeeType.HOURLY if calculation_type == 'hourly' else EmployeeType.MONTHLY
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if calculation_type == "hourly"
+                    else EmployeeType.MONTHLY
+                )
 
                 # Use new PayrollService
                 service = PayrollService()
@@ -98,17 +104,19 @@ class Command(BaseCommand):
                     user_id=1,  # System user for management commands
                     employee_type=employee_type,
                     force_recalculate=True,
-                    fast_mode=False  # Enable database persistence
+                    fast_mode=False,  # Enable database persistence
                 )
                 result = service.calculate(context, CalculationStrategy.ENHANCED)
 
                 # Extract unified values from result
                 total_salary = Decimal(str(result.get("total_salary", 0)))
-                
+
                 # Calculate base_pay and bonus_pay from the result
                 regular_hours = Decimal(str(result.get("regular_hours", 0)))
-                total_hours = regular_hours + Decimal(str(result.get("overtime_hours", 0)))
-                
+                total_hours = regular_hours + Decimal(
+                    str(result.get("overtime_hours", 0))
+                )
+
                 if calculation_type == "hourly" and active_salary.hourly_rate:
                     new_base_pay = regular_hours * active_salary.hourly_rate
                     new_bonus_pay = total_salary - new_base_pay
@@ -119,16 +127,16 @@ class Command(BaseCommand):
                         new_bonus_pay = total_salary - new_base_pay
                     else:
                         new_base_pay = total_salary
-                        new_bonus_pay = Decimal('0')
+                        new_bonus_pay = Decimal("0")
 
                 unified_result = {
                     "base_pay": new_base_pay,
-                    "bonus_pay": new_bonus_pay, 
+                    "bonus_pay": new_bonus_pay,
                     "total_pay": total_salary,
                     "total_gross_pay": total_salary,
                 }
 
-                # Check if values changed significantly  
+                # Check if values changed significantly
                 new_base_pay = unified_result["base_pay"]
                 new_bonus_pay = unified_result["bonus_pay"]
                 new_total_gross = unified_result["total_gross_pay"]
