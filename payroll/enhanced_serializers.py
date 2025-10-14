@@ -12,19 +12,39 @@ except Exception:  # pragma: no cover - safe fallback
 
 
 class PayrollCalculationService:  # type: ignore
+    """
+    Wrapper for PayrollService to maintain test compatibility.
+    Uses the new PayrollService.calculate() method with proper context.
+    """
+
     def __init__(self, employee, year: int, month: int):
         self.employee = employee
         self.year = year
         self.month = month
 
     def calculate_monthly_salary(self):
+        """
+        Calculate monthly salary using PayrollService.
+        Maintains backward compatibility with tests.
+        """
         if _RealService is None:
             return {}
-        service = _RealService()
+
         try:
-            return service.calculate_monthly_salary(
-                employee=self.employee, year=self.year, month=self.month
+            from .services.contracts import CalculationContext
+            from .services.enums import CalculationStrategy
+
+            # Create proper calculation context
+            context = CalculationContext(
+                employee_id=self.employee.id,
+                year=self.year,
+                month=self.month,
+                user_id=0,  # System call
             )
+
+            # Use the correct calculate() method
+            service = _RealService()
+            return service.calculate(context, CalculationStrategy.ENHANCED)
         except Exception:
             return {}
 

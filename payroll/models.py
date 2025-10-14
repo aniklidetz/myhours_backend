@@ -82,11 +82,27 @@ class Salary(models.Model):
     def calculate_salary(self):
         """
         Backward compatibility method for tests.
+        Updated to use PayrollService directly instead of deprecated calculate_monthly_salary.
         """
         from django.utils import timezone
 
+        from payroll.services.contracts import CalculationContext
+        from payroll.services.enums import CalculationStrategy
+        from payroll.services.payroll_service import PayrollService
+
         now = timezone.now()
-        result = self.calculate_monthly_salary(now.month, now.year)
+
+        # Use PayrollService directly
+        context = CalculationContext(
+            employee_id=self.employee.id,
+            year=now.year,
+            month=now.month,
+            user_id=0,  # System call
+        )
+
+        service = PayrollService()
+        result = service.calculate(context, CalculationStrategy.ENHANCED)
+
         # For compatibility with old tests, return only total_salary
         if isinstance(result, dict) and "total_salary" in result:
             return result["total_salary"]
@@ -95,169 +111,38 @@ class Salary(models.Model):
     def get_working_days_in_month(self, year, month):
         """
         Gets the number of working days in a month (excluding Shabbat and holidays)
-        Updated for 5-day work week
+
+        Delegates to PayrollUtils service to avoid Fat Model anti-pattern.
         """
-        try:
-            _, num_days = calendar.monthrange(year, month)
-            working_days = 0
+        from payroll.services.payroll_utils import PayrollUtils
 
-            for day in range(1, num_days + 1):
-                current_date = timezone.datetime(year, month, day).date()
-
-                # Check if it's Shabbat (Saturday - 5 in Python) or Sunday (6)
-                if current_date.weekday() in [5, 6]:  # Saturday or Sunday
-                    continue
-
-                # Check if it's a holiday
-                try:
-                    holiday = Holiday.objects.filter(
-                        date=current_date, is_holiday=True
-                    ).exists()
-
-                    if not holiday:
-                        working_days += 1
-                except Exception as e:
-                    # If holiday check fails, assume it's a working day
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Holiday check failed for {current_date}: {e}")
-                    working_days += 1
-
-            logger = logging.getLogger(__name__)
-            logger.info(f"Working days in {year}-{month:02d}: {working_days}")
-            return working_days
-
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            from core.logging_utils import err_tag
-
-            logger.error(
-                "Error calculating working days",
-                extra={"err": err_tag(e), "year": year, "month": month},
-            )
-            # Fallback: approximate working days for 5-day week
-            _, num_days = calendar.monthrange(year, month)
-            return max(1, int(num_days * 5 / 7))  # Approximate 5-day work week
+        return PayrollUtils.get_working_days_in_month(year, month)
 
     def get_worked_days_in_month(self, year, month):
         """
-        Gets the actual worked days in a given month
+        Gets the actual worked days for this employee in a given month
+
+        Delegates to PayrollUtils service to avoid Fat Model anti-pattern.
         """
-        try:
-            # Get work logs that overlap with the month
-            import calendar
-            from datetime import date, timedelta
+        from payroll.services.payroll_utils import PayrollUtils
 
-            # Calculate exact month boundaries
-            start_date = date(year, month, 1)
-            _, last_day = calendar.monthrange(year, month)
-            end_date = date(year, month, last_day)
+        return PayrollUtils.get_worked_days_for_employee(self.employee.id, year, month)
 
-            work_logs = WorkLog.objects.filter(
-                employee=self.employee,
-                check_in__date__lte=end_date,
-                check_out__date__gte=start_date,
-                check_out__isnull=False,
-            )
-
-            logger = logging.getLogger(__name__)
-            logger.info(
-                f"Found {work_logs.count()} work logs for {self.employee.get_full_name()} in {year}-{month:02d}"
-            )
-
-            if not work_logs.exists():
-                logger.info(
-                    f"No work logs found for {self.employee.get_full_name()} in {year}-{month:02d}"
-                )
-                return 0
-
-            # Get unique dates the employee worked (within the month)
-            worked_days = set()
-            for log in work_logs:
-                # Count days where work was performed within the month
-                work_start = max(log.check_in.date(), start_date)
-                work_end = min(log.check_out.date(), end_date)
-
-                current_date = work_start
-                while current_date <= work_end:
-                    worked_days.add(current_date)
-                    current_date += timedelta(days=1)
-
-            worked_days_count = len(worked_days)
-            logger.info(
-                f"Worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {worked_days_count}"
-            )
-            return worked_days_count
-
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(
-                f"Error calculating worked days for {self.employee.get_full_name()} in {year}-{month:02d}: {e}"
-            )
-            # Fallback: count unique work session dates
-            try:
-                from datetime import date
-
-                start_date = date(year, month, 1)
-                _, last_day = calendar.monthrange(year, month)
-                end_date = date(year, month, last_day)
-
-                work_logs = WorkLog.objects.filter(
-                    employee=self.employee,
-                    check_in__year=year,
-                    check_in__month=month,
-                    check_out__isnull=False,
-                )
-
-                unique_dates = set()
-                for log in work_logs:
-                    if start_date <= log.check_in.date() <= end_date:
-                        unique_dates.add(log.check_in.date())
-
-                return len(unique_dates)
-            except Exception as fallback_error:
-                logger.error(f"Fallback calculation also failed: {fallback_error}")
-                return 0
-
-    def calculate_monthly_salary(self, month, year):
-        """
-        DEPRECATED: Use PayrollService with CalculationStrategy.ENHANCED instead.
-
-        This method implements the Fat Model anti-pattern and should not be used.
-
-        Legacy method for calculating monthly salary considering the payment type and Israeli labor laws.
-        Will be removed in future version.
-
-        Args:
-            month: Month number (1-12)
-            year: Year (YYYY)
-
-        Returns:
-            Calculation result
-
-        Raises:
-            DeprecationWarning: This method is deprecated
-        """
-        import warnings
-
-        from payroll.services.contracts import CalculationContext
-        from payroll.services.payroll_service import get_payroll_service
-
-        warnings.warn(
-            "Salary.calculate_monthly_salary() is deprecated. Use PayrollService directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        service = get_payroll_service()
-        context = CalculationContext(
-            employee_id=self.employee.id,
-            year=year,
-            month=month,
-            user_id=0,  # user_id=0 for system call
-        )
-
-        # The result from the service is already a dictionary in the correct format
-        return service.calculate(context)
+    # REMOVED: calculate_monthly_salary() - Deprecated method removed
+    # Use PayrollService directly instead:
+    #
+    # from payroll.services.payroll_service import PayrollService
+    # from payroll.services.contracts import CalculationContext
+    # from payroll.services.enums import CalculationStrategy
+    #
+    # context = CalculationContext(
+    #     employee_id=employee.id,
+    #     year=year,
+    #     month=month,
+    #     user_id=request.user.id
+    # )
+    # service = PayrollService()
+    # result = service.calculate(context, CalculationStrategy.ENHANCED)
 
     def clean(self):
         """Validate Salary model fields based on calculation_type"""

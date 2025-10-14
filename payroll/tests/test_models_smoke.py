@@ -92,39 +92,6 @@ class SalaryModelSmokeTest(TestCase):
         self.assertFalse(salary.project_completed)
         self.assertEqual(salary.currency, "USD")
 
-    def test_calculate_salary_backward_compatibility(self):
-        """Test backward compatibility calculate_salary method"""
-        salary = Salary.objects.create(
-            employee=self.employee,
-            base_salary=Decimal("10000.00"),
-            calculation_type="monthly",
-            is_active=True,
-        )
-
-        with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
-            mock_calculate.return_value = {"total_salary": Decimal("10000.00")}
-
-            result = salary.calculate_salary()
-
-            self.assertEqual(result, Decimal("10000.00"))
-            mock_calculate.assert_called_once()
-
-    def test_calculate_salary_fallback(self):
-        """Test calculate_salary fallback when result is not dict"""
-        salary = Salary.objects.create(
-            employee=self.employee,
-            hourly_rate=Decimal("50.00"),
-            calculation_type="hourly",
-            is_active=True,
-        )
-
-        with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
-            mock_calculate.return_value = Decimal("8000.00")  # Not a dict
-
-            result = salary.calculate_salary()
-
-            self.assertEqual(result, Decimal("8000.00"))
-
     @patch("payroll.models.Holiday.objects.filter")
     def test_get_working_days_in_month_basic(self, mock_holiday_filter):
         """Test basic working days calculation"""

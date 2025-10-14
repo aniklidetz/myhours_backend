@@ -872,21 +872,18 @@ class LegacyPayrollCalculationSmokeTest(PayrollViewsSmokeTest):
 
     def test_legacy_payroll_calculation_monthly_employee(self):
         """Test legacy calculation for monthly employee"""
-        from payroll.views import _legacy_payroll_calculation
+        from payroll.views.payroll_list_views import _legacy_payroll_calculation
 
         employees = Employee.objects.filter(id=self.admin_employee.id)
         current_date = date(2025, 1, 15)
         start_date = date(2025, 1, 1)
         end_date = date(2025, 1, 31)
 
-        with patch("payroll.models.Salary.calculate_monthly_salary") as mock_calc:
-            mock_calc.return_value = {"total_salary": 10000}
+        result = _legacy_payroll_calculation(
+            employees, current_date, start_date, end_date
+        )
 
-            result = _legacy_payroll_calculation(
-                employees, current_date, start_date, end_date
-            )
-
-            self.assertIsInstance(result, list)
+        self.assertIsInstance(result, list)
 
     def test_legacy_payroll_calculation_service_failure(self):
         """Test legacy calculation handles service failures gracefully"""

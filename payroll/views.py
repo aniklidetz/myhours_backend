@@ -1485,15 +1485,29 @@ def backward_compatible_earnings(request):
             }
 
         else:
-            # Employee on monthly salary - simplified structure
+            # Employee on monthly salary - use PayrollService
             try:
-                service = PayrollCalculationService(
-                    target_employee,
-                    current_date.year,
-                    current_date.month,
+                from .services.enums import EmployeeType
+
+                active_salary = target_employee.salaries.filter(is_active=True).first()
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if active_salary and active_salary.calculation_type == "hourly"
+                    else EmployeeType.MONTHLY
+                )
+
+                context = CalculationContext(
+                    employee_id=target_employee.id,
+                    year=current_date.year,
+                    month=current_date.month,
+                    user_id=1,  # System user
+                    employee_type=employee_type,
                     fast_mode=True,
                 )
-                service_result = service.calculate_monthly_salary()
+                service = PayrollService()
+                service_result = service.calculate(
+                    context, CalculationStrategy.ENHANCED
+                )
             except Exception as calc_error:
                 logger.exception(
                     "Error in backward_compatible_earnings for monthly employee",

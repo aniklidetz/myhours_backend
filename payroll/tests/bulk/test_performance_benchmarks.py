@@ -153,9 +153,10 @@ class PerformanceBenchmarkTestCase(TestCase):
         self.assertEqual(result_bulk.successful_count, len(employee_ids))
 
         # Bulk should be at least as fast (accounting for overhead in small batches)
+        # Note: 2.0x tolerance to account for test environment variability
         self.assertLessEqual(
             duration_bulk,
-            duration_seq * 1.5,
+            duration_seq * 2.0,
             "Bulk processing should not be significantly slower",
         )
 

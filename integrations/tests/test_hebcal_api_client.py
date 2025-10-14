@@ -22,10 +22,14 @@ class HebcalAPIClientTest(TestCase):
     def setUp(self):
         """Set up test environment"""
         cache.clear()
+        # Reset rate limiting state to avoid test interference
+        HebcalAPIClient._last_request_time = None
 
     def tearDown(self):
         """Clean up after tests"""
         cache.clear()
+        # Reset rate limiting state
+        HebcalAPIClient._last_request_time = None
 
     @patch("integrations.services.hebcal_api_client.requests.get")
     def test_fetch_holidays_success(self, mock_get):
@@ -141,8 +145,9 @@ class HebcalAPIClientTest(TestCase):
         # Second call should return cached data
         self.assertEqual(holidays2, ["cached_holiday"])
 
+    @patch("integrations.services.hebcal_api_client.time.sleep")
     @patch("integrations.services.hebcal_api_client.requests.get")
-    def test_cache_disabled(self, mock_get):
+    def test_cache_disabled(self, mock_get, mock_sleep):
         """Test behavior when caching is disabled"""
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -153,41 +158,54 @@ class HebcalAPIClientTest(TestCase):
         HebcalAPIClient.fetch_holidays(2025, use_cache=False)
         HebcalAPIClient.fetch_holidays(2025, use_cache=False)
 
-        # Should call API twice when cache is disabled
+        # Should call API twice when cache is disabled (1 attempt per call, no retries on success)
         self.assertEqual(mock_get.call_count, 2)
 
+    @patch("integrations.services.hebcal_api_client.time.sleep")
     @patch("integrations.services.hebcal_api_client.requests.get")
-    def test_http_error_handling(self, mock_get):
+    def test_http_error_handling(self, mock_get, mock_sleep):
         """Test handling of HTTP errors"""
-        # Mock HTTP error
-        mock_get.side_effect = requests.HTTPError("404 Not Found")
+        # Mock HTTP error with response object (4xx client error, should not retry)
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        error = requests.HTTPError("404 Not Found")
+        error.response = mock_response
+        mock_get.side_effect = error
 
-        # Should return empty list on error
+        # Should return empty list on client error (4xx) without retrying
         holidays = HebcalAPIClient.fetch_holidays(2025)
         self.assertEqual(holidays, [])
+        # Should only try once for 4xx errors (no retries)
+        self.assertEqual(mock_get.call_count, 1)
 
+    @patch("integrations.services.hebcal_api_client.time.sleep")
     @patch("integrations.services.hebcal_api_client.requests.get")
-    def test_network_error_handling(self, mock_get):
-        """Test handling of network errors"""
+    def test_network_error_handling(self, mock_get, mock_sleep):
+        """Test handling of network errors with retry logic"""
         # Mock network error
         mock_get.side_effect = requests.RequestException("Network error")
 
-        # Should return empty list on error
+        # Should return empty list after all retries exhausted
         holidays = HebcalAPIClient.fetch_holidays(2025)
         self.assertEqual(holidays, [])
+        # Should retry MAX_RETRIES times
+        self.assertEqual(mock_get.call_count, HebcalAPIClient.MAX_RETRIES)
 
+    @patch("integrations.services.hebcal_api_client.time.sleep")
     @patch("integrations.services.hebcal_api_client.requests.get")
-    def test_invalid_json_handling(self, mock_get):
-        """Test handling of invalid JSON response"""
+    def test_invalid_json_handling(self, mock_get, mock_sleep):
+        """Test handling of invalid JSON response with retry logic"""
         # Mock response with invalid JSON
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.side_effect = ValueError("Invalid JSON")
         mock_get.return_value = mock_response
 
-        # Should return empty list on JSON error
+        # Should return empty list after retries
         holidays = HebcalAPIClient.fetch_holidays(2025)
         self.assertEqual(holidays, [])
+        # Should retry MAX_RETRIES times for JSON parsing errors
+        self.assertEqual(mock_get.call_count, HebcalAPIClient.MAX_RETRIES)
 
     def test_default_year_parameter(self):
         """Test that current year is used when no year specified"""
@@ -290,3 +308,84 @@ class HebcalAPIClientTest(TestCase):
                 HebcalAPIClient.fetch_holidays(2025, month=9)
                 cache_key = mock_cache.set.call_args[0][0]
                 self.assertEqual(cache_key, "hebcal_holidays_2025_9")
+
+    @patch("integrations.services.hebcal_api_client.time.sleep")
+    @patch("integrations.services.hebcal_api_client.time.time")
+    @patch("integrations.services.hebcal_api_client.requests.get")
+    def test_rate_limiting_enforced(self, mock_get, mock_time, mock_sleep):
+        """Test that rate limiting is enforced between requests"""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {"items": []}
+        mock_get.return_value = mock_response
+
+        # Simulate time passing
+        mock_time.side_effect = [
+            0,
+            0.5,
+            0.5,
+            2.0,
+        ]  # Second request too soon, should trigger sleep
+
+        # Make two requests
+        HebcalAPIClient.fetch_holidays(2025, use_cache=False)
+        HebcalAPIClient.fetch_holidays(2026, use_cache=False)
+
+        # Verify sleep was called to enforce rate limiting
+        # Should sleep for MIN_REQUEST_INTERVAL - 0.5 = 0.5 seconds
+        self.assertTrue(mock_sleep.called)
+        sleep_call = mock_sleep.call_args[0][0]
+        self.assertAlmostEqual(sleep_call, 0.5, places=1)
+
+    @patch("integrations.services.hebcal_api_client.time.sleep")
+    @patch("integrations.services.hebcal_api_client.requests.get")
+    def test_retry_with_429_rate_limit_error(self, mock_get, mock_sleep):
+        """Test retry behavior when API returns 429 Too Many Requests"""
+        # Mock 429 error with response object
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        error = requests.HTTPError("429 Too Many Requests")
+        error.response = mock_response
+        mock_get.side_effect = error
+
+        # Should retry on 429 errors
+        holidays = HebcalAPIClient.fetch_holidays(2025)
+        self.assertEqual(holidays, [])
+        # Should retry MAX_RETRIES times for 429 errors
+        self.assertEqual(mock_get.call_count, HebcalAPIClient.MAX_RETRIES)
+
+    @patch("integrations.services.hebcal_api_client.time.sleep")
+    @patch("integrations.services.hebcal_api_client.requests.get")
+    def test_retry_with_timeout_error(self, mock_get, mock_sleep):
+        """Test retry behavior on timeout errors"""
+        # Mock timeout error
+        mock_get.side_effect = requests.exceptions.Timeout("Request timeout")
+
+        # Should retry on timeout
+        holidays = HebcalAPIClient.fetch_holidays(2025)
+        self.assertEqual(holidays, [])
+        # Should retry MAX_RETRIES times
+        self.assertEqual(mock_get.call_count, HebcalAPIClient.MAX_RETRIES)
+        # Sleep is called for:
+        # - Rate limiting: (MAX_RETRIES - 1) times (not called on first attempt, _last_request_time is None)
+        # - Exponential backoff: (MAX_RETRIES - 1) times (not called after last attempt)
+        # Total: (MAX_RETRIES - 1) + (MAX_RETRIES - 1) = 2 * (MAX_RETRIES - 1)
+        expected_sleep_calls = 2 * (HebcalAPIClient.MAX_RETRIES - 1)
+        self.assertEqual(mock_sleep.call_count, expected_sleep_calls)
+
+    @patch("integrations.services.hebcal_api_client.time.sleep")
+    @patch("integrations.services.hebcal_api_client.requests.get")
+    def test_exponential_backoff_timing(self, mock_get, mock_sleep):
+        """Test that exponential backoff timing is correct"""
+        # Mock network error to trigger retries
+        mock_get.side_effect = requests.RequestException("Network error")
+
+        HebcalAPIClient.fetch_holidays(2025)
+
+        # Verify exponential backoff: 2^0=1s, 2^1=2s (no sleep after last attempt)
+        sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
+        # Filter out rate limiting sleeps (look for backoff sleeps which are powers of 2)
+        backoff_sleeps = [s for s in sleep_calls if s in [1, 2, 4]]
+        self.assertEqual(len(backoff_sleeps), HebcalAPIClient.MAX_RETRIES - 1)
+        self.assertEqual(backoff_sleeps[0], 1)  # 2^0 = 1
+        self.assertEqual(backoff_sleeps[1], 2)  # 2^1 = 2
