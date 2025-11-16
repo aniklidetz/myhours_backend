@@ -17,6 +17,11 @@ from django.test import TestCase, override_settings
 from core.management.commands.seed_employees import Command
 from payroll.models import Salary
 from payroll.serializers import SalarySerializer
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -50,6 +55,7 @@ class ProjectPayrollFeatureFlagTest(TestCase):
             currency="ILS",
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
 
         # Manually set to project type (bypassing auto-mapping)
@@ -87,6 +93,7 @@ class ProjectPayrollFeatureFlagTest(TestCase):
             currency="ILS",
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
 
         # Manually set to project (since auto-mapping goes to monthly)

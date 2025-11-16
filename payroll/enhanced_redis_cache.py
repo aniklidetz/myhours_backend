@@ -9,8 +9,8 @@ import logging
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from integrations.services.enhanced_sunrise_sunset_service import (
-    enhanced_sunrise_sunset_service,
+from integrations.services.unified_shabbat_service import (
+    get_shabbat_times,
 )
 from payroll.redis_cache_service import PayrollRedisCache
 
@@ -48,10 +48,8 @@ class EnhancedPayrollCache(PayrollRedisCache):
                 try:
                     work_date = date.fromisoformat(date_str)
 
-                    # Get precise timing from enhanced sunrise-sunset service (Israeli timezone)
-                    shabbat_times = enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
-                        work_date
-                    )
+                    # Get precise timing from unified shabbat service (Israeli timezone)
+                    shabbat_times = get_shabbat_times(work_date)
 
                     if shabbat_times:
                         # Update with precise API data (Israeli timezone)
@@ -111,14 +109,10 @@ class EnhancedPayrollCache(PayrollRedisCache):
                     fridays.append(current_date)
                 current_date += timedelta(days=1)
 
-            # Bulk load Shabbat times for all Fridays using enhanced service
+            # Bulk load Shabbat times for all Fridays using unified service
             enhanced_data = {}
             for friday in fridays:
-                shabbat_times = (
-                    enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
-                        friday
-                    )
-                )
+                shabbat_times = get_shabbat_times(friday)
                 if shabbat_times:
                     # Also cache Saturday data
                     saturday_date = friday + timedelta(days=1)

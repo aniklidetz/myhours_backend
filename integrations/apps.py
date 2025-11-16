@@ -29,7 +29,7 @@ class IntegrationsConfig(AppConfig):
 
                 from datetime import date
 
-                from .services.hebcal_service import HebcalService
+                from .services.holiday_sync_service import HolidaySyncService
 
                 # Check if holidays need synchronization
                 sync_key = "holidays_auto_sync_check"
@@ -42,7 +42,7 @@ class IntegrationsConfig(AppConfig):
                     current_year = date.today().year
                     for year in [current_year, current_year + 1]:
                         try:
-                            created, updated = HebcalService.sync_holidays_to_db(year)
+                            created, updated = HolidaySyncService.sync_year(year)
                             logger.info(
                                 f"Auto-synced holidays for {year}: {created} created, {updated} updated"
                             )

@@ -20,7 +20,7 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
+      - MONGO_CONNECTION_STRING=mongodb://mongo_admin:mongo_password_123@mongodb:27017/biometrics_db?authSource=admin
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB=biometrics_db
@@ -63,7 +63,7 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,192.168.1.164,*
       - DATABASE_URL=postgresql://myhours_user:${POSTGRES_PASSWORD}@postgres:5432/myhours_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - MONGO_CONNECTION_STRING=mongodb://mongodb:27017/
+      - MONGO_CONNECTION_STRING=mongodb://mongo_admin:mongo_password_123@mongodb:27017/biometrics_db?authSource=admin
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB=biometrics_db
@@ -133,8 +133,11 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_DATABASE: biometrics_db
+      MONGO_INITDB_ROOT_USERNAME: mongo_admin
+      MONGO_INITDB_ROOT_PASSWORD: mongo_password_123
     ports:
       - "27017:27017"
+    command: ["mongod", "--auth"]
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -144,7 +147,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
+  
+  mongo-express:
+    image: mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: mongo_admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: mongo_password_123
+      ME_CONFIG_MONGODB_SERVER: mongodb
+    depends_on:
+      - mongodb
+    networks:
+      - myhours_network
+      
 volumes:
   postgres_data:
     driver: local

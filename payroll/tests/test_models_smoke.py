@@ -20,6 +20,11 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -49,10 +54,11 @@ class SalaryModelSmokeTest(TestCase):
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
             currency="ILS",
+            is_active=True,
         )
 
         self.assertEqual(salary.employee, self.employee)
-        self.assertEqual(salary.hourly_rate, Decimal("50.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
         self.assertEqual(salary.calculation_type, "hourly")
         self.assertEqual(salary.currency, "ILS")
 
@@ -63,6 +69,7 @@ class SalaryModelSmokeTest(TestCase):
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.assertEqual(salary.base_salary, Decimal("10000.00"))
@@ -77,43 +84,13 @@ class SalaryModelSmokeTest(TestCase):
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
             currency="USD",
+            is_active=True,
         )
 
         # Project type may convert to monthly based on feature flags
         self.assertIn(salary.calculation_type, ["project", "monthly"])
         self.assertFalse(salary.project_completed)
         self.assertEqual(salary.currency, "USD")
-
-    def test_calculate_salary_backward_compatibility(self):
-        """Test backward compatibility calculate_salary method"""
-        salary = Salary.objects.create(
-            employee=self.employee,
-            base_salary=Decimal("10000.00"),
-            calculation_type="monthly",
-        )
-
-        with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
-            mock_calculate.return_value = {"total_salary": Decimal("10000.00")}
-
-            result = salary.calculate_salary()
-
-            self.assertEqual(result, Decimal("10000.00"))
-            mock_calculate.assert_called_once()
-
-    def test_calculate_salary_fallback(self):
-        """Test calculate_salary fallback when result is not dict"""
-        salary = Salary.objects.create(
-            employee=self.employee,
-            hourly_rate=Decimal("50.00"),
-            calculation_type="hourly",
-        )
-
-        with patch.object(salary, "calculate_monthly_salary") as mock_calculate:
-            mock_calculate.return_value = Decimal("8000.00")  # Not a dict
-
-            result = salary.calculate_salary()
-
-            self.assertEqual(result, Decimal("8000.00"))
 
     @patch("payroll.models.Holiday.objects.filter")
     def test_get_working_days_in_month_basic(self, mock_holiday_filter):
@@ -122,6 +99,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock no holidays
@@ -141,6 +119,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock that some holidays exist but not all days are holidays
@@ -161,6 +140,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Mock exception in holiday check
@@ -177,6 +157,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         worked_days = salary.get_worked_days_in_month(2025, 1)
@@ -189,6 +170,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         # Create some work logs with timezone-aware datetimes
@@ -213,6 +195,7 @@ class SalaryModelSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         str_repr = str(salary)
@@ -244,20 +227,23 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            base_pay=Decimal("8000.00"),
-            total_gross_pay=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
         )
 
         self.assertEqual(summary.employee, self.employee)
         self.assertEqual(summary.year, 2025)
         self.assertEqual(summary.month, 1)
         self.assertEqual(summary.total_hours, Decimal("160.00"))
-        self.assertEqual(summary.base_pay, Decimal("8000.00"))
+        self.assertEqual(summary.proportional_monthly, Decimal("8000.00"))
 
     def test_monthly_payroll_summary_unique_constraint(self):
         """Test unique constraint on employee/year/month"""
         MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, base_pay=Decimal("8000.00")
+            employee=self.employee,
+            year=2025,
+            month=1,
+            proportional_monthly=Decimal("8000.00"),
         )
 
         # Creating another summary for same employee/month should be allowed
@@ -266,7 +252,7 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             employee=self.employee,
             year=2025,
             month=2,  # Different month
-            base_pay=Decimal("7500.00"),
+            proportional_monthly=Decimal("7500.00"),
         )
 
         self.assertNotEqual(summary2.month, 1)
@@ -279,15 +265,15 @@ class MonthlyPayrollSummaryModelSmokeTest(TestCase):
             month=1,
             regular_hours=Decimal("160.00"),
             overtime_hours=Decimal("10.00"),
-            base_pay=Decimal("8000.00"),
-            overtime_pay=Decimal("750.00"),
-            total_gross_pay=Decimal("8750.00"),
+            proportional_monthly=Decimal("8000.00"),
+            total_bonuses_monthly=Decimal("750.00"),
+            total_salary=Decimal("8750.00"),
         )
 
         # Test calculated fields
         self.assertEqual(summary.regular_hours, Decimal("160.00"))
         self.assertEqual(summary.overtime_hours, Decimal("10.00"))
-        self.assertEqual(summary.total_gross_pay, Decimal("8750.00"))
+        self.assertEqual(summary.total_salary, Decimal("8750.00"))
 
 
 class CompensatoryDayModelSmokeTest(TestCase):
@@ -417,6 +403,7 @@ class ModelIntegrationSmokeTest(TestCase):
             employee=self.employee,
             base_salary=Decimal("12000.00"),
             calculation_type="monthly",
+            is_active=True,
         )
 
         # Test reverse relationship
@@ -426,11 +413,17 @@ class ModelIntegrationSmokeTest(TestCase):
         """Test creating multiple monthly payroll summaries for employee"""
         # Create summaries for different months
         summary1 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=1, base_pay=Decimal("8000.00")
+            employee=self.employee,
+            year=2025,
+            month=1,
+            proportional_monthly=Decimal("8000.00"),
         )
 
         summary2 = MonthlyPayrollSummary.objects.create(
-            employee=self.employee, year=2025, month=2, base_pay=Decimal("8500.00")
+            employee=self.employee,
+            year=2025,
+            month=2,
+            proportional_monthly=Decimal("8500.00"),
         )
 
         # Test that both summaries exist
@@ -443,6 +436,7 @@ class ModelIntegrationSmokeTest(TestCase):
             employee=self.employee,
             hourly_rate=Decimal("45.00"),
             calculation_type="hourly",
+            is_active=True,
         )
 
         # Test that timestamps are set

@@ -9,6 +9,11 @@ from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 
 from payroll.models import Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -41,6 +46,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             base_salary=Decimal("50000.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
         # Should remain as project type
         self.assertEqual(salary.calculation_type, "project")
@@ -54,6 +60,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             base_salary=Decimal("50000.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=60),
+            is_active=True,
         )
         # Should be converted to monthly based on employment_type='contract'
         self.assertEqual(salary.calculation_type, "monthly")
@@ -73,31 +80,33 @@ class SalaryProjectTypePreservationTest(TestCase):
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": True})
     def test_project_with_hourly_rate_preserved(self):
-        """Test that project with hourly_rate is preserved when feature enabled"""
+        """Test that project with monthly_hourly is preserved when feature enabled"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="project",
             hourly_rate=Decimal("75.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=90),
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "project")
-        self.assertEqual(salary.hourly_rate, Decimal("75.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("75.00"))
 
     @override_settings(FEATURE_FLAGS={"ENABLE_PROJECT_PAYROLL": False})
     def test_project_with_hourly_rate_converted_to_hourly(self):
-        """Test that project with hourly_rate converts to hourly when feature disabled"""
+        """Test that project with monthly_hourly converts to hourly when feature disabled"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="project",
             hourly_rate=Decimal("75.00"),
             project_start_date=date.today(),
             project_end_date=date.today() + timedelta(days=90),
+            is_active=True,
         )
         # Should be converted based on employment_type (contract -> monthly)
         self.assertEqual(salary.calculation_type, "monthly")
-        # hourly_rate is not preserved when converting to monthly type
-        self.assertIsNone(salary.hourly_rate)
+        # monthly_hourly is not preserved when converting to monthly type
+        self.assertIsNone(salary.monthly_hourly)
 
     def test_non_project_types_unaffected(self):
         """Test that non-project calculation types are not affected by the setting"""
@@ -106,6 +115,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("10000.00"),
+            is_active=True,
         )
         self.assertEqual(monthly_salary.calculation_type, "monthly")
 
@@ -126,6 +136,7 @@ class SalaryProjectTypePreservationTest(TestCase):
             employee=employee2,
             calculation_type="hourly",
             hourly_rate=Decimal("50.00"),
+            is_active=True,
         )
         self.assertEqual(hourly_salary.calculation_type, "hourly")
 
@@ -137,6 +148,7 @@ class SalaryProjectTypePreservationTest(TestCase):
                 employee=self.employee,
                 calculation_type="project",
                 base_salary=Decimal("30000.00"),
+                is_active=True,
                 # Missing required project dates
             )
 

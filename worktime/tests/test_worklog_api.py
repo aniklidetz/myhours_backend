@@ -587,14 +587,9 @@ class WorkLogAPIIntegrationTest(BaseAPITestCase):
             currency="ILS",
         )
 
-    @patch("payroll.services.EnhancedPayrollCalculationService.calculate_daily_pay")
-    def test_worklog_payroll_integration(self, mock_calculate):
+    def test_worklog_payroll_integration(self):
         """Test integration with payroll calculation"""
-        mock_calculate.return_value = {
-            "total_pay": 960.0,  # 8 hours * 120 ILS
-            "regular_hours": 8.0,
-            "overtime_hours": 0.0,
-        }
+        # Note: Using real payroll service instead of mock for integration test
 
         # Create work log through API with times within validation window
         url = reverse("worklog-list")

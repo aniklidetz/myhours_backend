@@ -71,7 +71,7 @@ if command -v pg_isready >/dev/null 2>&1; then
   fi
   echo "[pre-push] Database connectivity and authentication verified"
 else
-  echo "[pre-push] ⚠️ pg_isready not found - skipping database check"
+  echo "[pre-push]  pg_isready not found - skipping database check"
 fi
 
 # Django system checks
@@ -84,7 +84,7 @@ if [[ -f "manage.py" ]]; then
   
   echo "[pre-push] Django checks passed"
 else
-  echo "[pre-push] ⚠️ No manage.py found - skipping Django checks"
+  echo "[pre-push]  No manage.py found - skipping Django checks"
 fi
 
 # Test execution

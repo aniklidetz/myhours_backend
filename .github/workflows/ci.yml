@@ -382,6 +382,11 @@ jobs:
           mypy . --ignore-missing-imports
         continue-on-error: true
 
+      - name: Check for legacy payroll imports
+        working-directory: ${{ steps.detect.outputs.projdir }}
+        run: |
+          python scripts/check_legacy_imports.py
+
   security:
     runs-on: ubuntu-latest
     permissions:

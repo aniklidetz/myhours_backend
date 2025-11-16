@@ -222,6 +222,18 @@ class Employee(models.Model):
         """Get active salary information for this employee"""
         from payroll.models import Salary
 
+        # First try to use prefetched data to avoid N+1 queries
+        if (
+            hasattr(self, "_prefetched_objects_cache")
+            and "salaries" in self._prefetched_objects_cache
+        ):
+            # Use prefetched salaries
+            for salary in self.salaries.all():
+                if salary.is_active:
+                    return salary
+            return None
+
+        # Fallback to database query if not prefetched
         try:
             return Salary.objects.get(employee=self, is_active=True)
         except Salary.DoesNotExist:

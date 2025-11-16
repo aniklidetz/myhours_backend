@@ -10,7 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from payroll.models import DailyPayrollCalculation, MonthlyPayrollSummary
-from payroll.services import EnhancedPayrollCalculationService
+from payroll.services.contracts import CalculationContext
+from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -50,7 +52,7 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         force = options["force"]
 
-        self.stdout.write(f"🔄 Generating missing payroll calculations for {year}")
+        self.stdout.write(f"Generating missing payroll calculations for {year}")
         if month:
             self.stdout.write(f"   Month: {month}")
         if employee_id:
@@ -64,7 +66,7 @@ class Command(BaseCommand):
             employees_query = employees_query.filter(id=employee_id)
 
         employees = list(employees_query.prefetch_related("salaries"))
-        self.stdout.write(f"📊 Found {len(employees)} employees with salary info")
+        self.stdout.write(f" Found {len(employees)} employees with salary info")
 
         # Get work dates that need processing
         work_logs_query = WorkLog.objects.filter(
@@ -83,10 +85,10 @@ class Command(BaseCommand):
             work_dates.add(log)
 
         work_dates = sorted(work_dates)
-        self.stdout.write(f"📅 Found work logs on {len(work_dates)} unique dates")
+        self.stdout.write(f" Found work logs on {len(work_dates)} unique dates")
 
         if not work_dates:
-            self.stdout.write("❌ No work logs found for the specified criteria")
+            self.stdout.write("ERROR: No work logs found for the specified criteria")
             return
 
         daily_created = 0
@@ -113,7 +115,7 @@ class Command(BaseCommand):
                 continue
 
             self.stdout.write(
-                f"\n👤 Processing {employee.get_full_name()} ({len(employee_work_dates)} work dates)"
+                f"\n Processing {employee.get_full_name()} ({len(employee_work_dates)} work dates)"
             )
 
             # Process daily calculations
@@ -129,12 +131,30 @@ class Command(BaseCommand):
                         continue
 
                     if not dry_run:
-                        # Generate daily calculation
-                        service = EnhancedPayrollCalculationService(
-                            employee,
-                            work_date.year,
-                            work_date.month,
-                            fast_mode=True,  # Skip external API calls for speed
+                        # Generate daily calculation using new PayrollService
+                        active_salary = employee.salaries.filter(is_active=True).first()
+                        if not active_salary:
+                            self.stdout.write(
+                                f"  ERROR: No active salary for {employee.get_full_name()}"
+                            )
+                            errors += 1
+                            continue
+
+                        employee_type = (
+                            EmployeeType.HOURLY
+                            if active_salary.calculation_type == "hourly"
+                            else EmployeeType.MONTHLY
+                        )
+
+                        service = PayrollService()
+                        context = CalculationContext(
+                            employee_id=employee.id,
+                            year=work_date.year,
+                            month=work_date.month,
+                            user_id=1,  # System user for commands
+                            employee_type=employee_type,
+                            force_recalculate=force,
+                            # Remove fast_mode=True to enable database persistence
                         )
 
                         work_logs = WorkLog.objects.filter(
@@ -143,42 +163,69 @@ class Command(BaseCommand):
                             check_out__isnull=False,
                         )
 
-                        for work_log in work_logs:
-                            try:
-                                if employee.salary_info.calculation_type == "hourly":
-                                    result = service.calculate_daily_pay_hourly(
-                                        work_log, save_to_db=True
-                                    )
-                                else:
-                                    result = service.calculate_daily_bonuses_monthly(
-                                        work_log, save_to_db=True
-                                    )
+                        try:
+                            # Calculate using new unified service
+                            result = service.calculate(
+                                context, CalculationStrategy.ENHANCED
+                            )
 
-                                if existing_daily:
-                                    # Force update the updated_at timestamp
-                                    existing_daily.updated_at = timezone.now()
-                                    existing_daily.save(update_fields=["updated_at"])
-                                    daily_updated += 1
-                                    self.stdout.write(
-                                        f"  🔄 Updated daily calc for {work_date}"
+                            if result and result.get("total_salary", 0) > 0:
+                                # Create or update DailyPayrollCalculation record
+                                daily_defaults = {
+                                    "regular_hours": result.get("regular_hours", 0),
+                                    "overtime_hours_1": result.get("overtime_hours", 0),
+                                    "overtime_hours_2": result.get(
+                                        "overtime_hours_2", 0
+                                    ),
+                                    "night_hours": result.get("night_hours", 0),
+                                    "shabbat_hours": result.get("shabbat_hours", 0),
+                                    "holiday_hours": result.get("holiday_hours", 0),
+                                    # Don't set total_hours - it's a computed property
+                                    "total_salary": result.get("total_salary", 0),
+                                    "compensatory_days_earned": result.get(
+                                        "compensatory_days_earned", 0
+                                    ),
+                                    "daily_calculation_breakdown": result.get(
+                                        "breakdown", {}
+                                    ),
+                                    "updated_at": timezone.now(),
+                                }
+
+                                daily_calc, created = (
+                                    DailyPayrollCalculation.objects.update_or_create(
+                                        employee=employee,
+                                        work_date=work_date,
+                                        defaults=daily_defaults,
                                     )
-                                else:
+                                )
+
+                                if created:
                                     daily_created += 1
                                     self.stdout.write(
-                                        f"  ➕ Created daily calc for {work_date}"
+                                        f"   Created daily calc for {work_date} - salary: {result['total_salary']}"
                                     )
-
-                            except Exception as e:
+                                else:
+                                    daily_updated += 1
+                                    self.stdout.write(
+                                        f"   Updated daily calc for {work_date} - salary: {result['total_salary']}"
+                                    )
+                            else:
                                 self.stdout.write(
-                                    f"  ❌ Error creating daily calc for {work_date}: {e}"
+                                    f"  ERROR: No result from calculation for {work_date}"
                                 )
                                 errors += 1
+
+                        except Exception as e:
+                            self.stdout.write(
+                                f"  ERROR: Error creating daily calc for {work_date}: {e}"
+                            )
+                            errors += 1
                     else:
                         action = "Update" if existing_daily else "Create"
                         self.stdout.write(f"  [{action}] Daily calc for {work_date}")
 
                 except Exception as e:
-                    self.stdout.write(f"  ❌ Error processing {work_date}: {e}")
+                    self.stdout.write(f"  ERROR: Error processing {work_date}: {e}")
                     errors += 1
 
             # Process monthly summaries
@@ -199,31 +246,60 @@ class Command(BaseCommand):
                         continue
 
                     if not dry_run:
-                        service = EnhancedPayrollCalculationService(
-                            employee, summary_year, summary_month, fast_mode=True
+                        # Generate monthly summary using new PayrollService
+                        active_salary = employee.salaries.filter(is_active=True).first()
+                        if not active_salary:
+                            self.stdout.write(
+                                f"  ERROR: No active salary for {employee.get_full_name()}"
+                            )
+                            errors += 1
+                            continue
+
+                        employee_type = (
+                            EmployeeType.HOURLY
+                            if active_salary.calculation_type == "hourly"
+                            else EmployeeType.MONTHLY
                         )
 
-                        # Generate monthly summary
-                        try:
-                            monthly_result = service.calculate_monthly_salary_enhanced()
+                        service = PayrollService()
+                        context = CalculationContext(
+                            employee_id=employee.id,
+                            year=summary_year,
+                            month=summary_month,
+                            user_id=1,  # System user for commands
+                            employee_type=employee_type,
+                            force_recalculate=force,
+                            fast_mode=False,
+                        )
 
-                            if existing_monthly:
-                                # Force update the updated_at timestamp
-                                existing_monthly.updated_at = timezone.now()
-                                existing_monthly.save(update_fields=["updated_at"])
-                                monthly_updated += 1
-                                self.stdout.write(
-                                    f"  🔄 Updated monthly summary for {summary_year}-{summary_month:02d}"
-                                )
+                        try:
+                            monthly_result = service.calculate(
+                                context, CalculationStrategy.ENHANCED
+                            )
+
+                            if (
+                                monthly_result
+                                and monthly_result.get("status") == "success"
+                            ):
+                                if existing_monthly:
+                                    monthly_updated += 1
+                                    self.stdout.write(
+                                        f"   Updated monthly summary for {summary_year}-{summary_month:02d}"
+                                    )
+                                else:
+                                    monthly_created += 1
+                                    self.stdout.write(
+                                        f"   Created monthly summary for {summary_year}-{summary_month:02d}"
+                                    )
                             else:
-                                monthly_created += 1
                                 self.stdout.write(
-                                    f"  ➕ Created monthly summary for {summary_year}-{summary_month:02d}"
+                                    f"  ERROR: No result from monthly calculation for {summary_year}-{summary_month:02d}"
                                 )
+                                errors += 1
 
                         except Exception as e:
                             self.stdout.write(
-                                f"  ❌ Error creating monthly summary for {summary_year}-{summary_month:02d}: {e}"
+                                f"  ERROR: Error creating monthly summary for {summary_year}-{summary_month:02d}: {e}"
                             )
                             errors += 1
                     else:
@@ -234,12 +310,12 @@ class Command(BaseCommand):
 
                 except Exception as e:
                     self.stdout.write(
-                        f"  ❌ Error processing monthly summary for {summary_year}-{summary_month:02d}: {e}"
+                        f"  ERROR: Error processing monthly summary for {summary_year}-{summary_month:02d}: {e}"
                     )
                     errors += 1
 
         # Summary
-        self.stdout.write(f"\n📋 Summary:")
+        self.stdout.write(f"\n Summary:")
         if dry_run:
             self.stdout.write("   DRY RUN - No changes were made")
         else:
@@ -250,6 +326,6 @@ class Command(BaseCommand):
             self.stdout.write(f"   Errors: {errors}")
 
         if not dry_run and (daily_created > 0 or monthly_created > 0):
-            self.stdout.write("✅ Payroll generation completed successfully!")
+            self.stdout.write("SUCCESS: Payroll generation completed successfully!")
         elif errors > 0:
-            self.stdout.write("⚠️  Completed with errors. Check the logs above.")
+            self.stdout.write("WARNING:  Completed with errors. Check the logs above.")

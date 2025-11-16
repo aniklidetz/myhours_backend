@@ -23,11 +23,17 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
 
-class PayrollViewsAdvancedTest(TestCase):
+class PayrollViewsAdvancedTest(PayrollTestMixin, TestCase):
     """Advanced test cases for payroll views edge cases and error conditions"""
 
     def setUp(self):
@@ -50,6 +56,7 @@ class PayrollViewsAdvancedTest(TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
 
         # Create regular employee
@@ -69,6 +76,7 @@ class PayrollViewsAdvancedTest(TestCase):
             calculation_type="hourly",
             hourly_rate=Decimal("60.00"),
             currency="ILS",
+            is_active=True,
         )
 
 
@@ -131,7 +139,7 @@ class PayrollListAdvancedTest(PayrollViewsAdvancedTest):
             employee=self.employee,
             year=current_date.year,
             month=current_date.month,
-            total_gross_pay=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
             total_hours=Decimal("160.0"),
             worked_days=20,
         )
@@ -226,10 +234,10 @@ class DailyPayrollCalculationsAdvancedTest(PayrollViewsAdvancedTest):
         self.daily_calc = DailyPayrollCalculation.objects.create(
             employee=self.employee,
             work_date=date.today(),
-            regular_hours=Decimal("8.0"),
-            regular_pay=Decimal("480.00"),
-            base_pay=Decimal("480.00"),
-            total_pay=Decimal("480.00"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            base_regular_pay=Decimal("480.00"),
+            proportional_monthly=Decimal("480.00"),
+            total_salary=Decimal("480.00"),
         )
 
     def test_daily_calculations_with_date_filter(self):
@@ -282,13 +290,13 @@ class DailyPayrollCalculationsAdvancedTest(PayrollViewsAdvancedTest):
 class RecalculatePayrollAdvancedTest(PayrollViewsAdvancedTest):
     """Advanced tests for recalculate_payroll view"""
 
-    @patch("payroll.views.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_payroll_admin_success(self, mock_service_class):
         """Test successful payroll recalculation by admin"""
         mock_service = Mock()
         mock_service.calculate_monthly_salary_enhanced.return_value = {
             "employee": "Test Employee",
-            "total_pay": Decimal("5000.00"),
+            "total_salary": Decimal("5000.00"),
             "success": True,
         }
         mock_service_class.return_value = mock_service
@@ -419,7 +427,7 @@ class MonthlyPayrollSummaryAdvancedTest(PayrollViewsAdvancedTest):
             employee=self.employee,
             year=2025,
             month=1,
-            total_gross_pay=Decimal("10000.00"),
+            total_salary=Decimal("10000.00"),
             total_hours=Decimal("160.0"),
             worked_days=20,
         )

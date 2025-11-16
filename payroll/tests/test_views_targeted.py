@@ -22,6 +22,11 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from payroll.views import check_admin_or_accountant_role, get_user_employee_profile
 from users.models import Employee
 
@@ -120,6 +125,7 @@ class PayrollListViewTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
         self.token = Token.objects.create(user=self.user)
 
@@ -170,6 +176,7 @@ class PayrollListViewTest(APITestCase):
             base_salary=Decimal("4000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.client.credentials(HTTP_AUTHORIZATION="Token " + self.token.key)
@@ -254,6 +261,7 @@ class EnhancedEarningsViewTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
         self.token = Token.objects.create(user=self.user)
 
@@ -728,6 +736,7 @@ class PayrollViewsIntegrationTest(APITestCase):
             base_salary=Decimal("5000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
     def test_payroll_workflow_admin(self):

@@ -23,11 +23,17 @@ from payroll.models import (
     MonthlyPayrollSummary,
     Salary,
 )
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
 
-class PayrollViewsSmokeTest(TestCase):
+class PayrollViewsSmokeTest(PayrollTestMixin, TestCase):
     """Smoke tests for payroll views - basic functionality"""
 
     def setUp(self):
@@ -66,6 +72,7 @@ class PayrollViewsSmokeTest(TestCase):
             base_salary=Decimal("10000.00"),
             calculation_type="monthly",
             currency="ILS",
+            is_active=True,
         )
 
         self.employee_salary = Salary.objects.create(
@@ -73,6 +80,7 @@ class PayrollViewsSmokeTest(TestCase):
             hourly_rate=Decimal("50.00"),
             calculation_type="hourly",
             currency="ILS",
+            is_active=True,
         )
 
         # Create API clients
@@ -265,7 +273,7 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
         mock_summary = MagicMock()
         mock_summary.employee = self.admin_employee
         mock_summary.employee_id = self.admin_employee.id
-        mock_summary.total_gross_pay = Decimal("10000.00")
+        mock_summary.total_salary = Decimal("10000.00")
         mock_summary.total_hours = Decimal("160.00")
         mock_summary.worked_days = 22
         mock_summary.calculation_details = {"work_sessions_count": 22}
@@ -282,12 +290,12 @@ class PayrollListViewSmokeTest(PayrollViewsSmokeTest):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_payroll_list_with_optimized_service_mock(self):
-        """Test payroll list flow (optimized service may not exist)"""
+    def test_payroll_list_with_enhanced_service(self):
+        """Test payroll list flow with enhanced service"""
         url = reverse("payroll-list")
         response = self.admin_client.get(url)
 
-        # Service should handle missing optimized service gracefully
+        # Service should use enhanced strategy for calculations
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_payroll_list_legacy_fallback_exists(self):
@@ -399,8 +407,8 @@ class EnhancedEarningsViewSmokeTest(PayrollViewsSmokeTest):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            total_gross_pay=Decimal("8000.00"),
-            base_pay=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
             worked_days=22,
         )
 
@@ -456,13 +464,13 @@ class DailyPayrollCalculationsViewSmokeTest(PayrollViewsSmokeTest):
         calculation = DailyPayrollCalculation.objects.create(
             employee=self.regular_employee,
             work_date=date.today(),
-            regular_hours=Decimal("8.0"),
-            total_pay=Decimal("400.0"),
+            regular_hours=ISRAELI_DAILY_NORM_HOURS,
+            total_salary=Decimal("400.0"),
         )
 
         self.assertEqual(calculation.employee, self.regular_employee)
-        self.assertEqual(calculation.regular_hours, Decimal("8.0"))
-        self.assertEqual(calculation.total_pay, Decimal("400.0"))
+        self.assertEqual(calculation.regular_hours, ISRAELI_DAILY_NORM_HOURS)
+        self.assertEqual(calculation.total_salary, Decimal("400.0"))
 
 
 class RecalculatePayrollViewSmokeTest(PayrollViewsSmokeTest):
@@ -473,11 +481,11 @@ class RecalculatePayrollViewSmokeTest(PayrollViewsSmokeTest):
         url = reverse("recalculate-payroll")
         data = {"year": 2025, "month": 1, "employee_id": self.regular_employee.id}
 
-        with patch("payroll.views.EnhancedPayrollCalculationService") as mock_service:
+        with patch("payroll.services.payroll_service.PayrollService") as mock_service:
             mock_instance = MagicMock()
             mock_instance.calculate_monthly_salary_enhanced.return_value = {
                 "total_hours": 160,
-                "total_gross_pay": 8000,
+                "total_salary": 8000,
             }
             mock_service.return_value = mock_instance
 
@@ -550,8 +558,8 @@ class PayrollAnalyticsViewSmokeTest(PayrollViewsSmokeTest):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            total_gross_pay=Decimal("8000.00"),
-            base_pay=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
         )
 
         url = reverse("payroll-analytics")
@@ -604,13 +612,13 @@ class MonthlyPayrollSummaryViewSmokeTest(PayrollViewsSmokeTest):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            total_gross_pay=Decimal("8000.00"),
-            base_pay=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
             worked_days=22,
         )
 
         self.assertEqual(summary.employee, self.regular_employee)
-        self.assertEqual(summary.total_gross_pay, Decimal("8000.00"))
+        self.assertEqual(summary.total_salary, Decimal("8000.00"))
 
     def test_monthly_summary_basic_attributes(self):
         """Test monthly summary basic attributes"""
@@ -619,8 +627,8 @@ class MonthlyPayrollSummaryViewSmokeTest(PayrollViewsSmokeTest):
             year=2025,
             month=1,
             total_hours=Decimal("160.00"),
-            total_gross_pay=Decimal("8000.00"),
-            base_pay=Decimal("8000.00"),
+            total_salary=Decimal("8000.00"),
+            proportional_monthly=Decimal("8000.00"),
             worked_days=22,
         )
 
@@ -701,7 +709,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
         ]
 
         target_date = date(2025, 1, 15)  # Wednesday
-        total_hours = 8.0
+        total_hours = 8.6
 
         result = _calculate_hourly_daily_earnings(
             self.employee_salary, work_logs, target_date, total_hours
@@ -709,7 +717,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
 
         self.assertIn("total_earnings", result)
         self.assertIn("breakdown", result)
-        self.assertEqual(result["hours_worked"], 8.0)
+        self.assertEqual(result["hours_worked"], 8.6)
 
     def test_calculate_hourly_daily_earnings_overtime(self):
         """Test calculating earnings with overtime hours"""
@@ -747,7 +755,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
 
             work_logs = []
             target_date = date(2025, 1, 15)
-            total_hours = 8.0
+            total_hours = 8.6
 
             result = _calculate_hourly_daily_earnings(
                 self.employee_salary, work_logs, target_date, total_hours
@@ -776,7 +784,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
             ]
 
             target_date = date(2025, 1, 15)
-            total_hours = 8.0
+            total_hours = 8.6
 
             result = _calculate_hourly_daily_earnings(
                 self.employee_salary, work_logs, target_date, total_hours
@@ -822,7 +830,7 @@ class CalculateHourlyDailyEarningsViewSmokeTest(PayrollViewsSmokeTest):
         ]
 
         target_date = date(2025, 1, 17)  # Friday
-        total_hours = 8.0  # More than Friday norm (7.6)
+        total_hours = 8.6  # More than Friday norm (7.6)
 
         result = _calculate_hourly_daily_earnings(
             self.employee_salary, work_logs, target_date, total_hours
@@ -864,21 +872,18 @@ class LegacyPayrollCalculationSmokeTest(PayrollViewsSmokeTest):
 
     def test_legacy_payroll_calculation_monthly_employee(self):
         """Test legacy calculation for monthly employee"""
-        from payroll.views import _legacy_payroll_calculation
+        from payroll.views.payroll_list_views import _legacy_payroll_calculation
 
         employees = Employee.objects.filter(id=self.admin_employee.id)
         current_date = date(2025, 1, 15)
         start_date = date(2025, 1, 1)
         end_date = date(2025, 1, 31)
 
-        with patch("payroll.models.Salary.calculate_monthly_salary") as mock_calc:
-            mock_calc.return_value = {"total_salary": 10000}
+        result = _legacy_payroll_calculation(
+            employees, current_date, start_date, end_date
+        )
 
-            result = _legacy_payroll_calculation(
-                employees, current_date, start_date, end_date
-            )
-
-            self.assertIsInstance(result, list)
+        self.assertIsInstance(result, list)
 
     def test_legacy_payroll_calculation_service_failure(self):
         """Test legacy calculation handles service failures gracefully"""
@@ -917,7 +922,7 @@ class PayrollViewsExceptionHandlingSmokeTest(PayrollViewsSmokeTest):
     @patch("payroll.views.logger")
     def test_enhanced_earnings_calculation_error(self, mock_logger):
         """Test enhanced earnings handling calculation errors"""
-        with patch("payroll.views.EnhancedPayrollCalculationService") as mock_service:
+        with patch("payroll.services.payroll_service.PayrollService") as mock_service:
             mock_service.side_effect = Exception("Calculation failed")
 
             url = reverse("current-earnings")
@@ -935,7 +940,7 @@ class PayrollViewsExceptionHandlingSmokeTest(PayrollViewsSmokeTest):
         url = reverse("recalculate-payroll")
         data = {"year": 2025, "month": 1, "employee_id": self.regular_employee.id}
 
-        with patch("payroll.views.EnhancedPayrollCalculationService") as mock_service:
+        with patch("payroll.services.payroll_service.PayrollService") as mock_service:
             mock_instance = MagicMock()
             mock_instance.calculate_monthly_salary_enhanced.side_effect = Exception(
                 "Service failed"

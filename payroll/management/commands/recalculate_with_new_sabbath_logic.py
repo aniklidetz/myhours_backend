@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from payroll.models import DailyPayrollCalculation
-from payroll.services import EnhancedPayrollCalculationService
+from payroll.services.contracts import CalculationContext
+from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -65,7 +67,7 @@ class Command(BaseCommand):
 
                 if not worklog:
                     self.stdout.write(
-                        f"⚠️  No worklog found for {calc.employee.get_full_name()} on {calc.work_date}"
+                        f"WARNING:  No worklog found for {calc.employee.get_full_name()} on {calc.work_date}"
                     )
                     continue
 
@@ -79,26 +81,44 @@ class Command(BaseCommand):
                 calculation_type = calc.employee.salary_info.calculation_type
 
                 if calculation_type == "monthly":
-                    service = EnhancedPayrollCalculationService(
-                        calc.employee,
-                        calc.work_date.year,
-                        calc.work_date.month,
-                        fast_mode=True,
+                    active_salary = calc.employee.salaries.filter(
+                        is_active=True
+                    ).first()
+                    if not active_salary:
+                        continue
+
+                    employee_type = EmployeeType.MONTHLY
+
+                    context = CalculationContext(
+                        employee_id=calc.employee.id,
+                        year=calc.work_date.year,
+                        month=calc.work_date.month,
+                        user_id=1,  # System user
+                        employee_type=employee_type,
+                        fast_mode=False,
                     )
-                    result = service.calculate_daily_bonuses_monthly(
-                        worklog, save_to_db=False
-                    )
+                    service = PayrollService()
+                    result = service.calculate(context, CalculationStrategy.ENHANCED)
 
                 elif calculation_type == "hourly":
-                    service = EnhancedPayrollCalculationService(
-                        calc.employee,
-                        calc.work_date.year,
-                        calc.work_date.month,
-                        fast_mode=True,
+                    active_salary = calc.employee.salaries.filter(
+                        is_active=True
+                    ).first()
+                    if not active_salary:
+                        continue
+
+                    employee_type = EmployeeType.HOURLY
+
+                    context = CalculationContext(
+                        employee_id=calc.employee.id,
+                        year=calc.work_date.year,
+                        month=calc.work_date.month,
+                        user_id=1,  # System user
+                        employee_type=employee_type,
+                        fast_mode=False,
                     )
-                    result = service.calculate_daily_pay_hourly(
-                        worklog, save_to_db=False
-                    )
+                    service = PayrollService()
+                    result = service.calculate(context, CalculationStrategy.ENHANCED)
 
                     # Convert hourly result to unified structure
                     if "breakdown" in result:
@@ -122,7 +142,7 @@ class Command(BaseCommand):
                         result["total_gross_pay"] = new_total_pay
                 else:
                     self.stdout.write(
-                        f"⚠️  Unsupported calculation type '{calculation_type}' for {calc.employee.get_full_name()}"
+                        f"WARNING:  Unsupported calculation type '{calculation_type}' for {calc.employee.get_full_name()}"
                     )
                     continue
 
@@ -174,7 +194,7 @@ class Command(BaseCommand):
                     updated_count += 1
                 else:
                     self.stdout.write(
-                        f"✓ No change needed for {calc.employee.get_full_name()} - {calc.work_date}"
+                        f"OK: No change needed for {calc.employee.get_full_name()} - {calc.work_date}"
                     )
 
             except Exception as e:

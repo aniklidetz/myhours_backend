@@ -4,6 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from users.models import Employee
@@ -137,6 +138,10 @@ class WorkLog(models.Model):
         indexes = [
             models.Index(fields=["employee", "check_in"]),
             models.Index(fields=["check_in"]),
+            models.Index(fields=["check_out"]),  # Added for check_out filtering
+            models.Index(
+                fields=["employee", "check_in", "check_out"]
+            ),  # Composite for date range queries
             models.Index(fields=["is_approved"]),
         ]
 
@@ -168,24 +173,34 @@ class WorkLog(models.Model):
         self._validate_no_overlaps()
 
     def _validate_no_overlaps(self):
-        """Ensure no overlapping work sessions for the same employee"""
+        """Ensure no overlapping work sessions for the same employee
+
+        OPTIMIZED: Uses database query instead of Python loop
+        Complexity: O(N²) -> O(1)
+        """
         # Determine end time for comparison
         end_time = self.check_out or timezone.now()
 
-        # Build query to find overlapping sessions
-        overlapping_query = WorkLog.objects.filter(
-            employee=self.employee,
-        ).exclude(pk=self.pk)
+        # OPTIMIZED: Use database query to find overlaps directly
+        # Two sessions overlap if:
+        # 1. Session A starts before Session B ends AND
+        # 2. Session A ends after Session B starts
+        overlapping = (
+            WorkLog.objects.filter(
+                employee=self.employee,
+                check_in__lt=end_time,  # Other session starts before this ends
+            )
+            .filter(
+                Q(check_out__isnull=True)  # Other session still ongoing
+                | Q(check_out__gt=self.check_in)  # Other session ends after this starts
+            )
+            .exclude(pk=self.pk)
+        )
 
-        # Check for overlaps with existing sessions
-        for existing_log in overlapping_query:
-            existing_end = existing_log.check_out or timezone.now()
-
-            # Check if times overlap
-            if self.check_in < existing_end and end_time > existing_log.check_in:
-                raise ValidationError(
-                    "This work session overlaps with another work session"
-                )
+        if overlapping.exists():
+            raise ValidationError(
+                "This work session overlaps with another work session"
+            )
 
     def get_duration(self):
         """Get the duration of the work session"""

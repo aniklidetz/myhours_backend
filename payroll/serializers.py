@@ -35,12 +35,29 @@ class SalarySerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_calculated_salary(self, obj):
-        """Get current month's calculated salary"""
+        """Get current month's calculated salary using PayrollService"""
         try:
             from django.utils import timezone
 
+            from payroll.services.contracts import CalculationContext
+            from payroll.services.payroll_service import PayrollService
+
             now = timezone.now()
-            return obj.calculate_monthly_salary(now.month, now.year)
+            context = CalculationContext(
+                employee_id=obj.employee.id,
+                year=now.year,
+                month=now.month,
+                user_id=None,  # No user context in serializer
+                fast_mode=True,  # Use fast mode for serializer performance
+            )
+            service = PayrollService(context)
+            result = service.calculate()
+            return {
+                "total_salary": float(result.total_salary),
+                "total_hours": float(result.total_hours),
+                "regular_hours": float(result.regular_hours),
+                "overtime_hours": float(result.overtime_hours),
+            }
         except Exception:
             return None
 
@@ -81,6 +98,11 @@ class SalarySerializer(serializers.ModelSerializer):
         calculation_type = attrs.get("calculation_type")
         project_start_date = attrs.get("project_start_date")
         project_end_date = attrs.get("project_end_date")
+
+        # Handle monthly_hourly field - convert 0 to None for consistency
+        monthly_hourly = attrs.get("monthly_hourly", None)
+        if monthly_hourly is not None and Decimal(str(monthly_hourly)) == 0:
+            attrs["monthly_hourly"] = None
 
         # Check if project payroll is enabled
         if calculation_type == "project":

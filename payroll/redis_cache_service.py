@@ -10,6 +10,7 @@ Provides caching for:
 
 import json
 import logging
+import os
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -24,8 +25,8 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from integrations.models import Holiday
-from integrations.services.enhanced_sunrise_sunset_service import (
-    enhanced_sunrise_sunset_service,
+from integrations.services.unified_shabbat_service import (
+    get_shabbat_times,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,23 +43,43 @@ class PayrollRedisCache:
 
         if REDIS_AVAILABLE:
             try:
-                # Try to get Redis configuration from Django settings
-                redis_config = getattr(
-                    settings,
-                    "REDIS_CONFIG",
-                    {
-                        "host": "localhost",
-                        "port": 6379,
-                        "db": 0,
-                        "decode_responses": True,
-                    },
+                # Try to use REDIS_URL from environment (Docker) or Django settings
+                redis_url = os.environ.get("REDIS_URL") or getattr(
+                    settings, "CELERY_BROKER_URL", None
                 )
 
-                self.redis_client = redis.Redis(**redis_config)
+                if redis_url:
+                    # Use redis.from_url() for URL-based connection (Docker-compatible)
+                    self.redis_client = redis.from_url(
+                        redis_url,
+                        decode_responses=True,
+                        socket_connect_timeout=5,
+                        socket_timeout=5,
+                    )
+                    logger.info(
+                        f"🔗 PayrollRedisCache connecting via URL: {redis_url.split('@')[0]}@..."
+                    )
+                else:
+                    # Fallback to REDIS_CONFIG or defaults (for non-Docker setups)
+                    redis_config = getattr(
+                        settings,
+                        "REDIS_CONFIG",
+                        {
+                            "host": "localhost",
+                            "port": 6379,
+                            "db": 0,
+                            "decode_responses": True,
+                        },
+                    )
+                    self.redis_client = redis.Redis(**redis_config)
+                    logger.info(
+                        f"🔗 PayrollRedisCache connecting via config: {redis_config.get('host')}:{redis_config.get('port')}"
+                    )
+
                 # Test connection
                 self.redis_client.ping()
                 self.cache_available = True
-                logger.info("✅ Redis cache initialized successfully")
+                logger.info("✅ PayrollRedisCache initialized successfully")
 
             except Exception as e:
                 logger.warning(f"⚠️ Redis not available: {e}. Using database fallback.")
@@ -130,9 +151,7 @@ class PayrollRedisCache:
             # ✅ NEW: Enhance Shabbat entries with precise API times
             if holiday.is_shabbat:
                 try:
-                    shabbat_times = enhanced_sunrise_sunset_service.get_shabbat_times_israeli_timezone(
-                        holiday.date, use_cache=True
-                    )
+                    shabbat_times = get_shabbat_times(holiday.date, use_cache=True)
 
                     if shabbat_times:
                         holiday_data.update(

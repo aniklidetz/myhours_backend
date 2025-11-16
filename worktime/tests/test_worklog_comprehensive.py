@@ -412,16 +412,19 @@ class WorkLogBusinessLogicTest(TestCase):
             # No check_out - current session
         )
 
-        # Attempting to create overlapping session should be handled by business logic
-        second_log = WorkLog.objects.create(
-            employee=self.hourly_employee,
-            check_in=base_time + timedelta(hours=1),
-            # This would overlap with the first session
-        )
+        # Attempting to create overlapping session should raise ValidationError
+        with self.assertRaises(ValidationError) as context:
+            second_log = WorkLog.objects.create(
+                employee=self.hourly_employee,
+                check_in=base_time + timedelta(hours=1),
+                # This would overlap with the first session
+            )
 
-        # Both logs can exist, but business logic should handle overlaps
+        # Verify the error message
+        self.assertIn("overlaps", str(context.exception).lower())
+
+        # First log should still be a current session
         self.assertTrue(first_log.is_current_session())
-        self.assertTrue(second_log.is_current_session())
 
     def test_worklog_performance_with_large_dataset(self):
         """Test performance with large number of work logs"""

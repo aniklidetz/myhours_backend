@@ -9,6 +9,11 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, TransactionTestCase
 
 from payroll.models import Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -115,12 +120,33 @@ class SalaryActiveConstraintTest(TestCase):
             is_active=True,
         )
         # Test that the service gets the active salary
-        from payroll.services import EnhancedPayrollCalculationService
+        from datetime import datetime
 
-        service = EnhancedPayrollCalculationService(self.employee, 2025, 8)
-        self.assertEqual(service.salary.id, salary2.id)
-        self.assertEqual(service.salary.calculation_type, "hourly")
-        self.assertEqual(service.salary.hourly_rate, Decimal("60.00"))
+        from django.utils import timezone
+
+        from payroll.services.enums import CalculationStrategy
+        from payroll.services.payroll_service import PayrollService
+        from payroll.tests.helpers import make_context
+        from worktime.models import WorkLog
+
+        # Create a work log so there's something to calculate
+        check_in = timezone.make_aware(datetime(2025, 8, 1, 9, 0))
+        check_out = timezone.make_aware(datetime(2025, 8, 1, 17, 0))
+        WorkLog.objects.create(
+            employee=self.employee, check_in=check_in, check_out=check_out
+        )
+
+        context = make_context(self.employee, 2025, 8)
+        service = PayrollService()
+        result = service.calculate(context, CalculationStrategy.ENHANCED)
+
+        # The new service doesn't expose salary directly, but we can verify it uses the active one
+        # by checking the result reflects hourly calculation with the active salary
+        self.assertGreater(
+            result["total_salary"], 0
+        )  # Should calculate based on hourly rate
+        # With 8 hours at 60.00/hour, should be around 480
+        self.assertAlmostEqual(float(result["total_salary"]), 480.0, places=0)
 
     def test_service_fails_when_no_active_salary(self):
         """Test that service raises error when no active salary exists"""
@@ -131,15 +157,19 @@ class SalaryActiveConstraintTest(TestCase):
             calculation_type="monthly",
             is_active=False,
         )
-        # Service should fail
-        from django.core.exceptions import ValidationError
+        # Service should return zero result when no active salary
+        from payroll.services.enums import CalculationStrategy
+        from payroll.services.payroll_service import PayrollService
+        from payroll.tests.helpers import make_context
 
-        from payroll.services import EnhancedPayrollCalculationService
+        context = make_context(self.employee, 2025, 8)
+        service = PayrollService()
+        result = service.calculate(context, CalculationStrategy.ENHANCED)
 
-        with self.assertRaises(ValidationError) as cm:
-            EnhancedPayrollCalculationService(self.employee, 2025, 8)
-        self.assertIn("Active salary is required", str(cm.exception))
-        self.assertIn(self.employee.get_full_name(), str(cm.exception))
+        # Should return result with 0 salary
+        self.assertEqual(result["total_salary"], 0)
+        # May have error in metadata or logs
+        # The new architecture returns empty result instead of raising exception
 
 
 class SalaryConstraintTransactionTest(TransactionTestCase):

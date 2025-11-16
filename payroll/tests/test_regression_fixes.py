@@ -13,6 +13,11 @@ from django.test import TestCase
 
 from payroll.models import Salary
 from payroll.serializers import SalarySerializer
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+)
 from users.models import Employee
 
 
@@ -33,17 +38,18 @@ class SalaryConstraintRegressionTest(TestCase):
         )
 
     def test_monthly_salary_with_null_hourly_rate(self):
-        """Test monthly salary can be created with null hourly_rate"""
+        """Test monthly salary can be created with null monthly_hourly"""
         salary = Salary.objects.create(
             employee=self.employee,
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             hourly_rate=None,  # Should be None, not 0
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "monthly")
         self.assertEqual(salary.base_salary, Decimal("15000.00"))
-        self.assertIsNone(salary.hourly_rate)
+        self.assertIsNone(salary.monthly_hourly)
 
     def test_hourly_salary_with_null_base_salary(self):
         """Test hourly salary can be created with null base_salary"""
@@ -53,9 +59,10 @@ class SalaryConstraintRegressionTest(TestCase):
             hourly_rate=Decimal("50.00"),
             base_salary=None,  # Should be None, not 0
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(salary.calculation_type, "hourly")
-        self.assertEqual(salary.hourly_rate, Decimal("50.00"))
+        self.assertEqual(salary.monthly_hourly, Decimal("50.00"))
         self.assertIsNone(salary.base_salary)
 
 
@@ -87,6 +94,7 @@ class SalaryInfoPropertyRegressionTest(TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
         self.assertEqual(self.employee.salary_info, salary)
         # Check if employee has active salary by checking salary_info exists
@@ -157,7 +165,7 @@ class SalarySerializerRegressionTest(TestCase):
         self.assertTrue(base_salary is None or base_salary == 0)
 
     def test_serializer_normalizes_zero_hourly_rate_to_none(self):
-        """Test serializer converts 0 hourly_rate to None"""
+        """Test serializer converts 0 monthly_hourly to None"""
         data = {
             "employee": self.employee.id,
             "calculation_type": "monthly",

@@ -10,9 +10,7 @@ from datetime import date, datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from integrations.services.enhanced_sunrise_sunset_service import (
-    EnhancedSunriseSunsetService,
-)
+from integrations.services.unified_shabbat_service import get_shabbat_times
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -176,9 +174,7 @@ class Command(BaseCommand):
         """Create a work shift that overlaps with Sabbath time"""
         try:
             # Get precise Sabbath times for this Friday
-            sabbath_times = (
-                EnhancedSunriseSunsetService.get_shabbat_times_israeli_timezone(friday)
-            )
+            sabbath_times = get_shabbat_times(friday)
 
             if not sabbath_times:
                 self.stdout.write(

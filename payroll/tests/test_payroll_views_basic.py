@@ -17,11 +17,17 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from payroll.models import Salary
+from payroll.tests.helpers import (
+    ISRAELI_DAILY_NORM_HOURS,
+    MONTHLY_NORM_HOURS,
+    NIGHT_NORM_HOURS,
+    PayrollTestMixin,
+)
 from users.models import Employee
 from worktime.models import WorkLog
 
 
-class BasicPayrollViewsTest(TestCase):
+class BasicPayrollViewsTest(PayrollTestMixin, TestCase):
     """Basic tests for payroll views focusing on view logic"""
 
     def setUp(self):
@@ -44,6 +50,7 @@ class BasicPayrollViewsTest(TestCase):
             calculation_type="monthly",
             base_salary=Decimal("15000.00"),
             currency="ILS",
+            is_active=True,
         )
 
         # Create regular employee
@@ -63,6 +70,7 @@ class BasicPayrollViewsTest(TestCase):
             calculation_type="hourly",
             hourly_rate=Decimal("60.00"),
             currency="ILS",
+            is_active=True,
         )
 
 
@@ -166,10 +174,11 @@ class EnhancedEarningsBasicTest(BasicPayrollViewsTest):
         self.client.force_authenticate(user=self.admin_user)
         response = self.client.get("/api/v1/payroll/earnings/?month=invalid&year=abc")
 
-        # Should handle gracefully and use defaults
-        # Accept 200 or 404 as endpoint may not exist
+        # Should return 400 for invalid parameters
+        # Accept 400 or 404 as endpoint may not exist
         self.assertIn(
-            response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
+            response.status_code,
+            [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND],
         )
 
 
@@ -218,14 +227,14 @@ class DailyCalculationsBasicTest(BasicPayrollViewsTest):
 class RecalculatePayrollBasicTest(BasicPayrollViewsTest):
     """Basic tests for recalculate payroll endpoint"""
 
-    @patch("payroll.services.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_admin_access(self, mock_service):
         """Test admin can trigger payroll recalculation"""
         # Mock the service
         mock_instance = Mock()
         mock_instance.calculate_monthly_salary_enhanced.return_value = {
             "employee": "Test Employee",
-            "total_pay": Decimal("5000.00"),
+            "total_salary": Decimal("5000.00"),
         }
         mock_service.return_value = mock_instance
 
@@ -259,14 +268,14 @@ class RecalculatePayrollBasicTest(BasicPayrollViewsTest):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("payroll.services.EnhancedPayrollCalculationService")
+    @patch("payroll.services.self.payroll_service.PayrollService")
     def test_recalculate_specific_employee(self, mock_service):
         """Test recalculation for specific employee"""
         # Mock the service
         mock_instance = Mock()
         mock_instance.calculate_monthly_salary_enhanced.return_value = {
             "employee": "Specific Employee",
-            "total_pay": Decimal("3000.00"),
+            "total_salary": Decimal("3000.00"),
         }
         mock_service.return_value = mock_instance
 
@@ -379,7 +388,7 @@ class BackwardCompatibleEarningsBasicTest(BasicPayrollViewsTest):
         )
 
 
-class HelperFunctionsBasicTest(TestCase):
+class HelperFunctionsBasicTest(PayrollTestMixin, TestCase):
     """Test helper functions in payroll views"""
 
     def setUp(self):

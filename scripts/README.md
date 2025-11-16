@@ -15,7 +15,11 @@ scripts/
 
 ## Available Scripts
 
-### 🧹 Cleanup Scripts (`cleanup/`)
+###  Shabbat Service Migration Scripts
+- **`test_shabbat_migration.py`** - Full Django-based migration readiness test
+- **`test_shabbat_standalone.py`** - Standalone logic tests (no Django/DB required)
+
+###  Cleanup Scripts (`cleanup/`)
 - **`cleanup_old_files.sh`** - Comprehensive cleanup: logs, backups, cache, and temporary files
 - **`setup_log_rotation.sh`** - Log rotation with compression and archiving
 - **`setup_crontab.sh`** - Automated cleanup scheduling via crontab
@@ -25,14 +29,14 @@ scripts/
 - **`setup_database.py`** - Initial database setup and configuration
 - **`backup_database.sh`** - Creates timestamped backups of PostgreSQL and MongoDB
 
-### 🚀 Deployment Scripts (`deployment/`)
+###  Deployment Scripts (`deployment/`)
 - **`Dockerfile.optimized`** - Optimized Docker configuration for production
 
-### 🧪 Testing Scripts (`testing/`)
+###  Testing Scripts (`testing/`)
 - **`run-tests.sh`** - Main test execution script
 - **`coverage.sh`** - Generates test coverage reports
 
-### 🔧 Utilities (`utilities/`)
+###  Utilities (`utilities/`)
 - **`url_inspector.py`** - URL pattern inspection tool
 
 ## Usage Examples

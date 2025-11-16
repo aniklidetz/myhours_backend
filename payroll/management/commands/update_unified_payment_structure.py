@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from payroll.models import DailyPayrollCalculation
-from payroll.services import EnhancedPayrollCalculationService
+from payroll.services.contracts import CalculationContext
+from payroll.services.enums import CalculationStrategy, EmployeeType
+from payroll.services.payroll_service import PayrollService
 from users.models import Employee
 from worktime.models import WorkLog
 
@@ -76,55 +78,68 @@ class Command(BaseCommand):
                 old_total_gross = calc.total_gross_pay
 
                 # Calculate new values using unified logic
-                calculation_type = calc.employee.salary_info.calculation_type
-
-                if calculation_type == "monthly":
-                    # Use monthly employee logic
-                    service = EnhancedPayrollCalculationService(
-                        calc.employee,
-                        calc.work_date.year,
-                        calc.work_date.month,
-                        fast_mode=True,  # Skip API calls for speed
-                    )
-                    result = service.calculate_daily_bonuses_monthly(
-                        worklog, save_to_db=False
-                    )
-
-                elif calculation_type == "hourly":
-                    # For hourly employees: implement similar unified logic
-                    # For now, calculate manually
-                    hours_worked = worklog.get_total_hours()
-                    hourly_rate = calc.employee.salary_info.hourly_rate or Decimal("0")
-
-                    # NEW UNIFIED LOGIC for hourly employees:
-                    # base_pay = hours × hourly_rate
-                    # bonus_pay = overtime premiums + special day bonuses
-                    # total_pay = base_pay + bonus_pay
-
-                    new_base_pay = hours_worked * hourly_rate
-
-                    # For now, use existing total_pay as total and calculate bonus_pay
-                    new_total_pay = calc.total_pay if calc.total_pay else new_base_pay
-                    new_bonus_pay = max(Decimal("0"), new_total_pay - new_base_pay)
-
-                    result = {
-                        "base_pay": new_base_pay,
-                        "bonus_pay": new_bonus_pay,
-                        "total_pay": new_total_pay,
-                        "total_gross_pay": new_total_pay,
-                    }
-                else:
+                # Get active salary to determine employee type
+                active_salary = calc.employee.salaries.filter(is_active=True).first()
+                if not active_salary:
                     self.stdout.write(
-                        f"⚠️  Unsupported calculation type '{calculation_type}' for {calc.employee.get_full_name()}"
+                        self.style.ERROR(
+                            f"No active salary found for {calc.employee.get_full_name()}"
+                        )
                     )
                     continue
 
-                # Extract new values
-                new_base_pay = result.get("base_pay", Decimal("0"))
-                new_bonus_pay = result.get("bonus_pay", Decimal("0"))
-                new_total_gross = result.get(
-                    "total_gross_pay", result.get("total_pay", Decimal("0"))
+                calculation_type = active_salary.calculation_type
+                employee_type = (
+                    EmployeeType.HOURLY
+                    if calculation_type == "hourly"
+                    else EmployeeType.MONTHLY
                 )
+
+                # Use new PayrollService
+                service = PayrollService()
+                context = CalculationContext(
+                    employee_id=calc.employee.id,
+                    year=calc.work_date.year,
+                    month=calc.work_date.month,
+                    user_id=1,  # System user for management commands
+                    employee_type=employee_type,
+                    force_recalculate=True,
+                    fast_mode=False,  # Enable database persistence
+                )
+                result = service.calculate(context, CalculationStrategy.ENHANCED)
+
+                # Extract unified values from result
+                total_salary = Decimal(str(result.get("total_salary", 0)))
+
+                # Calculate base_pay and bonus_pay from the result
+                regular_hours = Decimal(str(result.get("regular_hours", 0)))
+                total_hours = regular_hours + Decimal(
+                    str(result.get("overtime_hours", 0))
+                )
+
+                if calculation_type == "hourly" and active_salary.hourly_rate:
+                    new_base_pay = regular_hours * active_salary.hourly_rate
+                    new_bonus_pay = total_salary - new_base_pay
+                else:
+                    # For monthly employees, use proportional split
+                    if total_hours > 0:
+                        new_base_pay = total_salary * (regular_hours / total_hours)
+                        new_bonus_pay = total_salary - new_base_pay
+                    else:
+                        new_base_pay = total_salary
+                        new_bonus_pay = Decimal("0")
+
+                unified_result = {
+                    "base_pay": new_base_pay,
+                    "bonus_pay": new_bonus_pay,
+                    "total_pay": total_salary,
+                    "total_gross_pay": total_salary,
+                }
+
+                # Check if values changed significantly
+                new_base_pay = unified_result["base_pay"]
+                new_bonus_pay = unified_result["bonus_pay"]
+                new_total_gross = unified_result["total_gross_pay"]
 
                 # Check if there's a significant change
                 base_change = abs(new_base_pay - old_base_pay) > Decimal("0.01")
