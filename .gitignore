@@ -103,3 +103,7 @@ simple_temp_*.py
 *_validation.py
 
 debug_scripts_archive/
+
+# local dumps
+*.dump
+*.json

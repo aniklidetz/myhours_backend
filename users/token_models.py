@@ -38,6 +38,24 @@ class DeviceToken(models.Model):
     biometric_verified = models.BooleanField(default=False)
     biometric_verified_at = models.DateTimeField(null=True, blank=True)
 
+    # Token rotation fields (for replay attack detection)
+    rotation_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this token has been rotated"
+    )
+    previous_token = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Previous token before rotation (for replay attack detection)"
+    )
+    previous_token_expires_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Grace period for previous token (allows for clock skew)"
+    )
+
     class Meta:
         unique_together = ["user", "device_id"]
         ordering = ["-created_at"]
@@ -66,13 +84,48 @@ class DeviceToken(models.Model):
         """Check if token is valid and not expired"""
         return self.is_active and self.expires_at > timezone.now()
 
-    def refresh(self, ttl_days=7):
-        """Refresh token expiration"""
-        if self.is_valid():
-            self.expires_at = timezone.now() + timedelta(days=ttl_days)
-            self.save(update_fields=["expires_at"])
-            return True
-        return False
+    def refresh(self, ttl_days=7, grace_period_seconds=300):
+        """
+        Rotate token for security (prevents replay attacks).
+
+        Returns the new token string or None if rotation failed.
+
+        Token rotation:
+        1. Store current token in previous_token with grace period
+        2. Generate new token
+        3. Increment rotation_count
+        4. Update expires_at
+        """
+        if not self.is_valid():
+            return None
+
+        # Store current token for grace period (handles clock skew)
+        self.previous_token = self.token
+        self.previous_token_expires_at = timezone.now() + timedelta(seconds=grace_period_seconds)
+
+        # Generate new token
+        new_token = secrets.token_hex(32)
+        self.token = new_token
+
+        # Update rotation count and expiration
+        self.rotation_count += 1
+        self.expires_at = timezone.now() + timedelta(days=ttl_days)
+
+        self.save(update_fields=[
+            "token",
+            "previous_token",
+            "previous_token_expires_at",
+            "rotation_count",
+            "expires_at"
+        ])
+
+        logger.info(
+            f"Token rotated for user {self.user.username}, "
+            f"device {self.device_id[:8]}..., "
+            f"rotation_count={self.rotation_count}"
+        )
+
+        return new_token
 
     def mark_used(self, ip_address=None, location=None):
         """Mark token as used and update tracking info"""
@@ -105,45 +158,6 @@ class DeviceToken(models.Model):
             return time_since_verification > timedelta(hours=24)
 
         return True
-
-    @classmethod
-    def create_token(cls, user, device_id, device_info=None, ttl_days=7):
-        """Create or update device token for user and device"""
-        expires_at = timezone.now() + timedelta(days=ttl_days)
-
-        # Try to get existing token for this user+device combination
-        try:
-            device_token = cls.objects.get(user=user, device_id=device_id)
-            # Update existing token
-            device_token.token = cls.generate_token()
-            device_token.expires_at = expires_at
-            device_token.is_active = True
-            device_token.device_info = device_info or {}
-            device_token.save()
-            logger.info(
-                f"Updated existing device token for user {user.username}, device {device_id[:8]}..."
-            )
-        except cls.DoesNotExist:
-            # Create new token
-            device_token = cls.objects.create(
-                user=user,
-                token=cls.generate_token(),
-                device_id=device_id,
-                device_info=device_info or {},
-                expires_at=expires_at,
-            )
-            logger.info(
-                f"Created new device token for user {user.username}, device {device_id[:8]}..."
-            )
-
-        return device_token
-
-    @staticmethod
-    def generate_token():
-        """Generate a secure random token"""
-        import secrets
-
-        return secrets.token_hex(32)  # 64 character hex string
 
 
 class TokenRefreshLog(models.Model):

@@ -49,7 +49,7 @@ def biometric_stats(request):
 
     try:
         # Get MongoDB stats
-        biometrics_views.get_mongodb_service().get_statistics()
+        mongo_stats = biometrics_views.mongo_biometric_repository.get_statistics()
 
         # Get PostgreSQL stats
         total_profiles = BiometricProfile.objects.count()
@@ -234,6 +234,13 @@ def verify_face(request):
             return Response(
                 {"success": False, "error": "Employee account is inactive"},
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Check if face processor is available
+        if biometrics_views.face_processor is None:
+            return Response(
+                {"error": "Face recognition service unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         # For now, simulate verification failure in real mode

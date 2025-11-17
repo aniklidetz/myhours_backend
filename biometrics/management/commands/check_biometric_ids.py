@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from biometrics.models import BiometricProfile
-from biometrics.services.mongodb_service import MongoDBService
+from biometrics.services.mongodb_repository import MongoBiometricRepository
 from users.models import Employee
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class Command(BaseCommand):
         self.stdout.write("Checking biometric ID consistency...")
 
         # Initialize MongoDB service
-        mongodb_service = MongoDBService()
+        mongodb_service = MongoBiometricRepository()
 
         if mongodb_service.collection is None:
             self.stdout.write(self.style.ERROR("MongoDB not available"))

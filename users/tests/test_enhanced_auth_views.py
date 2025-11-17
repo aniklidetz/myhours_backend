@@ -56,9 +56,7 @@ class EnhancedLoginViewTest(TestCase):
     def test_enhanced_login_success_200(self, mock_mongodb):
         """Test successful enhanced login - 200 OK"""
         # Mock MongoDB service
-        mock_service = MagicMock()
-        mock_service.get_face_embeddings.return_value = None  # No biometric data
-        mock_mongodb.return_value = mock_service
+        mock_mongodb.get_face_embeddings.return_value = None  # No biometric data
 
         data = {
             "email": "test@example.com",
@@ -95,13 +93,11 @@ class EnhancedLoginViewTest(TestCase):
         )
         self.assertEqual(device_token.token, response_data["token"])
 
-    @patch("users.enhanced_auth_views.get_mongodb_service")
+    @patch("users.enhanced_auth_views.mongo_biometric_repository")
     def test_enhanced_login_with_biometric_data(self, mock_mongodb):
         """Test enhanced login with existing biometric data"""
         # Mock MongoDB service with biometric data
-        mock_service = MagicMock()
-        mock_service.get_face_embeddings.return_value = [{"embedding": [1, 2, 3]}]
-        mock_mongodb.return_value = mock_service
+        mock_mongodb.get_face_embeddings.return_value = [{"embedding": [1, 2, 3]}]
 
         data = {
             "email": "test@example.com",
@@ -249,10 +245,8 @@ class EnhancedLoginViewTest(TestCase):
             role="employee",
         )
 
-        with patch("users.enhanced_auth_views.get_mongodb_service") as mock_mongodb:
-            mock_service = MagicMock()
-            mock_service.get_face_embeddings.return_value = None
-            mock_mongodb.return_value = mock_service
+        with patch("users.enhanced_auth_views.mongo_biometric_repository") as mock_mongodb:
+            mock_mongodb.get_face_embeddings.return_value = None
 
             data = {
                 "email": "different@example.com",
@@ -270,9 +264,7 @@ class EnhancedLoginViewTest(TestCase):
     @patch("users.enhanced_auth_views.get_mongodb_service")
     def test_enhanced_login_custom_ttl_settings(self, mock_mongodb):
         """Test enhanced login with custom TTL settings"""
-        mock_service = MagicMock()
-        mock_service.get_face_embeddings.return_value = None
-        mock_mongodb.return_value = mock_service
+        mock_mongodb.get_face_embeddings.return_value = None
 
         data = {
             "email": "test@example.com",
@@ -292,9 +284,7 @@ class EnhancedLoginViewTest(TestCase):
     @patch("users.enhanced_auth_views.logger")
     def test_enhanced_login_logging(self, mock_logger, mock_mongodb):
         """Test that enhanced login events are logged"""
-        mock_service = MagicMock()
-        mock_service.get_face_embeddings.return_value = None
-        mock_mongodb.return_value = mock_service
+        mock_mongodb.get_face_embeddings.return_value = None
 
         data = {
             "email": "test@example.com",
@@ -392,16 +382,15 @@ class BiometricVerificationViewTest(TestCase):
         self.assertEqual(response_data["error_id"], "bio_001")
 
     @patch("users.enhanced_auth_views.get_mongodb_service")
-    def test_biometric_verification_no_biometric_data_400(self, mock_mongodb):
+    def test_biometric_verification_no_biometric_data_400(self, mock_get_service):
         """Test biometric verification when no biometric data exists - 400 Bad Request"""
         self.client.credentials(
             HTTP_AUTHORIZATION=f"DeviceToken {self.device_token.token}"
         )
 
         # Mock empty embeddings
-        mock_service = MagicMock()
+        mock_service = mock_get_service.return_value
         mock_service.get_all_active_embeddings.return_value = []
-        mock_mongodb.return_value = mock_service
 
         data = {"image": "base64_encoded_image"}
 
@@ -421,10 +410,9 @@ class BiometricVerificationViewTest(TestCase):
             HTTP_AUTHORIZATION=f"DeviceToken {self.device_token.token}"
         )
 
-        with patch("users.enhanced_auth_views.get_mongodb_service") as mock_mongodb:
-            mock_service = MagicMock()
+        with patch("users.enhanced_auth_views.get_mongodb_service") as mock_get_service:
+            mock_service = mock_get_service.return_value
             mock_service.get_all_active_embeddings.return_value = [{"employee_id": 1}]
-            mock_mongodb.return_value = mock_service
 
             data = {"image": "base64_encoded_image"}
 
@@ -439,16 +427,15 @@ class BiometricVerificationViewTest(TestCase):
 
     @patch("users.enhanced_auth_views.get_mongodb_service")
     @patch("users.enhanced_auth_views.face_processor")
-    def test_biometric_verification_failed_401(self, mock_face_processor, mock_mongodb):
+    def test_biometric_verification_failed_401(self, mock_face_processor, mock_get_service):
         """Test biometric verification failure - 401 Unauthorized"""
         self.client.credentials(
             HTTP_AUTHORIZATION=f"DeviceToken {self.device_token.token}"
         )
 
         # Mock services
-        mock_service = MagicMock()
+        mock_service = mock_get_service.return_value
         mock_service.get_all_active_embeddings.return_value = [{"employee_id": 1}]
-        mock_mongodb.return_value = mock_service
 
         mock_face_processor.find_matching_employee.return_value = {"success": False}
 
@@ -466,7 +453,7 @@ class BiometricVerificationViewTest(TestCase):
     @patch("users.enhanced_auth_views.get_mongodb_service")
     @patch("users.enhanced_auth_views.face_processor")
     def test_biometric_verification_mismatch_401(
-        self, mock_face_processor, mock_mongodb
+        self, mock_face_processor, mock_get_service
     ):
         """Test biometric verification with employee mismatch - 401 Unauthorized"""
         self.client.credentials(
@@ -474,9 +461,8 @@ class BiometricVerificationViewTest(TestCase):
         )
 
         # Mock services
-        mock_service = MagicMock()
+        mock_service = mock_get_service.return_value
         mock_service.get_all_active_embeddings.return_value = [{"employee_id": 1}]
-        mock_mongodb.return_value = mock_service
 
         # Mock successful match but for different employee
         mock_face_processor.find_matching_employee.return_value = {
@@ -499,7 +485,7 @@ class BiometricVerificationViewTest(TestCase):
     @patch("users.enhanced_auth_views.get_mongodb_service")
     @patch("users.enhanced_auth_views.face_processor")
     def test_biometric_verification_success_200(
-        self, mock_face_processor, mock_mongodb
+        self, mock_face_processor, mock_get_service
     ):
         """Test successful biometric verification - 200 OK"""
         self.client.credentials(
@@ -507,11 +493,10 @@ class BiometricVerificationViewTest(TestCase):
         )
 
         # Mock services
-        mock_service = MagicMock()
+        mock_service = mock_get_service.return_value
         mock_service.get_all_active_embeddings.return_value = [
             {"employee_id": self.employee.id}
         ]
-        mock_mongodb.return_value = mock_service
 
         mock_face_processor.find_matching_employee.return_value = {
             "success": True,
@@ -543,7 +528,7 @@ class BiometricVerificationViewTest(TestCase):
     @patch("users.enhanced_auth_views.get_mongodb_service")
     @patch("users.enhanced_auth_views.face_processor")
     def test_biometric_verification_payroll_operation(
-        self, mock_face_processor, mock_mongodb
+        self, mock_face_processor, mock_get_service
     ):
         """Test biometric verification for payroll operation with shorter TTL"""
         self.client.credentials(
@@ -551,11 +536,10 @@ class BiometricVerificationViewTest(TestCase):
         )
 
         # Mock services
-        mock_service = MagicMock()
+        mock_service = mock_get_service.return_value
         mock_service.get_all_active_embeddings.return_value = [
             {"employee_id": self.employee.id}
         ]
-        mock_mongodb.return_value = mock_service
 
         mock_face_processor.find_matching_employee.return_value = {
             "success": True,
@@ -583,12 +567,11 @@ class BiometricVerificationViewTest(TestCase):
         )
 
         # Mock the services to get through to the exception part
-        with patch("users.enhanced_auth_views.get_mongodb_service") as mock_mongodb:
-            mock_service = MagicMock()
+        with patch("users.enhanced_auth_views.get_mongodb_service") as mock_get_service:
+            mock_service = mock_get_service.return_value
             mock_service.get_all_active_embeddings.return_value = [
                 {"employee_id": self.employee.id}
             ]
-            mock_mongodb.return_value = mock_service
 
             with patch(
                 "users.enhanced_auth_views.face_processor"

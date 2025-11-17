@@ -47,7 +47,32 @@ class DeviceTokenAuthentication(BaseAuthentication):
                 token=key, is_active=True
             )
         except self.model.DoesNotExist:
-            raise AuthenticationFailed("Invalid token.")
+            # Check if this is a previous token (replay attack detection)
+            try:
+                device_token = self.model.objects.select_related("user").get(
+                    previous_token=key, is_active=True
+                )
+                # Check if grace period has expired
+                if device_token.previous_token_expires_at and \
+                   timezone.now() > device_token.previous_token_expires_at:
+                    # Replay attack detected! Revoke all tokens for this device
+                    logger.critical(
+                        f"SECURITY INCIDENT: REPLAY ATTACK DETECTED - Old token used after grace period. "
+                        f"user={device_token.user.username}, "
+                        f"device={device_token.device_id[:8]}..."
+                    )
+                    device_token.is_active = False
+                    device_token.save()
+                    raise AuthenticationFailed("Security incident detected: Token replay attack. All tokens revoked.")
+                else:
+                    # Within grace period - allow but log
+                    logger.warning(
+                        f"Previous token used within grace period: "
+                        f"user={device_token.user.username}, "
+                        f"device={device_token.device_id[:8]}..."
+                    )
+            except self.model.DoesNotExist:
+                raise AuthenticationFailed("Invalid token.")
 
         if not device_token.is_valid():
             # Token is expired
