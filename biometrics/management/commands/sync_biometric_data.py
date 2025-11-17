@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from biometrics.models import BiometricProfile
-from biometrics.services.mongodb_service import get_mongodb_service
+from biometrics.services.mongodb_repository import mongo_biometric_repository
 from users.models import Employee
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class Command(BaseCommand):
                 return
 
             # Check MongoDB data
-            mongo_embeddings = get_mongodb_service().get_face_embeddings(employee_id)
+            mongo_embeddings = mongo_biometric_repository.get_face_embeddings(employee_id)
             if mongo_embeddings:
                 self.stdout.write(
                     f"  MongoDB: {len(mongo_embeddings)} embeddings found"
@@ -82,9 +82,9 @@ class Command(BaseCommand):
 
     def check_mongodb_connection(self):
         """Check MongoDB connection"""
-        if get_mongodb_service().health_check():
+        if mongo_biometric_repository.health_check():
             self.stdout.write(self.style.SUCCESS("MongoDB connection: OK"))
-            stats = get_mongodb_service().get_statistics()
+            stats = mongo_biometric_repository.get_statistics()
             self.stdout.write(f"MongoDB stats: {stats}")
         else:
             self.stdout.write(self.style.ERROR("MongoDB connection: FAILED"))

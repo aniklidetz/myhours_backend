@@ -308,6 +308,44 @@ class MongoBiometricRepository:
             )  # lgtm[py/clear-text-logging-sensitive-data]
             return []
 
+    def get_all_active_embeddings(self) -> List[Tuple[int, List[Dict]]]:
+        """
+        Retrieve all active face embeddings for matching
+
+        This method provides backward compatibility with legacy code
+        that expects embeddings in tuple format.
+
+        Returns:
+            List of tuples (employee_id, embeddings)
+        """
+        if self.collection is None:
+            logger.warning("MongoDB collection is None")
+            return []
+
+        try:
+            logger.info("Fetching all active embeddings from MongoDB...")
+            results = []
+
+            cursor = self.collection.find({"is_active": True})
+            for document in cursor:
+                employee_id = document.get("employee_id")
+                embeddings = document.get("embeddings", [])
+
+                if employee_id and embeddings:
+                    results.append((employee_id, embeddings))
+                    logger.debug(
+                        f"Loaded {len(embeddings)} embeddings for employee {safe_id(employee_id)}"
+                    )
+
+            logger.info(f"Loaded embeddings for {len(results)} employees")
+            return results
+
+        except Exception as e:
+            logger.error(
+                f"Failed to get all active embeddings: {err_tag(e)}"
+            )
+            return []
+
     def find_matching_employee(
         self, face_encoding: List[float], tolerance: float = 0.8
     ) -> Optional[Tuple[int, float]]:
