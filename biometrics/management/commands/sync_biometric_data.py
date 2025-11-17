@@ -52,7 +52,9 @@ class Command(BaseCommand):
                 return
 
             # Check MongoDB data
-            mongo_embeddings = mongo_biometric_repository.get_face_embeddings(employee_id)
+            mongo_embeddings = mongo_biometric_repository.get_face_embeddings(
+                employee_id
+            )
             if mongo_embeddings:
                 self.stdout.write(
                     f"  MongoDB: {len(mongo_embeddings)} embeddings found"

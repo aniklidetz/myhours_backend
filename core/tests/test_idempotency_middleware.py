@@ -24,7 +24,9 @@ class APIIdempotencyMiddlewareTest(TestCase):
     def setUp(self):
         """Set up test environment"""
         self.factory = RequestFactory()
-        self.middleware = APIIdempotencyMiddleware(get_response=lambda r: JsonResponse({"success": True}))
+        self.middleware = APIIdempotencyMiddleware(
+            get_response=lambda r: JsonResponse({"success": True})
+        )
         cache.clear()
 
     def tearDown(self):
@@ -33,35 +35,34 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
     def test_non_post_requests_not_affected(self):
         """Test that GET requests are not affected by middleware"""
-        request = self.factory.get('/api/v1/biometrics/check-in/')
+        request = self.factory.get("/api/v1/biometrics/check-in/")
         response = self.middleware.process_request(request)
 
         self.assertIsNone(response)  # Middleware doesn't intercept
 
     def test_non_protected_endpoints_not_affected(self):
         """Test that non-protected endpoints don't require idempotency key"""
-        request = self.factory.post('/api/v1/some-other-endpoint/')
+        request = self.factory.post("/api/v1/some-other-endpoint/")
         response = self.middleware.process_request(request)
 
         self.assertIsNone(response)  # Middleware doesn't intercept
 
     def test_protected_endpoint_without_key_logs_warning(self):
         """Test that missing idempotency key logs warning but allows request"""
-        request = self.factory.post('/api/v1/biometrics/check-in/')
+        request = self.factory.post("/api/v1/biometrics/check-in/")
         request.user = Mock(is_authenticated=False)
 
-        with self.assertLogs('core.middleware_idempotency', level='WARNING') as cm:
+        with self.assertLogs("core.middleware_idempotency", level="WARNING") as cm:
             response = self.middleware.process_request(request)
 
         self.assertIsNone(response)  # Request allowed to proceed
-        self.assertTrue(any('Idempotency-Key missing' in log for log in cm.output))
+        self.assertTrue(any("Idempotency-Key missing" in log for log in cm.output))
 
     def test_idempotency_key_too_long_rejected(self):
         """Test that overly long idempotency keys are rejected"""
-        long_key = 'x' * 300  # Exceeds MAX_KEY_LENGTH (255)
+        long_key = "x" * 300  # Exceeds MAX_KEY_LENGTH (255)
         request = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=long_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=long_key
         )
         request.user = Mock(is_authenticated=False)
 
@@ -69,21 +70,20 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertIn('INVALID_IDEMPOTENCY_KEY', data['error'])
+        self.assertIn("INVALID_IDEMPOTENCY_KEY", data["error"])
 
     def test_first_request_with_key_not_cached(self):
         """Test that first request with idempotency key is not found in cache"""
         idempotency_key = str(uuid.uuid4())
         request = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request.user = Mock(is_authenticated=True, id=1)
 
         response = self.middleware.process_request(request)
 
         self.assertIsNone(response)  # No cached response
-        self.assertTrue(hasattr(request, '_idempotency_key'))
+        self.assertTrue(hasattr(request, "_idempotency_key"))
         self.assertEqual(request._idempotency_key, idempotency_key)
 
     def test_duplicate_request_returns_cached_response(self):
@@ -92,8 +92,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         # First request
         request1 = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request1.user = Mock(is_authenticated=True, id=1)
 
@@ -102,7 +101,9 @@ class APIIdempotencyMiddlewareTest(TestCase):
         self.assertIsNone(response1)  # Not cached yet
 
         # Simulate successful response
-        success_response = JsonResponse({"success": True, "worklog_id": 123}, status=200)
+        success_response = JsonResponse(
+            {"success": True, "worklog_id": 123}, status=200
+        )
         success_response.data = {"success": True, "worklog_id": 123}
 
         # Cache the response
@@ -110,8 +111,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         # Second request with same key
         request2 = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request2.user = Mock(is_authenticated=True, id=1)
 
@@ -120,9 +120,9 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         self.assertIsNotNone(response2)
         self.assertEqual(response2.status_code, 200)
-        self.assertTrue(response2['X-Idempotency-Cached'])
+        self.assertTrue(response2["X-Idempotency-Cached"])
         data = json.loads(response2.content)
-        self.assertEqual(data['worklog_id'], 123)
+        self.assertEqual(data["worklog_id"], 123)
 
     def test_different_users_with_same_key_not_confused(self):
         """Test that same idempotency key from different users doesn't cause collision"""
@@ -130,8 +130,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         # User 1's request
         request1 = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request1.user = Mock(is_authenticated=True, id=1)
 
@@ -143,8 +142,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         # User 2's request with SAME key
         request2 = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request2.user = Mock(is_authenticated=True, id=2)
 
@@ -157,8 +155,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
         idempotency_key = str(uuid.uuid4())
 
         request = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request.user = Mock(is_authenticated=True, id=1)
 
@@ -173,8 +170,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
 
         # Second request should NOT get cached response
         request2 = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request2.user = Mock(is_authenticated=True, id=1)
 
@@ -186,8 +182,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
         idempotency_key = str(uuid.uuid4())
 
         request = self.factory.post(
-            '/api/v1/biometrics/check-in/',
-            HTTP_IDEMPOTENCY_KEY=idempotency_key
+            "/api/v1/biometrics/check-in/", HTTP_IDEMPOTENCY_KEY=idempotency_key
         )
         request.user = Mock(is_authenticated=True, id=1)
 
@@ -202,7 +197,7 @@ class APIIdempotencyMiddlewareTest(TestCase):
         result_response = self.middleware.process_response(request, success_response)
 
         # Check TTL header
-        ttl = result_response['X-Idempotency-TTL']
+        ttl = result_response["X-Idempotency-TTL"]
         self.assertEqual(int(ttl), 24 * 60 * 60)  # 24 hours in seconds
 
 
@@ -212,17 +207,15 @@ class APIIdempotencyIntegrationTest(APITestCase):
     def setUp(self):
         """Set up test environment"""
         self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.employee = Employee.objects.create(
-            first_name='Test',
-            last_name='User',
-            email='test@example.com',
-            employment_type='full_time',
+            first_name="Test",
+            last_name="User",
+            email="test@example.com",
+            employment_type="full_time",
             is_active=True,
-            user=self.user
+            user=self.user,
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
@@ -241,33 +234,35 @@ class APIIdempotencyIntegrationTest(APITestCase):
         idempotency_key = str(uuid.uuid4())
 
         # First check-in
-        with patch('biometrics.views.face_processor.find_matching_employee') as mock_match:
+        with patch(
+            "biometrics.views.face_processor.find_matching_employee"
+        ) as mock_match:
             mock_match.return_value = {
-                'success': True,
-                'employee_id': self.employee.id,
-                'confidence': 0.95,
-                'processing_time_ms': 50
+                "success": True,
+                "employee_id": self.employee.id,
+                "confidence": 0.95,
+                "processing_time_ms": 50,
             }
 
             response1 = self.client.post(
-                '/api/v1/biometrics/check-in/',
-                {'image': 'base64_image_data', 'location': 'Office'},
+                "/api/v1/biometrics/check-in/",
+                {"image": "base64_image_data", "location": "Office"},
                 HTTP_IDEMPOTENCY_KEY=idempotency_key,
-                format='json'
+                format="json",
             )
 
         # If first request was successful (200), subsequent request should return cached
         if response1.status_code == 200:
             response2 = self.client.post(
-                '/api/v1/biometrics/check-in/',
-                {'image': 'base64_image_data', 'location': 'Office'},
+                "/api/v1/biometrics/check-in/",
+                {"image": "base64_image_data", "location": "Office"},
                 HTTP_IDEMPOTENCY_KEY=idempotency_key,
-                format='json'
+                format="json",
             )
 
             # Should return same response
             self.assertEqual(response2.status_code, 200)
-            self.assertTrue('X-Idempotency-Cached' in response2)
+            self.assertTrue("X-Idempotency-Cached" in response2)
 
 
 class IdempotencyKeyGenerationTest(TestCase):

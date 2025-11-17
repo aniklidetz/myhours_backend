@@ -94,8 +94,11 @@ class TestIsraeliDSTTransitions:
         # NOTE: With DST spring forward, the duration might be ~24 hours instead of ~25
         # because the clock jumps forward 1 hour during Saturday morning
         duration = shabbat_end - shabbat_start
-        assert timedelta(hours=23, minutes=30) <= duration <= timedelta(hours=25, minutes=30), \
-            f"Shabbat duration {duration} seems wrong for DST transition"
+        assert (
+            timedelta(hours=23, minutes=30)
+            <= duration
+            <= timedelta(hours=25, minutes=30)
+        ), f"Shabbat duration {duration} seems wrong for DST transition"
 
     def test_shabbat_times_on_fall_dst_transition_sunday(self):
         """
@@ -124,7 +127,11 @@ class TestIsraeliDSTTransitions:
 
         # Duration should be normal ~25 hours (DST change is on Sunday, not during Shabbat)
         duration = shabbat_end - shabbat_start
-        assert timedelta(hours=24, minutes=30) <= duration <= timedelta(hours=25, minutes=30)
+        assert (
+            timedelta(hours=24, minutes=30)
+            <= duration
+            <= timedelta(hours=25, minutes=30)
+        )
 
     def test_work_shift_crossing_dst_spring_forward(self):
         """
@@ -153,12 +160,14 @@ class TestIsraeliDSTTransitions:
         shabbat_end = datetime.fromisoformat(shabbat_times["shabbat_end"])
 
         # Check-in (22:00 Friday) should be AFTER Shabbat start
-        assert is_shabbat_time(check_in), \
-            f"Check-in at {check_in} should be during Shabbat (starts {shabbat_start})"
+        assert is_shabbat_time(
+            check_in
+        ), f"Check-in at {check_in} should be during Shabbat (starts {shabbat_start})"
 
         # Check-out (04:00 Saturday) should be BEFORE Shabbat end
-        assert is_shabbat_time(check_out), \
-            f"Check-out at {check_out} should be during Shabbat (ends {shabbat_end})"
+        assert is_shabbat_time(
+            check_out
+        ), f"Check-out at {check_out} should be during Shabbat (ends {shabbat_end})"
 
         # Verify entire shift is during Shabbat (for 1.5× premium calculation)
         assert check_in >= shabbat_start, "Shift should start after Shabbat begins"
@@ -206,14 +215,18 @@ class TestIsraeliDSTTransitions:
         israel_summer = service._parse_and_convert_to_israel_tz(utc_summer)
 
         # Israeli time should be UTC+3 in summer (DST)
-        assert israel_summer.hour == 19, f"Expected 19:30 IDT, got {israel_summer.hour}:30"
+        assert (
+            israel_summer.hour == 19
+        ), f"Expected 19:30 IDT, got {israel_summer.hour}:30"
 
         # UTC time during Israeli standard time (winter)
         utc_winter = "2025-01-15T16:30:00+00:00"  # January (no DST)
         israel_winter = service._parse_and_convert_to_israel_tz(utc_winter)
 
         # Israeli time should be UTC+2 in winter (no DST)
-        assert israel_winter.hour == 18, f"Expected 18:30 IST, got {israel_winter.hour}:30"
+        assert (
+            israel_winter.hour == 18
+        ), f"Expected 18:30 IST, got {israel_winter.hour}:30"
 
     def test_is_shabbat_time_with_naive_datetime(self):
         """
@@ -263,8 +276,9 @@ class TestIsraeliDSTTransitions:
             shabbat_hours = (overlap_end - overlap_start).total_seconds() / 3600
 
             # Should have significant Shabbat hours (most of night shift)
-            assert shabbat_hours > 5, \
-                f"Expected significant Shabbat hours, got {shabbat_hours:.2f}h"
+            assert (
+                shabbat_hours > 5
+            ), f"Expected significant Shabbat hours, got {shabbat_hours:.2f}h"
         else:
             pytest.fail("No Shabbat overlap detected - DST handling may be broken")
 
@@ -287,9 +301,13 @@ class TestDSTEdgeCases:
         # 02:30 AM on March 29, 2025 doesn't exist (clock jumps 02:00 → 03:00)
         # pytz should handle this gracefully either by raising exception or picking a valid time
         try:
-            time_with_auto = israel_tz.localize(datetime(2025, 3, 29, 2, 30), is_dst=None)
+            time_with_auto = israel_tz.localize(
+                datetime(2025, 3, 29, 2, 30), is_dst=None
+            )
             # If no exception, verify it created a valid DST time
-            assert time_with_auto.tzinfo is not None, "Should create timezone-aware datetime"
+            assert (
+                time_with_auto.tzinfo is not None
+            ), "Should create timezone-aware datetime"
             # Should be in DST (IDT) after spring forward
             assert time_with_auto.dst() == timedelta(hours=1), "Should be in DST"
         except pytz.exceptions.NonExistentTimeError:
@@ -317,28 +335,42 @@ class TestDSTEdgeCases:
         # 01:30 AM on October 26, 2025 is ambiguous (happens twice)
         # pytz should handle this gracefully either by raising exception or picking one occurrence
         try:
-            time_with_auto = israel_tz.localize(datetime(2025, 10, 26, 1, 30), is_dst=None)
+            time_with_auto = israel_tz.localize(
+                datetime(2025, 10, 26, 1, 30), is_dst=None
+            )
             # If no exception, verify it created a valid timezone-aware datetime
-            assert time_with_auto.tzinfo is not None, "Should create timezone-aware datetime"
+            assert (
+                time_with_auto.tzinfo is not None
+            ), "Should create timezone-aware datetime"
         except pytz.exceptions.AmbiguousTimeError:
             # This is also acceptable behavior
             pass
 
         # Can explicitly specify which occurrence: is_dst=True for first (DST), is_dst=False for second
-        first_occurrence = israel_tz.localize(datetime(2025, 10, 26, 1, 30), is_dst=True)
-        second_occurrence = israel_tz.localize(datetime(2025, 10, 26, 1, 30), is_dst=False)
+        first_occurrence = israel_tz.localize(
+            datetime(2025, 10, 26, 1, 30), is_dst=True
+        )
+        second_occurrence = israel_tz.localize(
+            datetime(2025, 10, 26, 1, 30), is_dst=False
+        )
 
         # Verify they are different
         assert first_occurrence.tzinfo is not None
         assert second_occurrence.tzinfo is not None
 
         # First occurrence should be in DST (IDT), second in standard time (IST)
-        assert first_occurrence.dst() == timedelta(hours=1), "First occurrence should be DST (IDT)"
-        assert second_occurrence.dst() == timedelta(hours=0), "Second occurrence should be standard time (IST)"
+        assert first_occurrence.dst() == timedelta(
+            hours=1
+        ), "First occurrence should be DST (IDT)"
+        assert second_occurrence.dst() == timedelta(
+            hours=0
+        ), "Second occurrence should be standard time (IST)"
 
         # They should represent different moments in UTC (1 hour apart)
         diff = second_occurrence - first_occurrence
-        assert diff == timedelta(hours=1), "Two occurrences should be 1 hour apart in UTC"
+        assert diff == timedelta(
+            hours=1
+        ), "Two occurrences should be 1 hour apart in UTC"
 
     def test_shabbat_calculation_consistency_across_dst(self):
         """
@@ -353,10 +385,10 @@ class TestDSTEdgeCases:
         test_dates = [
             date(2025, 3, 21),  # Week before DST starts
             date(2025, 3, 28),  # DST starts (spring forward)
-            date(2025, 4, 4),   # Week after DST starts
-            date(2025, 10, 17), # Week before DST ends
-            date(2025, 10, 24), # Week of DST end (ends Sunday)
-            date(2025, 10, 31), # Week after DST ends
+            date(2025, 4, 4),  # Week after DST starts
+            date(2025, 10, 17),  # Week before DST ends
+            date(2025, 10, 24),  # Week of DST end (ends Sunday)
+            date(2025, 10, 31),  # Week after DST ends
         ]
 
         for test_date in test_dates:
@@ -375,10 +407,12 @@ class TestDSTEdgeCases:
             diff_start = friday_sunset - shabbat_start
             diff_end = shabbat_end - saturday_sunset
 
-            assert abs(diff_start - timedelta(minutes=18)) < timedelta(minutes=1), \
-                f"18-minute rule violated for {test_date}"
-            assert abs(diff_end - timedelta(minutes=42)) < timedelta(minutes=1), \
-                f"42-minute rule violated for {test_date}"
+            assert abs(diff_start - timedelta(minutes=18)) < timedelta(
+                minutes=1
+            ), f"18-minute rule violated for {test_date}"
+            assert abs(diff_end - timedelta(minutes=42)) < timedelta(
+                minutes=1
+            ), f"42-minute rule violated for {test_date}"
 
 
 if __name__ == "__main__":

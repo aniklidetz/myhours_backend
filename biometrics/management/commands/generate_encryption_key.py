@@ -28,9 +28,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.HTTP_INFO("Biometric Data Encryption Key Generator")
         )
-        self.stdout.write(
-            self.style.HTTP_INFO("GDPR Article 9 Compliance")
-        )
+        self.stdout.write(self.style.HTTP_INFO("GDPR Article 9 Compliance"))
         self.stdout.write(
             self.style.HTTP_INFO(
                 "==================================================================="
@@ -41,8 +39,12 @@ class Command(BaseCommand):
         self.stdout.write("\n📝 Generating encryption key...")
         key = BiometricEncryptionService.generate_key()
 
-        self.stdout.write(self.style.SUCCESS("\n✅ Encryption key generated successfully!"))
-        self.stdout.write(f"\n{self.style.WARNING('IMPORTANT: Store this key securely!')}")
+        self.stdout.write(
+            self.style.SUCCESS("\n✅ Encryption key generated successfully!")
+        )
+        self.stdout.write(
+            f"\n{self.style.WARNING('IMPORTANT: Store this key securely!')}"
+        )
         self.stdout.write(
             self.style.WARNING(
                 "This key is required to encrypt/decrypt biometric embeddings."
@@ -86,13 +88,9 @@ class Command(BaseCommand):
 
                 if decrypted == test_data:
                     self.stdout.write(
-                        self.style.SUCCESS(
-                            "✅ Encryption test passed - key is valid!"
-                        )
+                        self.style.SUCCESS("✅ Encryption test passed - key is valid!")
                     )
-                    self.stdout.write(
-                        f"   - Encrypted size: {len(encrypted)} bytes"
-                    )
+                    self.stdout.write(f"   - Encrypted size: {len(encrypted)} bytes")
                     self.stdout.write(
                         f"   - Original data: {len(str(test_data))} bytes"
                     )

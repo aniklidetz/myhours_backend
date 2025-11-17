@@ -83,9 +83,7 @@ class Command(BaseCommand):
 
             for collection_name, info in collections_to_audit.items():
                 self.stdout.write(f"\n{'─' * 80}")
-                self.stdout.write(
-                    self.style.WARNING(f"📊 Auditing: {collection_name}")
-                )
+                self.stdout.write(self.style.WARNING(f"📊 Auditing: {collection_name}"))
                 self.stdout.write(f"{'─' * 80}")
 
                 collection_data = self._audit_collection(
@@ -103,9 +101,7 @@ class Command(BaseCommand):
             # Migration recommendations
             self._print_recommendations(results)
 
-            self.stdout.write(
-                self.style.SUCCESS("\n✅ Audit completed successfully\n")
-            )
+            self.stdout.write(self.style.SUCCESS("\n✅ Audit completed successfully\n"))
 
         except Exception as e:
             raise CommandError(f"Audit failed: {str(e)}")
@@ -165,7 +161,9 @@ class Command(BaseCommand):
             }
 
             self.stdout.write(f"\n  📋 Schema Analysis:")
-            self.stdout.write(f"     Fields: {', '.join(result['schema_analysis']['fields'])}")
+            self.stdout.write(
+                f"     Fields: {', '.join(result['schema_analysis']['fields'])}"
+            )
             self.stdout.write(
                 f"     Employee IDs found: {len(set(result['employee_ids']))}"
             )
@@ -202,7 +200,9 @@ class Command(BaseCommand):
             elif key in ["face_encoding", "encodings"]:
                 if isinstance(value, list):
                     if len(value) > 0 and isinstance(value[0], list):
-                        sanitized[key] = f"[{len(value)} encodings of {len(value[0])} dims]"
+                        sanitized[key] = (
+                            f"[{len(value)} encodings of {len(value[0])} dims]"
+                        )
                     else:
                         sanitized[key] = f"[{len(value)} dims]"
                 else:
@@ -254,9 +254,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("📊 AUDIT SUMMARY"))
         self.stdout.write(f"{'=' * 80}\n")
 
-        self.stdout.write(
-            f"Total MongoDB collections: {results['total_collections']}"
-        )
+        self.stdout.write(f"Total MongoDB collections: {results['total_collections']}")
         self.stdout.write(
             f"Biometric collections checked: {len(results['biometric_collections'])}\n"
         )
@@ -314,17 +312,19 @@ class Command(BaseCommand):
 
         if len(non_empty) == 0:
             self.stdout.write(
-                self.style.SUCCESS(
-                    "✅ OPTIMAL SITUATION: All collections are empty"
-                )
+                self.style.SUCCESS("✅ OPTIMAL SITUATION: All collections are empty")
             )
             self.stdout.write("\nRecommended Actions:")
             self.stdout.write("1. Fix mongodb_service.py to use ONLY 'face_embeddings'")
             self.stdout.write(
                 "2. Remove conditional collection selection (lines 32-42)"
             )
-            self.stdout.write("3. No data migration needed - proceed directly to code fixes")
-            self.stdout.write("\nPriority: HIGH - Fix before any production data is created")
+            self.stdout.write(
+                "3. No data migration needed - proceed directly to code fixes"
+            )
+            self.stdout.write(
+                "\nPriority: HIGH - Fix before any production data is created"
+            )
 
         elif len(non_empty) == 1:
             collection_name = non_empty[0]
@@ -352,9 +352,7 @@ class Command(BaseCommand):
                 self.stdout.write(
                     "2. RUN: python manage.py migrate_biometric_collections --dry-run"
                 )
-                self.stdout.write(
-                    "3. BACKUP: Create MongoDB backup before migration"
-                )
+                self.stdout.write("3. BACKUP: Create MongoDB backup before migration")
                 self.stdout.write(
                     "4. MIGRATE: python manage.py migrate_biometric_collections"
                 )

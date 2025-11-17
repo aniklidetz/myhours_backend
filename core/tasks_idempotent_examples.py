@@ -17,9 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Define transient errors
-TRANSIENT_ERRORS = (
-    Exception,  # Simplified for example
-)
+TRANSIENT_ERRORS = (Exception,)  # Simplified for example
 
 
 # EXAMPLE 1: Daily cleanup task (should run once per day)

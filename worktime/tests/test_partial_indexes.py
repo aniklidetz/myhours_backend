@@ -58,14 +58,19 @@ class PartialIndexQueryPlanTest(TestCase):
             )
 
             result = cursor.fetchone()
-            self.assertIsNotNone(result, "Partial index wt_emp_checkin_active_idx not found")
+            self.assertIsNotNone(
+                result, "Partial index wt_emp_checkin_active_idx not found"
+            )
 
             index_name, index_def = result
-            self.assertIn("WHERE", index_def, "Index is not partial (missing WHERE clause)")
+            self.assertIn(
+                "WHERE", index_def, "Index is not partial (missing WHERE clause)"
+            )
             # PostgreSQL creates "WHERE (NOT is_deleted)" or "WHERE is_deleted = false"
             self.assertTrue(
-                "not is_deleted" in index_def.lower() or "is_deleted = false" in index_def.lower(),
-                f"Index condition not correct. Got: {index_def}"
+                "not is_deleted" in index_def.lower()
+                or "is_deleted = false" in index_def.lower(),
+                f"Index condition not correct. Got: {index_def}",
             )
 
     def test_checkin_only_index_used(self):
@@ -87,14 +92,19 @@ class PartialIndexQueryPlanTest(TestCase):
             )
 
             result = cursor.fetchone()
-            self.assertIsNotNone(result, "Partial index wt_checkin_active_idx not found")
+            self.assertIsNotNone(
+                result, "Partial index wt_checkin_active_idx not found"
+            )
 
             index_name, index_def = result
-            self.assertIn("WHERE", index_def, "Index is not partial (missing WHERE clause)")
+            self.assertIn(
+                "WHERE", index_def, "Index is not partial (missing WHERE clause)"
+            )
             # PostgreSQL creates "WHERE (NOT is_deleted)" or "WHERE is_deleted = false"
             self.assertTrue(
-                "not is_deleted" in index_def.lower() or "is_deleted = false" in index_def.lower(),
-                f"Index condition not correct. Got: {index_def}"
+                "not is_deleted" in index_def.lower()
+                or "is_deleted = false" in index_def.lower(),
+                f"Index condition not correct. Got: {index_def}",
             )
 
 

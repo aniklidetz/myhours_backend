@@ -133,7 +133,9 @@ class BiometricEncryptionService:
             encrypted_bytes = self.cipher.encrypt(embeddings_json.encode("utf-8"))
 
             # Add version prefix for future key rotation
-            encrypted_data = f"{self.ENCRYPTION_VERSION}:{encrypted_bytes.decode('utf-8')}"
+            encrypted_data = (
+                f"{self.ENCRYPTION_VERSION}:{encrypted_bytes.decode('utf-8')}"
+            )
 
             logger.debug(
                 f"Encrypted {len(embeddings)} embeddings "

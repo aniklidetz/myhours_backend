@@ -187,7 +187,10 @@ class BiometricEncryptionServiceTests(TestCase):
                     {
                         "vector": [0.1, 0.2, 0.3],
                         "quality": 0.95,
-                        "metadata": {"timestamp": "2025-01-12T10:00:00Z", "camera": "front"},
+                        "metadata": {
+                            "timestamp": "2025-01-12T10:00:00Z",
+                            "camera": "front",
+                        },
                     }
                 ],
             ]

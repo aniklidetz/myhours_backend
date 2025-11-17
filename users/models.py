@@ -133,6 +133,8 @@ class Employee(models.Model):
             models.Index(fields=["is_active"]),
             models.Index(fields=["role"]),
             models.Index(fields=["employment_type"]),
+            models.Index(fields=["user"], name="users_employee_user_idx"),
+            models.Index(fields=["-created_at"], name="users_employee_created_idx"),
         ]
         constraints = [
             models.UniqueConstraint(

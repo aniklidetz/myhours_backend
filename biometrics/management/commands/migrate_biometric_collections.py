@@ -37,7 +37,9 @@ from core.logging_utils import safe_id
 
 
 class Command(BaseCommand):
-    help = "Migrate all biometric collections (face_encodings, faces) to face_embeddings"
+    help = (
+        "Migrate all biometric collections (face_encodings, faces) to face_embeddings"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -158,10 +160,14 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("=" * 80))
 
         if self.dry_run:
-            self.stdout.write(self.style.WARNING("\n⚠️  DRY RUN MODE - No changes will be made\n"))
+            self.stdout.write(
+                self.style.WARNING("\n⚠️  DRY RUN MODE - No changes will be made\n")
+            )
         elif self.merge_mode:
             self.stdout.write(
-                self.style.WARNING("\n⚠️  MERGE MODE - Will handle duplicate employee_ids\n")
+                self.style.WARNING(
+                    "\n⚠️  MERGE MODE - Will handle duplicate employee_ids\n"
+                )
             )
 
     def _audit_collections(self) -> Dict:
@@ -180,9 +186,7 @@ class Command(BaseCommand):
                 if count > 0:
                     docs = collection.find({}, {"employee_id": 1})
                     employee_ids = {
-                        doc["employee_id"]
-                        for doc in docs
-                        if "employee_id" in doc
+                        doc["employee_id"] for doc in docs if "employee_id" in doc
                     }
 
                 results[coll_name] = {
@@ -203,7 +207,9 @@ class Command(BaseCommand):
 
     def _print_audit_summary(self, audit: Dict):
         """Print audit summary"""
-        self.stdout.write(f"{'Collection':<20} {'Exists':<8} {'Documents':<12} {'Employees'}")
+        self.stdout.write(
+            f"{'Collection':<20} {'Exists':<8} {'Documents':<12} {'Employees'}"
+        )
         self.stdout.write("─" * 80)
 
         for name in ["face_encodings", "faces", "face_embeddings"]:
@@ -288,15 +294,15 @@ class Command(BaseCommand):
                     "documents": documents,
                 }
 
-                self.stdout.write(f"✓ Backed up {coll_name}: {len(documents)} documents")
+                self.stdout.write(
+                    f"✓ Backed up {coll_name}: {len(documents)} documents"
+                )
 
         # Save backup
         with open(backup_file, "w") as f:
             json.dump(backup_data, f, indent=2, default=str)
 
-        self.stdout.write(
-            self.style.SUCCESS(f"\n✅ Backup created: {backup_file}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"\n✅ Backup created: {backup_file}"))
         return str(backup_file)
 
     def _serialize_array_field(self, value):
@@ -306,15 +312,15 @@ class Command(BaseCommand):
         elif isinstance(value, list):
             # Handle nested structures
             return [
-                self._serialize_array_field(item) if isinstance(item, (dict, list, np.ndarray))
-                else item
+                (
+                    self._serialize_array_field(item)
+                    if isinstance(item, (dict, list, np.ndarray))
+                    else item
+                )
                 for item in value
             ]
         elif isinstance(value, dict):
-            return {
-                k: self._serialize_array_field(v)
-                for k, v in value.items()
-            }
+            return {k: self._serialize_array_field(v) for k, v in value.items()}
         return value
 
     def _perform_migration(self, audit: Dict) -> Dict:
@@ -497,7 +503,11 @@ class Command(BaseCommand):
         if face_encoding:
             embeddings.append(
                 {
-                    "vector": face_encoding if isinstance(face_encoding, list) else face_encoding.tolist(),
+                    "vector": (
+                        face_encoding
+                        if isinstance(face_encoding, list)
+                        else face_encoding.tolist()
+                    ),
                     "quality_score": 0.7,  # Default quality for legacy data
                     "created_at": old_doc.get("created_at", datetime.now()),
                     "angle": "frontal",  # Default angle
@@ -531,7 +541,11 @@ class Command(BaseCommand):
             for idx, encoding in enumerate(encodings):
                 embeddings.append(
                     {
-                        "vector": encoding if isinstance(encoding, list) else encoding.tolist(),
+                        "vector": (
+                            encoding
+                            if isinstance(encoding, list)
+                            else encoding.tolist()
+                        ),
                         "quality_score": 0.7,
                         "created_at": old_doc.get("created_at", datetime.now()),
                         "angle": f"angle_{idx}",
@@ -542,7 +556,11 @@ class Command(BaseCommand):
             face_encoding = old_doc.get("face_encoding")
             embeddings = [
                 {
-                    "vector": face_encoding if isinstance(face_encoding, list) else face_encoding.tolist(),
+                    "vector": (
+                        face_encoding
+                        if isinstance(face_encoding, list)
+                        else face_encoding.tolist()
+                    ),
                     "quality_score": 0.7,
                     "created_at": old_doc.get("created_at", datetime.now()),
                     "angle": "frontal",
@@ -631,18 +649,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("\n✅ Verification PASSED"))
         else:
             self.stdout.write(
-                self.style.ERROR(
-                    f"\n❌ Verification FAILED - document count mismatch"
-                )
+                self.style.ERROR(f"\n❌ Verification FAILED - document count mismatch")
             )
 
     def _cleanup_legacy_collections(self, migration_results: Dict):
         """Delete legacy collections after successful migration"""
         if migration_results["errors"]:
             self.stdout.write(
-                self.style.WARNING(
-                    "⚠️  Skipping cleanup due to migration errors"
-                )
+                self.style.WARNING("⚠️  Skipping cleanup due to migration errors")
             )
             return
 
@@ -682,24 +696,26 @@ class Command(BaseCommand):
 
         if self.dry_run:
             self.stdout.write(
-                self.style.WARNING(
-                    "\n⚠️  DRY RUN completed - no changes were made"
-                )
+                self.style.WARNING("\n⚠️  DRY RUN completed - no changes were made")
             )
-            self.stdout.write("\nTo perform actual migration, run without --dry-run flag")
+            self.stdout.write(
+                "\nTo perform actual migration, run without --dry-run flag"
+            )
         else:
-            self.stdout.write(self.style.SUCCESS("\n✅ Migration completed successfully!"))
+            self.stdout.write(
+                self.style.SUCCESS("\n✅ Migration completed successfully!")
+            )
             self.stdout.write("\nNext steps:")
             self.stdout.write("1. Verify face_embeddings collection data")
-            self.stdout.write(
-                "2. Fix mongodb_service.py to use ONLY 'face_embeddings'"
-            )
+            self.stdout.write("2. Fix mongodb_service.py to use ONLY 'face_embeddings'")
             self.stdout.write("3. Update views and management commands")
             self.stdout.write("4. Run tests to ensure compatibility")
 
     def _execute_rollback(self):
         """Rollback from a backup file"""
-        self.stdout.write(self.style.WARNING(f"\n🔄 Rolling back from: {self.rollback_file}\n"))
+        self.stdout.write(
+            self.style.WARNING(f"\n🔄 Rolling back from: {self.rollback_file}\n")
+        )
 
         if not Path(self.rollback_file).exists():
             raise CommandError(f"Backup file not found: {self.rollback_file}")

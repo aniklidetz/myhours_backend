@@ -23,6 +23,12 @@ class BiometricProfile(models.Model):
         db_table = "biometric_profiles"
         verbose_name = "Biometric Profile"
         verbose_name_plural = "Biometric Profiles"
+        indexes = [
+            models.Index(fields=["employee"], name="bio_prof_emp_idx"),
+            models.Index(fields=["is_active"], name="bio_prof_active_idx"),
+            models.Index(fields=["-last_updated"], name="bio_prof_updated_idx"),
+            models.Index(fields=["created_at"], name="bio_prof_created_idx"),
+        ]
 
     def __str__(self):
         return f"Biometric Profile for {self.employee.get_full_name()}"
@@ -83,6 +89,15 @@ class BiometricAttempt(models.Model):
         db_table = "biometric_attempts"
         verbose_name = "Biometric Attempt"
         verbose_name_plural = "Biometric Attempts"
+        indexes = [
+            models.Index(fields=["ip_address"], name="bio_attempt_ip_idx"),
+            models.Index(
+                fields=["ip_address", "blocked_until"],
+                name="bio_attempt_ip_blocked_idx",
+            ),
+            models.Index(fields=["blocked_until"], name="bio_attempt_blocked_idx"),
+            models.Index(fields=["last_attempt"], name="bio_attempt_last_idx"),
+        ]
 
     def is_blocked(self):
         if self.blocked_until:

@@ -44,12 +44,12 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
 
     # Endpoints that require idempotency protection
     IDEMPOTENT_ENDPOINTS = {
-        '/api/v1/biometrics/check-in/',
-        '/api/v1/biometrics/check-out/',
-        '/api/v1/biometrics/register/',
-        '/api/v1/payroll/calculate/',
-        '/api/v1/payroll/bulk-calculate/',
-        '/api/v1/payroll/monthly-summary/',
+        "/api/v1/biometrics/check-in/",
+        "/api/v1/biometrics/check-out/",
+        "/api/v1/biometrics/register/",
+        "/api/v1/payroll/calculate/",
+        "/api/v1/payroll/bulk-calculate/",
+        "/api/v1/payroll/monthly-summary/",
     }
 
     # TTL for idempotency cache (24 hours)
@@ -65,14 +65,14 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
         Returns cached response if request was already processed.
         """
         # Only apply to POST requests on protected endpoints
-        if request.method != 'POST':
+        if request.method != "POST":
             return None
 
         if request.path not in self.IDEMPOTENT_ENDPOINTS:
             return None
 
         # Get idempotency key from header
-        idempotency_key = request.META.get('HTTP_IDEMPOTENCY_KEY')
+        idempotency_key = request.META.get("HTTP_IDEMPOTENCY_KEY")
 
         if not idempotency_key:
             # Idempotency key not provided - allow request but log warning
@@ -81,8 +81,10 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
                 extra={
                     "path": request.path,
                     "method": request.method,
-                    "user_id": request.user.id if request.user.is_authenticated else None
-                }
+                    "user_id": (
+                        request.user.id if request.user.is_authenticated else None
+                    ),
+                },
             )
             return None
 
@@ -94,7 +96,7 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
                     "message": f"Idempotency-Key too long (max {self.MAX_KEY_LENGTH} characters)",
                     "timestamp": timezone.now().isoformat(),
                 },
-                status=400
+                status=400,
             )
 
         # Generate cache key
@@ -109,14 +111,18 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
                 extra={
                     "path": request.path,
                     "idempotency_key": idempotency_key[:16] + "...",
-                    "user_id": request.user.id if request.user.is_authenticated else None
-                }
+                    "user_id": (
+                        request.user.id if request.user.is_authenticated else None
+                    ),
+                },
             )
 
             # Return cached response
-            response = JsonResponse(cached_response['data'], status=cached_response['status'])
-            response['X-Idempotency-Cached'] = 'true'
-            response['X-Idempotency-Original-Timestamp'] = cached_response['timestamp']
+            response = JsonResponse(
+                cached_response["data"], status=cached_response["status"]
+            )
+            response["X-Idempotency-Cached"] = "true"
+            response["X-Idempotency-Original-Timestamp"] = cached_response["timestamp"]
             return response
 
         # Store idempotency key in request for process_response
@@ -130,24 +136,24 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
         Cache successful responses for idempotency.
         """
         # Only cache if idempotency key was provided
-        if not hasattr(request, '_idempotency_key'):
+        if not hasattr(request, "_idempotency_key"):
             return response
 
         # Only cache successful responses (200-299)
         if not (200 <= response.status_code < 300):
             logger.debug(
                 f"Not caching response for idempotency (status {response.status_code})",
-                extra={"path": request.path}
+                extra={"path": request.path},
             )
             return response
 
         # Cache the response
         try:
             # Parse response data
-            if hasattr(response, 'data'):
+            if hasattr(response, "data"):
                 # DRF Response
                 response_data = response.data
-            elif response['Content-Type'] == 'application/json':
+            elif response["Content-Type"] == "application/json":
                 # Django JsonResponse
                 response_data = json.loads(response.content)
             else:
@@ -155,16 +161,16 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
                 return response
 
             cached_response = {
-                'data': response_data,
-                'status': response.status_code,
-                'timestamp': timezone.now().isoformat(),
+                "data": response_data,
+                "status": response.status_code,
+                "timestamp": timezone.now().isoformat(),
             }
 
             # Store in cache
             cache.set(
                 request._idempotency_cache_key,
                 cached_response,
-                timeout=self.IDEMPOTENCY_TTL_SECONDS
+                timeout=self.IDEMPOTENCY_TTL_SECONDS,
             )
 
             logger.info(
@@ -172,18 +178,18 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
                 extra={
                     "path": request.path,
                     "idempotency_key": request._idempotency_key[:16] + "...",
-                    "ttl_hours": self.IDEMPOTENCY_TTL_SECONDS / 3600
-                }
+                    "ttl_hours": self.IDEMPOTENCY_TTL_SECONDS / 3600,
+                },
             )
 
             # Add header to indicate response was cached
-            response['X-Idempotency-Cached'] = 'false'
-            response['X-Idempotency-TTL'] = str(self.IDEMPOTENCY_TTL_SECONDS)
+            response["X-Idempotency-Cached"] = "false"
+            response["X-Idempotency-TTL"] = str(self.IDEMPOTENCY_TTL_SECONDS)
 
         except Exception as e:
             logger.error(
                 f"Failed to cache response for idempotency: {e}",
-                extra={"path": request.path}
+                extra={"path": request.path},
             )
 
         return response
@@ -195,7 +201,7 @@ class APIIdempotencyMiddleware(MiddlewareMixin):
         Includes user ID to prevent cross-user key collisions.
         """
         # Include user ID for security
-        user_id = request.user.id if request.user.is_authenticated else 'anonymous'
+        user_id = request.user.id if request.user.is_authenticated else "anonymous"
 
         # Hash the idempotency key for consistent length
         key_hash = hashlib.sha256(idempotency_key.encode()).hexdigest()[:32]

@@ -341,9 +341,7 @@ class MongoBiometricRepository:
             return results
 
         except Exception as e:
-            logger.error(
-                f"Failed to get all active embeddings: {err_tag(e)}"
-            )
+            logger.error(f"Failed to get all active embeddings: {err_tag(e)}")
             return []
 
     def find_matching_employee(

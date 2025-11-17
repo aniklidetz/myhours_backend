@@ -40,25 +40,28 @@ class DeviceToken(models.Model):
 
     # Token rotation fields (for replay attack detection)
     rotation_count = models.PositiveIntegerField(
-        default=0,
-        help_text="Number of times this token has been rotated"
+        default=0, help_text="Number of times this token has been rotated"
     )
     previous_token = models.CharField(
         max_length=64,
         blank=True,
         null=True,
-        db_index=True,
-        help_text="Previous token before rotation (for replay attack detection)"
+        help_text="Previous token before rotation (for replay attack detection)",
     )
     previous_token_expires_at = models.DateTimeField(
         blank=True,
         null=True,
-        help_text="Grace period for previous token (allows for clock skew)"
+        help_text="Grace period for previous token (allows for clock skew)",
     )
 
     class Meta:
         unique_together = ["user", "device_id"]
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["token"], name="dev_token_token_idx"),
+            models.Index(fields=["previous_token"], name="dev_token_prev_idx"),
+            models.Index(fields=["user"], name="dev_token_user_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user.username} - {self.device_id[:8]}..."
@@ -101,7 +104,9 @@ class DeviceToken(models.Model):
 
         # Store current token for grace period (handles clock skew)
         self.previous_token = self.token
-        self.previous_token_expires_at = timezone.now() + timedelta(seconds=grace_period_seconds)
+        self.previous_token_expires_at = timezone.now() + timedelta(
+            seconds=grace_period_seconds
+        )
 
         # Generate new token
         new_token = secrets.token_hex(32)
@@ -111,13 +116,15 @@ class DeviceToken(models.Model):
         self.rotation_count += 1
         self.expires_at = timezone.now() + timedelta(days=ttl_days)
 
-        self.save(update_fields=[
-            "token",
-            "previous_token",
-            "previous_token_expires_at",
-            "rotation_count",
-            "expires_at"
-        ])
+        self.save(
+            update_fields=[
+                "token",
+                "previous_token",
+                "previous_token_expires_at",
+                "rotation_count",
+                "expires_at",
+            ]
+        )
 
         logger.info(
             f"Token rotated for user {self.user.username}, "
@@ -172,6 +179,14 @@ class TokenRefreshLog(models.Model):
 
     class Meta:
         ordering = ["-refreshed_at"]
+        indexes = [
+            models.Index(fields=["device_token"], name="users_token_device__idx"),
+            models.Index(
+                fields=["device_token", "-refreshed_at"],
+                name="users_token_device_refresh_idx",
+            ),
+            models.Index(fields=["-refreshed_at"], name="users_token_refresh_idx"),
+        ]
 
 
 class BiometricSession(models.Model):
@@ -196,6 +211,15 @@ class BiometricSession(models.Model):
 
     class Meta:
         ordering = ["-started_at"]
+        indexes = [
+            models.Index(fields=["device_token"], name="bio_sess_device_idx"),
+            models.Index(
+                fields=["device_token", "is_active", "expires_at"],
+                name="bio_sess_dev_active_idx",
+            ),
+            models.Index(fields=["expires_at"], name="bio_sess_expires_idx"),
+            models.Index(fields=["-started_at"], name="bio_sess_started_idx"),
+        ]
 
     @classmethod
     def create_session(

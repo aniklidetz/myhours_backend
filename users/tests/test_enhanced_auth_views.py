@@ -245,7 +245,9 @@ class EnhancedLoginViewTest(TestCase):
             role="employee",
         )
 
-        with patch("users.enhanced_auth_views.mongo_biometric_repository") as mock_mongodb:
+        with patch(
+            "users.enhanced_auth_views.mongo_biometric_repository"
+        ) as mock_mongodb:
             mock_mongodb.get_face_embeddings.return_value = None
 
             data = {
@@ -427,7 +429,9 @@ class BiometricVerificationViewTest(TestCase):
 
     @patch("users.enhanced_auth_views.get_mongodb_service")
     @patch("users.enhanced_auth_views.face_processor")
-    def test_biometric_verification_failed_401(self, mock_face_processor, mock_get_service):
+    def test_biometric_verification_failed_401(
+        self, mock_face_processor, mock_get_service
+    ):
         """Test biometric verification failure - 401 Unauthorized"""
         self.client.credentials(
             HTTP_AUTHORIZATION=f"DeviceToken {self.device_token.token}"

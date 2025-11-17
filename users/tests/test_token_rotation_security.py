@@ -33,9 +33,7 @@ class TokenRotationTests(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.device_id = "test-device-12345"
 
@@ -43,9 +41,7 @@ class TokenRotationTests(TestCase):
         """Test that refresh() creates a new token"""
         # Create initial token
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -60,9 +56,7 @@ class TokenRotationTests(TestCase):
     def test_token_rotation_stores_previous_token(self):
         """Test that old token is stored in previous_token"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -77,9 +71,7 @@ class TokenRotationTests(TestCase):
     def test_token_rotation_increments_counter(self):
         """Test that rotation_count is incremented"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         self.assertEqual(device_token.rotation_count, 0)
@@ -97,9 +89,7 @@ class TokenRotationTests(TestCase):
     def test_expired_token_cannot_be_refreshed(self):
         """Test that expired tokens cannot be refreshed"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         # Expire token
@@ -115,9 +105,7 @@ class TokenRotationTests(TestCase):
     def test_inactive_token_cannot_be_refreshed(self):
         """Test that inactive tokens cannot be refreshed"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         # Deactivate
@@ -133,9 +121,7 @@ class TokenRotationTests(TestCase):
     def test_multiple_rotations_chain_correctly(self):
         """Test that multiple rotations work correctly"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         token1 = device_token.token
@@ -158,9 +144,7 @@ class ReplayAttackDetectionTests(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.device_id = "test-device-12345"
         self.auth = DeviceTokenAuthentication()
@@ -168,12 +152,11 @@ class ReplayAttackDetectionTests(TestCase):
     def test_current_token_works(self):
         """Test that current token authenticates successfully"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         from rest_framework.test import APIRequestFactory
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -186,9 +169,7 @@ class ReplayAttackDetectionTests(TestCase):
     def test_old_token_within_grace_period_works(self):
         """Test that old token within grace period still works (clock skew tolerance)"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -196,6 +177,7 @@ class ReplayAttackDetectionTests(TestCase):
         new_token = device_token.refresh(ttl_days=7, grace_period_seconds=60)
 
         from rest_framework.test import APIRequestFactory
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -212,9 +194,7 @@ class ReplayAttackDetectionTests(TestCase):
     def test_old_token_after_grace_period_triggers_revocation(self):
         """Test that old token after grace period triggers token family revocation"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -227,6 +207,7 @@ class ReplayAttackDetectionTests(TestCase):
 
         from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -245,9 +226,7 @@ class ReplayAttackDetectionTests(TestCase):
         """Test that entire token family is revoked on replay attack"""
         # Create multiple tokens for same user/device
         device_token1 = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token1.token
 
@@ -263,6 +242,7 @@ class ReplayAttackDetectionTests(TestCase):
 
         from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -277,13 +257,12 @@ class ReplayAttackDetectionTests(TestCase):
     def test_invalid_token_not_confused_with_replay(self):
         """Test that completely invalid tokens don't trigger replay detection"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -307,9 +286,7 @@ class RefreshEndpointTests(APITestCase):
         from users.models import Employee
 
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         # Create Employee for permission IsEmployeeOrAbove
         self.employee = Employee.objects.create(
@@ -318,7 +295,7 @@ class RefreshEndpointTests(APITestCase):
             email="test@example.com",
             employment_type="full_time",
             is_active=True,
-            user=self.user
+            user=self.user,
         )
         self.device_id = "test-device-12345"
         self.client = APIClient()
@@ -326,9 +303,7 @@ class RefreshEndpointTests(APITestCase):
     def test_refresh_endpoint_returns_new_token(self):
         """Test that refresh endpoint returns new token"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -351,9 +326,7 @@ class RefreshEndpointTests(APITestCase):
     def test_refresh_endpoint_old_token_stops_working(self):
         """Test that old token stops working after refresh (after grace period)"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -383,9 +356,7 @@ class RefreshEndpointTests(APITestCase):
     def test_new_token_works_after_refresh(self):
         """Test that new token works after refresh"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -395,7 +366,9 @@ class RefreshEndpointTests(APITestCase):
 
         # Check response is successful first
         if response.status_code != status.HTTP_200_OK:
-            print(f"First refresh failed: {response.status_code}, content: {response.content}")
+            print(
+                f"First refresh failed: {response.status_code}, content: {response.content}"
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         new_token = response.data["token"]
@@ -414,20 +387,16 @@ class SecurityLoggingTests(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.device_id = "test-device-12345"
         self.auth = DeviceTokenAuthentication()
 
-    @patch('users.authentication.logger')
+    @patch("users.authentication.logger")
     def test_replay_attack_logged_as_critical(self, mock_logger):
         """Test that replay attacks are logged as CRITICAL"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -438,6 +407,7 @@ class SecurityLoggingTests(TestCase):
 
         from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -447,18 +417,19 @@ class SecurityLoggingTests(TestCase):
 
         # Verify critical logging
         critical_calls = [
-            call for call in mock_logger.critical.call_args_list
+            call
+            for call in mock_logger.critical.call_args_list
             if "REPLAY ATTACK DETECTED" in str(call)
         ]
-        self.assertGreater(len(critical_calls), 0, "Replay attack should be logged as CRITICAL")
+        self.assertGreater(
+            len(critical_calls), 0, "Replay attack should be logged as CRITICAL"
+        )
 
-    @patch('users.token_models.logger')
+    @patch("users.token_models.logger")
     def test_token_rotation_logged(self, mock_logger):
         """Test that token rotations are logged"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         # Rotate
@@ -466,7 +437,8 @@ class SecurityLoggingTests(TestCase):
 
         # Verify info logging
         info_calls = [
-            call for call in mock_logger.info.call_args_list
+            call
+            for call in mock_logger.info.call_args_list
             if "Token rotated" in str(call)
         ]
         self.assertGreater(len(info_calls), 0, "Token rotation should be logged")
@@ -478,9 +450,7 @@ class EdgeCaseTests(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.device_id = "test-device-12345"
         self.auth = DeviceTokenAuthentication()
@@ -488,9 +458,7 @@ class EdgeCaseTests(TestCase):
     def test_concurrent_refresh_attempts(self):
         """Test that concurrent refresh attempts are handled safely"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
 
         # Simulate concurrent refresh (same token used twice)
@@ -505,9 +473,7 @@ class EdgeCaseTests(TestCase):
     def test_grace_period_edge_at_expiry(self):
         """Test grace period exactly at expiry time"""
         device_token = DeviceToken.create_token(
-            user=self.user,
-            device_id=self.device_id,
-            ttl_days=7
+            user=self.user, device_id=self.device_id, ttl_days=7
         )
         old_token = device_token.token
 
@@ -523,6 +489,7 @@ class EdgeCaseTests(TestCase):
 
         from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+
         factory = APIRequestFactory()
         request = factory.get("/test/")
 
@@ -533,4 +500,5 @@ class EdgeCaseTests(TestCase):
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v", "--tb=short"])

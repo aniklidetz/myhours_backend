@@ -136,13 +136,40 @@ class WorkLog(models.Model):
         verbose_name = "Work Log"
         verbose_name_plural = "Work Logs"
         indexes = [
-            models.Index(fields=["employee", "check_in"]),
-            models.Index(fields=["check_in"]),
-            models.Index(fields=["check_out"]),  # Added for check_out filtering
+            # Partial indexes (only index active/non-deleted records for better performance)
             models.Index(
-                fields=["employee", "check_in", "check_out"]
-            ),  # Composite for date range queries
-            models.Index(fields=["is_approved"]),
+                fields=["employee", "check_in"],
+                name="wt_emp_checkin_active_idx",
+                condition=models.Q(is_deleted=False),
+            ),
+            models.Index(
+                fields=["check_in"],
+                name="wt_checkin_active_idx",
+                condition=models.Q(is_deleted=False),
+            ),
+            models.Index(
+                fields=["check_out"],
+                name="wt_checkout_active_idx",
+                condition=models.Q(is_deleted=False),
+            ),
+            models.Index(
+                fields=["employee", "check_in", "check_out"],
+                name="wt_emp_cin_cout_active_idx",
+                condition=models.Q(is_deleted=False),
+            ),
+            models.Index(
+                fields=["is_approved"],
+                name="wt_approved_active_idx",
+                condition=models.Q(is_deleted=False),
+            ),
+        ]
+        constraints = [
+            # Ensure only one active check-in per employee (prevent concurrent sessions)
+            models.UniqueConstraint(
+                fields=["employee"],
+                condition=models.Q(check_out__isnull=True, is_deleted=False),
+                name="unique_active_checkin_per_employee",
+            ),
         ]
 
     def clean(self):

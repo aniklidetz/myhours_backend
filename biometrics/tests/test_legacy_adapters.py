@@ -4,6 +4,7 @@ Adapter tests to ensure legacy → modern compatibility.
 These tests verify that the modern services can handle
 data migrated from legacy services and maintain backward compatibility.
 """
+
 import pytest
 from unittest.mock import Mock, patch
 from django.test import TestCase
@@ -20,9 +21,7 @@ class LegacyDataCompatibilityTest(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.employee = Employee.objects.create(
             user=self.user,
@@ -182,9 +181,7 @@ class EnhancedServiceLegacyCompatibilityTest(TestCase):
     def setUp(self):
         """Set up test data"""
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123"
         )
         self.employee = Employee.objects.create(
             user=self.user,

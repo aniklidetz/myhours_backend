@@ -360,6 +360,14 @@ class Salary(models.Model):
                 name="unique_active_salary_per_employee",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["employee", "is_active"], name="payroll_salary_emp_active_idx"
+            ),
+            models.Index(fields=["employee"], name="payroll_salary_emp_idx"),
+            models.Index(fields=["is_active"], name="payroll_salary_active_idx"),
+            models.Index(fields=["-created_at"], name="payroll_salary_created_idx"),
+        ]
 
 
 class CompensatoryDay(models.Model):
@@ -384,6 +392,13 @@ class CompensatoryDay(models.Model):
         verbose_name = "Compensatory Day"
         verbose_name_plural = "Compensatory Days"
         ordering = ["-date_earned"]
+        indexes = [
+            models.Index(
+                fields=["employee", "date_used"], name="payroll_compday_emp_used_idx"
+            ),
+            models.Index(fields=["employee"], name="payroll_compday_emp_idx"),
+            models.Index(fields=["-date_earned"], name="payroll_compday_earned_idx"),
+        ]
 
 
 class DailyPayrollCalculation(models.Model):
