@@ -20,6 +20,7 @@ try:
     from biometrics.services.face_processor import face_processor
 except ImportError:
     face_processor = None
+from biometrics.services.mongodb_repository import mongo_biometric_repository
 from biometrics.services.mongodb_service import get_mongodb_service
 
 from .authentication import DeviceTokenAuthentication
@@ -219,7 +220,7 @@ def enhanced_login(request):
 
         # Check if biometric registration exists
         biometric_registered = bool(
-            get_mongodb_service().get_face_embeddings(employee.id)
+            mongo_biometric_repository.get_face_embeddings(employee.id)
         )
 
         # Determine if biometric verification is required
@@ -520,6 +521,7 @@ def refresh_token(request):
                     "expires_at": device_token.expires_at.isoformat(),
                     "refreshed_at": timezone.now().isoformat(),
                     "ttl_days": ttl_days,
+                    "rotation_count": device_token.rotation_count,
                 }
             )
         else:

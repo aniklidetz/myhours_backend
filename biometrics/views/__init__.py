@@ -31,7 +31,7 @@ except ImportError:
 
 # Import serializers
 from ..serializers import FaceRecognitionSerializer, FaceRegistrationSerializer
-from ..services.mongodb_service import get_mongodb_service
+from ..services.mongodb_repository import mongo_biometric_repository
 
 # Import attendance views
 from .attendance_views import check_in, check_out, check_work_status
@@ -77,7 +77,7 @@ __all__ = [
     "enhanced_biometric_service",
     "CriticalBiometricError",
     "face_processor",
-    "get_mongodb_service",
+    "mongo_biometric_repository",
     # Serializers
     "FaceRecognitionSerializer",
     "FaceRegistrationSerializer",

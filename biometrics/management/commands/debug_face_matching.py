@@ -5,7 +5,7 @@ import numpy as np
 from django.core.management.base import BaseCommand
 
 from biometrics.services.face_processor import face_processor
-from biometrics.services.mongodb_service import mongodb_service
+from biometrics.services.mongodb_repository import mongo_biometric_repository
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class Command(BaseCommand):
         self.stdout.write("🔍 Debugging face matching process...")
 
         # Get all active embeddings
-        all_embeddings = mongodb_service.get_all_active_embeddings()
+        all_embeddings = mongo_biometric_repository.get_all_active_embeddings()
         self.stdout.write(f"Found {len(all_embeddings)} employees with embeddings:")
 
         for emp_id, embeddings in all_embeddings:

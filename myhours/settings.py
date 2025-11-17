@@ -162,6 +162,13 @@ MONGO_DB_NAME = config("MONGO_DB_NAME", default="biometrics_db")
 MONGO_HOST = config("MONGO_HOST", default="localhost")
 MONGO_PORT = config("MONGO_PORT", default=27017, cast=int)
 
+# Biometric encryption settings (GDPR Article 9 compliance)
+# In tests, this should be None to verify proper error handling
+if TESTING:
+    BIOMETRIC_ENCRYPTION_KEY = None
+else:
+    BIOMETRIC_ENCRYPTION_KEY = config("BIOMETRIC_ENCRYPTION_KEY", default=None)
+
 # Disable HTTPS redirect for tests
 if TESTING:
     SECURE_SSL_REDIRECT = False

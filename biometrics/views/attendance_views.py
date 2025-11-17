@@ -167,7 +167,7 @@ def check_in(request):
 
         # Get all active embeddings
         all_embeddings = (
-            biometrics_views.get_mongodb_service().get_all_active_embeddings()
+            biometrics_views.mongo_biometric_repository.get_all_active_embeddings()
         )
 
         if not all_embeddings:
