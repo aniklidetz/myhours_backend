@@ -190,25 +190,29 @@ class MockedShabbatTestBase(PayrollTestBase):
             datetime.combine(saturday_date, datetime.min.time())
         )
 
-        Holiday.objects.create(
+        Holiday.objects.get_or_create(
             date=friday_date,
-            name="Shabbat",
-            is_shabbat=True,
-            is_special_shabbat=False,
-            is_holiday=False,
-            start_time=shabbat_start,
-            end_time=friday_midnight,
+            defaults={
+                "name": "Shabbat",
+                "is_shabbat": True,
+                "is_special_shabbat": False,
+                "is_holiday": False,
+                "start_time": shabbat_start,
+                "end_time": friday_midnight,
+            },
         )
 
         # Create Saturday record
-        Holiday.objects.create(
+        Holiday.objects.get_or_create(
             date=saturday_date,
-            name="Shabbat",
-            is_shabbat=True,
-            is_special_shabbat=False,
-            is_holiday=False,
-            start_time=friday_midnight,
-            end_time=shabbat_end,
+            defaults={
+                "name": "Shabbat",
+                "is_shabbat": True,
+                "is_special_shabbat": False,
+                "is_holiday": False,
+                "start_time": friday_midnight,
+                "end_time": shabbat_end,
+            },
         )
 
 

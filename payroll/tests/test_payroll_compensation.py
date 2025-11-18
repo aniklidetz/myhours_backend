@@ -302,7 +302,7 @@ class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
 
         # Should have massive overtime (each day has 3.4h OT = 20.4h total)
         overtime_hours = float(result.get("overtime_hours", 0))
-        # Updated expected value to match enhanced algorithm: 13.13
+        # Updated expected value to match enhanced algorithm: 10.2
         self.assertAlmostEqual(
             overtime_hours, 10.2, places=1
         )  # Enhanced Strategy calculation

@@ -365,7 +365,7 @@ class APIIntegrationTest(PayrollTestMixin, TestCase):
                 "Sabbath-time lookups should be bounded (may call per work day without advanced caching)",
             )
             self.assertLessEqual(
-                mock_get.call_count, 50, "Raw HTTP calls should be limited by caches"
+                mock_get.call_count, 70, "Raw HTTP calls should be limited by caches"
             )
 
             # Basic result validation

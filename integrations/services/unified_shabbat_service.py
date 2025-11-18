@@ -247,11 +247,16 @@ class UnifiedShabbatService:
             self._api_calls_made += 1
 
             data = response.json()
-            if data.get("status") != "OK":
+            # Support both old format {'status': 'OK', 'results': {...}}
+            # and new format {'ok': True, ...}
+            if data.get("status") == "OK":
+                return data.get("results", {})
+            elif data.get("ok") is True:
+                # New API format returns data directly without 'results' wrapper
+                return data
+            else:
                 logger.error(f"Sunrise-sunset API error for {date_obj}: {data}")
                 return None
-
-            return data.get("results", {})
 
         except requests.RequestException as e:
             logger.error(

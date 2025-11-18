@@ -20,6 +20,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from cryptography.fernet import Fernet, InvalidToken
+
 from django.conf import settings
 from django.core.cache import cache
 

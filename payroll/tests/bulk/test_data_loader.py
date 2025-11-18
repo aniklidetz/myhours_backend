@@ -89,12 +89,14 @@ class BulkDataLoaderTestCase(TestCase):
             check_out=datetime(2025, 10, 9, 16, 0, 0, tzinfo=tz),
         )
 
-        # Create a holiday
-        self.holiday = Holiday.objects.create(
+        # Create a holiday (use get_or_create to avoid duplicates)
+        self.holiday, _ = Holiday.objects.get_or_create(
             date=date(2025, 10, 10),
-            name="Yom Kippur",
-            is_holiday=True,
-            is_shabbat=False,
+            defaults={
+                "name": "Yom Kippur",
+                "is_holiday": True,
+                "is_shabbat": False,
+            },
         )
 
         self.loader = BulkDataLoader()

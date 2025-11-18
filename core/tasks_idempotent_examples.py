@@ -5,14 +5,15 @@ This file demonstrates how to apply idempotency decorators to existing tasks.
 Copy these patterns to core/tasks.py for production use.
 """
 
+import logging
+
 from celery import shared_task
-from django.core.mail import send_mail
+
 from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 
 from core.idempotency import idempotent_daily_task, idempotent_once, idempotent_task
-
-import logging
 
 logger = logging.getLogger(__name__)
 

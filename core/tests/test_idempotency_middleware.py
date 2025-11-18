@@ -11,8 +11,8 @@ from rest_framework.test import APIClient, APITestCase
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import RequestFactory, TestCase
 from django.http import JsonResponse
+from django.test import RequestFactory, TestCase
 
 from core.middleware_idempotency import APIIdempotencyMiddleware
 from users.models import Employee

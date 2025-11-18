@@ -41,17 +41,19 @@ class NightShiftCalculationTest(TestCase):
         )
         # Create Sabbath holiday for the test_sabbath_night_shift test
         # July 5, 2025 is a Saturday (Sabbath)
-        Holiday.objects.create(
+        Holiday.objects.get_or_create(
             date=date(2025, 7, 5),
-            name="Shabbat",
-            is_holiday=True,
-            is_shabbat=True,
-            start_time=timezone.make_aware(
-                datetime(2025, 7, 4, 18, 30)
-            ),  # Friday ~6:30 PM
-            end_time=timezone.make_aware(
-                datetime(2025, 7, 5, 19, 30)
-            ),  # Saturday ~7:30 PM
+            defaults={
+                "name": "Shabbat",
+                "is_holiday": True,
+                "is_shabbat": True,
+                "start_time": timezone.make_aware(
+                    datetime(2025, 7, 4, 18, 30)
+                ),  # Friday ~6:30 PM
+                "end_time": timezone.make_aware(
+                    datetime(2025, 7, 5, 19, 30)
+                ),  # Saturday ~7:30 PM
+            },
         )
 
     def test_full_night_shift(self):

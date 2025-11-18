@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
+
 from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings

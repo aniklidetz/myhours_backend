@@ -205,8 +205,8 @@ class ReplayAttackDetectionTests(TestCase):
         device_token.previous_token_expires_at = timezone.now() - timedelta(seconds=1)
         device_token.save()
 
-        from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.get("/test/")
@@ -240,8 +240,8 @@ class ReplayAttackDetectionTests(TestCase):
         # Verify both tokens are active before attack
         self.assertTrue(device_token1.is_active)
 
-        from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.get("/test/")
@@ -260,8 +260,8 @@ class ReplayAttackDetectionTests(TestCase):
             user=self.user, device_id=self.device_id, ttl_days=7
         )
 
-        from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.get("/test/")
@@ -405,8 +405,8 @@ class SecurityLoggingTests(TestCase):
         device_token.previous_token_expires_at = timezone.now() - timedelta(seconds=1)
         device_token.save()
 
-        from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.get("/test/")
@@ -487,8 +487,8 @@ class EdgeCaseTests(TestCase):
         # Slight delay to ensure it's expired
         time.sleep(0.1)
 
-        from rest_framework.test import APIRequestFactory
         from rest_framework.exceptions import AuthenticationFailed
+        from rest_framework.test import APIRequestFactory
 
         factory = APIRequestFactory()
         request = factory.get("/test/")

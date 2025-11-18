@@ -42,6 +42,8 @@ class HolidaySyncServiceTest(TestCase):
             date(2025, 1, 24),
             date(2025, 1, 31),
             date(2025, 2, 7),
+            date(2025, 12, 26),  # Shabbat Chanukah
+            date(2025, 12, 25),  # Eve
         ]
         Holiday.objects.filter(date__in=integration_test_dates).delete()
 
@@ -70,6 +72,8 @@ class HolidaySyncServiceTest(TestCase):
             date(2025, 1, 24),
             date(2025, 1, 31),
             date(2025, 2, 7),
+            date(2025, 12, 26),  # Shabbat Chanukah
+            date(2025, 12, 25),  # Eve
         ]
         Holiday.objects.filter(date__in=integration_test_dates).delete()
 
@@ -263,8 +267,16 @@ class HolidaySyncServiceTest(TestCase):
         self.assertEqual(created, 4)
         self.assertEqual(updated, 0)
 
-        # Verify database records
-        shabbats = Holiday.objects.filter(is_shabbat=True, is_special_shabbat=False)
+        # Verify database records - only check the specific dates we created
+        test_dates = [
+            date(2025, 1, 3),
+            date(2025, 1, 4),
+            date(2025, 1, 10),
+            date(2025, 1, 11),
+        ]
+        shabbats = Holiday.objects.filter(
+            date__in=test_dates, is_shabbat=True, is_special_shabbat=False
+        )
         self.assertEqual(len(shabbats), 4)  # 2 Shabbats × 2 records each
 
         first_shabbat = shabbats.get(date=date(2025, 1, 3))

@@ -235,7 +235,7 @@ class CriticalPointsAlgorithmTestCase(TestCase):
                 "saturday 19:00",
                 10.0,
                 10.0,
-            ),  # System counts all Saturday hours as Sabbath
+            ),  # System calculates precise Sabbath hours based on actual sunset time
             ("saturday 13:00", "saturday 20:00", 7.0, 4.7),
             (
                 "saturday 11:00",

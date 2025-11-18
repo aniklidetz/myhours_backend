@@ -5,13 +5,15 @@ These tests verify that the modern services can handle
 data migrated from legacy services and maintain backward compatibility.
 """
 
-import pytest
 from unittest.mock import Mock, patch
-from django.test import TestCase
-from django.contrib.auth.models import User
 
-from biometrics.services.mongodb_repository import MongoBiometricRepository
+import pytest
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+
 from biometrics.services.enhanced_biometric_service import EnhancedBiometricService
+from biometrics.services.mongodb_repository import MongoBiometricRepository
 from users.models import Employee
 
 

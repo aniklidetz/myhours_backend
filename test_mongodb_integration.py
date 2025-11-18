@@ -6,6 +6,7 @@ Tests the BLOCKER fix: MongoDB operations outside PostgreSQL transaction
 
 import os
 import sys
+
 import django
 
 # Setup Django
@@ -16,12 +17,14 @@ os.environ["MONGO_DB_NAME"] = "biometrics_db_test"
 
 django.setup()
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from biometrics.services.enhanced_biometric_service import EnhancedBiometricService
-from biometrics.models import BiometricProfile
-from users.models import Employee
 from pymongo import MongoClient
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from biometrics.models import BiometricProfile
+from biometrics.services.enhanced_biometric_service import EnhancedBiometricService
+from users.models import Employee
 
 User = get_user_model()
 

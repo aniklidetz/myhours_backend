@@ -30,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from bson import ObjectId
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 

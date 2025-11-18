@@ -319,15 +319,21 @@ class EnhancedEarningsSerializerHelperMethodsTest(EnhancedEarningsSerializerTest
 
     def test_build_compensatory_breakdown_with_holiday(self):
         """Test _build_compensatory_breakdown with holiday compensatory day"""
-        # Create test holiday
+        # Create test holiday on a weekday to avoid Shabbat conflicts
+        # 2025-02-14 is Friday
+        test_date = date(2025, 2, 14)
+
+        # Delete any existing holidays for this date to avoid conflicts
+        Holiday.objects.filter(date=test_date).delete()
+
         holiday, _ = Holiday.objects.get_or_create(
-            date=date(2025, 2, 15),
+            date=test_date,
             defaults={"name": "Test Holiday", "is_holiday": True, "is_shabbat": False},
         )
 
         # Create compensatory day
         comp_day = CompensatoryDay.objects.create(
-            employee=self.employee, date_earned=date(2025, 2, 15), reason="holiday"
+            employee=self.employee, date_earned=test_date, reason="holiday"
         )
 
         balance = {"holiday": {"unused": 2}, "sabbath": {"unused": 1}, "unused": 3}
@@ -567,8 +573,9 @@ class CompensatoryDayDetailSerializerTest(TestCase):
             role="employee",
         )
 
+        # Use a weekday to avoid Shabbat conflicts (2025-02-14 is Friday)
         self.comp_day = CompensatoryDay.objects.create(
-            employee=self.employee, date_earned=date(2025, 2, 15), reason="holiday"
+            employee=self.employee, date_earned=date(2025, 2, 14), reason="holiday"
         )
 
         self.serializer = CompensatoryDayDetailSerializer()
@@ -588,9 +595,14 @@ class CompensatoryDayDetailSerializerTest(TestCase):
 
     def test_get_holiday_info_for_holiday(self):
         """Test get_holiday_info returns holiday details"""
-        # Create holiday
+        # Create holiday on the same date as comp_day (2025-02-14 from setUp)
+        test_date = date(2025, 2, 14)
+
+        # Delete any existing holidays for this date to avoid conflicts
+        Holiday.objects.filter(date=test_date).delete()
+
         holiday, _ = Holiday.objects.get_or_create(
-            date=date(2025, 2, 15),
+            date=test_date,
             defaults={"name": "Purim", "is_holiday": True, "is_special_shabbat": False},
         )
 
