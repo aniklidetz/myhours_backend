@@ -157,6 +157,9 @@ class HolidaySyncServiceTest(TestCase):
 
     def test_sync_special_shabbats(self):
         """Test synchronization of special Shabbats"""
+        # Clear any existing special shabbats to ensure clean test
+        Holiday.objects.filter(is_special_shabbat=True).delete()
+
         holidays = [
             {
                 "title": "Shabbat Rosh Chodesh",

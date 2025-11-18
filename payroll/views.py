@@ -503,7 +503,7 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                         employee_id=employee.id,
                         year=current_date.year,
                         month=current_date.month,
-                        user_id=request.user.id,
+                        user_id=None,  # No request context in standalone function
                         employee_type=employee_type,
                         fast_mode=True,
                     )
@@ -546,11 +546,7 @@ def _legacy_payroll_calculation(employees, current_date, start_date, end_date):
                         employee_id=employee.id,
                         year=current_date.year,
                         month=current_date.month,
-                        user_id=(
-                            self.request.user.id
-                            if self.request.user.is_authenticated
-                            else None
-                        ),
+                        user_id=None,  # No request context in standalone function
                         fast_mode=True,
                     )
                     service = PayrollService(context)

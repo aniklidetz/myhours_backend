@@ -157,7 +157,7 @@ class Command(BaseCommand):
 
                     self.stdout.write(
                         f"{'[DRY RUN] ' if options['dry_run'] else ''}Updated {calc.employee.get_full_name()} - {calc.work_date}: "
-                        f"₪{old_total_pay:.2f} → ₪{new_total_pay:.2f} "
+                        f"₪{old_total_pay:.2f} → ₪{new_total_salary:.2f} "
                         f"(gross: ₪{old_total_gross:.2f} → ₪{new_total_gross:.2f})"
                     )
                     updated_count += 1

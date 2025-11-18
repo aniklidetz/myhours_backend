@@ -89,6 +89,9 @@ class BulkDataLoaderTestCase(TestCase):
             check_out=datetime(2025, 10, 9, 16, 0, 0, tzinfo=tz),
         )
 
+        # Clear all October 2025 holidays to ensure clean test state
+        Holiday.objects.filter(date__year=2025, date__month=10).delete()
+
         # Create a holiday (use get_or_create to avoid duplicates)
         self.holiday, _ = Holiday.objects.get_or_create(
             date=date(2025, 10, 10),

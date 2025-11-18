@@ -106,8 +106,10 @@ class PayrollAPIAuthenticationTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("total_salary", response.data)
-        self.assertIn("calculation_type", response.data)
-        self.assertEqual(response.data["calculation_type"], "monthly")
+        # calculation_type is in the summary dict
+        self.assertIn("summary", response.data)
+        self.assertIn("calculation_type", response.data["summary"])
+        self.assertEqual(response.data["summary"]["calculation_type"], "monthly")
 
     def test_regular_user_can_access_own_data(self):
         """Test regular user can only access their own payroll data"""
