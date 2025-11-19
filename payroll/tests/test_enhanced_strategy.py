@@ -503,8 +503,16 @@ class TestEnhancedStrategyIntegration:
             assert result["breakdown"]["holiday_pay"] == float(expected_holiday_pay)
             assert result["breakdown"]["holiday_rate"] == 60.0  # 40 * 1.5
 
-    def test_sabbath_work_premium_calculation(self):
+    @patch("payroll.services.strategies.enhanced.get_shabbat_times")
+    def test_sabbath_work_premium_calculation(self, mock_shabbat_times):
         """Test that Sabbath work gets proper premium rates"""
+        # Mock Shabbat times for January 3-4, 2025
+        # Friday January 3 sunset ~16:32, Saturday January 4 nightfall ~17:33
+        mock_shabbat_times.return_value = {
+            "shabbat_start": "2025-01-03T16:32:00+02:00",
+            "shabbat_end": "2025-01-04T17:33:00+02:00",
+        }
+
         context = CalculationContext(
             employee_id=790,
             year=2025,

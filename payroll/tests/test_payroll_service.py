@@ -51,6 +51,7 @@ class MockFailingStrategy(AbstractPayrollStrategy):
         raise ValueError("Mock calculation failure")
 
 
+@pytest.mark.django_db
 class TestPayrollService:
     """Test the main payroll service orchestrator"""
 
@@ -87,10 +88,21 @@ class TestPayrollService:
         assert service.enable_caching is False
         assert service.factory is not None
 
-    @patch.object(PayrollService, "_execute_calculation")
-    @patch.object(PayrollService, "_validate_result")
-    def test_calculate_success(self, mock_validate, mock_execute, service, context):
+    def test_calculate_success(self):
         """Test successful calculation"""
+        # Use fast_mode=True to skip database persistence
+        context = CalculationContext(
+            employee_id=123,
+            year=2025,
+            month=1,
+            user_id=456,
+            strategy_hint=None,
+            force_recalculate=False,
+            fast_mode=True,  # Skip database persistence
+            include_breakdown=True,
+            include_daily_details=False,
+        )
+
         expected_result = PayrollResult(
             total_salary=Decimal("5000.00"),
             total_hours=Decimal("160.0"),
@@ -102,17 +114,40 @@ class TestPayrollService:
             metadata={"calculation_strategy": "test"},
         )
 
-        mock_execute.return_value = expected_result
+        with (
+            patch(
+                "payroll.services.payroll_service.PayrollService._execute_calculation",
+                return_value=expected_result,
+            ) as mock_execute,
+            patch(
+                "payroll.services.payroll_service.PayrollService._validate_result"
+            ) as mock_validate,
+        ):
 
-        result = service.calculate(context, CalculationStrategy.ENHANCED)
+            service = PayrollService(enable_fallback=True, enable_caching=False)
+            result = service.calculate(context, CalculationStrategy.ENHANCED)
 
-        assert result == expected_result
-        mock_execute.assert_called_once()
-        mock_validate.assert_called_once()
+            assert result == expected_result
+            mock_execute.assert_called_once()
+            mock_validate.assert_called_once()
 
-    def test_calculate_with_mock_strategy_success(self, service, context):
+    def test_calculate_with_mock_strategy_success(self):
         """Test calculation with mock strategy"""
+        # Use fast_mode=True to skip database persistence
+        context = CalculationContext(
+            employee_id=123,
+            year=2025,
+            month=1,
+            user_id=456,
+            strategy_hint=None,
+            force_recalculate=False,
+            fast_mode=True,
+            include_breakdown=True,
+            include_daily_details=False,
+        )
+
         mock_calculator = MockSuccessfulStrategy(context)
+        service = PayrollService(enable_fallback=True, enable_caching=False)
 
         with patch.object(
             service.factory, "create_calculator", return_value=mock_calculator
@@ -122,9 +157,27 @@ class TestPayrollService:
             assert result["total_salary"] == Decimal("5000.00")
             assert result["metadata"]["calculation_strategy"] == "mock_successful"
 
-    def test_calculate_with_strategy_failure_and_fallback(self, service, context):
+    def test_calculate_with_strategy_failure_and_fallback(self):
         """Test calculation with strategy failure and successful fallback"""
-        successful_result = PayrollResult(
+        # Use fast_mode=True to skip database persistence
+        context = CalculationContext(
+            employee_id=123,
+            year=2025,
+            month=1,
+            user_id=456,
+            strategy_hint=None,
+            force_recalculate=False,
+            fast_mode=True,
+            include_breakdown=True,
+            include_daily_details=False,
+        )
+
+        service = PayrollService(enable_fallback=True, enable_caching=False)
+
+        # Create mock calculators - need to create a real Mock for the calculator
+        # to avoid issues with base class methods
+        mock_calculator = Mock()
+        mock_calculator.calculate_with_logging.return_value = PayrollResult(
             total_salary=Decimal("5000.00"),
             total_hours=Decimal("160.0"),
             regular_hours=Decimal("144.0"),
@@ -132,25 +185,23 @@ class TestPayrollService:
             holiday_hours=Decimal("0.0"),
             shabbat_hours=Decimal("0.0"),
             breakdown={},
-            metadata={"calculation_strategy": "fallback", "fallback_used": True},
+            metadata={"calculation_strategy": "mock_successful"},
         )
 
         # Mock the factory to first fail creating the enhanced strategy, then succeed with fallback
         with patch.object(service.factory, "create_calculator") as mock_create:
-            # First call raises exception, second call (in fallback) succeeds
-            failing_calculator = MockFailingStrategy(context)
-            fallback_calculator = MockSuccessfulStrategy(context)
-
+            # First call raises exception (for ENHANCED), second call returns fallback calculator
             mock_create.side_effect = [
                 Exception("Strategy creation failed"),
-                fallback_calculator,
+                mock_calculator,
             ]
 
-            result = service.calculate(context, CalculationStrategy.ENHANCED)
+            # Use LEGACY strategy so fallback can happen (ENHANCED is the fallback strategy)
+            result = service.calculate(context, CalculationStrategy.LEGACY)
 
             # Should get result from fallback
             assert result["total_salary"] == Decimal("5000.00")
-            # Factory should be called twice - once for original, once for fallback
+            # Factory should be called twice - once for original (LEGACY), once for fallback (ENHANCED)
             assert mock_create.call_count == 2
 
     def test_calculate_with_fallback_disabled_raises_error(self, context):
