@@ -15,6 +15,7 @@ from integrations.models import Holiday
 from payroll.models import CompensatoryDay, DailyPayrollCalculation, Salary
 from payroll.services.enums import CalculationStrategy
 from payroll.services.payroll_service import PayrollService
+from payroll.tests.base import MockedShabbatTestBase
 from payroll.tests.helpers import (
     ISRAELI_DAILY_NORM_HOURS,
     MONTHLY_NORM_HOURS,
@@ -28,10 +29,11 @@ from worktime.models import WorkLog
 from .test_helpers import create_shabbat_for_date
 
 
-class PayrollCalculationIntegrationTest(PayrollTestMixin, TestCase):
+class PayrollCalculationIntegrationTest(PayrollTestMixin, MockedShabbatTestBase):
     """Test payroll calculations with actual work logs using new PayrollService"""
 
     def setUp(self):
+        super().setUp()
         # Create Shabbat Holiday records for all dates used in tests - Iron Isolation pattern
         from integrations.models import Holiday
 
@@ -201,10 +203,11 @@ class PayrollCalculationIntegrationTest(PayrollTestMixin, TestCase):
         self.assertAlmostEqual(actual_pay, expected_total, delta=50)
 
 
-class WeeklyLimitsValidationTest(PayrollTestMixin, TestCase):
+class WeeklyLimitsValidationTest(PayrollTestMixin, MockedShabbatTestBase):
     """Test weekly limits validation with actual work patterns"""
 
     def setUp(self):
+        super().setUp()
         # Create Shabbat Holiday records for July 2025
         create_shabbat_for_date(date(2025, 7, 5))  # Saturday
         create_shabbat_for_date(

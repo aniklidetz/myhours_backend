@@ -503,16 +503,8 @@ class TestEnhancedStrategyIntegration:
             assert result["breakdown"]["holiday_pay"] == float(expected_holiday_pay)
             assert result["breakdown"]["holiday_rate"] == 60.0  # 40 * 1.5
 
-    @patch("payroll.services.strategies.enhanced.get_shabbat_times")
-    def test_sabbath_work_premium_calculation(self, mock_shabbat_times):
+    def test_sabbath_work_premium_calculation(self):
         """Test that Sabbath work gets proper premium rates"""
-        # Mock Shabbat times for January 3-4, 2025
-        # Friday January 3 sunset ~16:32, Saturday January 4 nightfall ~17:33
-        mock_shabbat_times.return_value = {
-            "shabbat_start": "2025-01-03T16:32:00+02:00",
-            "shabbat_end": "2025-01-04T17:33:00+02:00",
-        }
-
         context = CalculationContext(
             employee_id=790,
             year=2025,
@@ -537,17 +529,32 @@ class TestEnhancedStrategyIntegration:
         employee.salary_info = salary
 
         # Saturday work log - 6 hours work + 30 minutes break = 6.5 total duration
+        # Use Israel timezone to match Shabbat times
+        import pytz
+
+        israel_tz = pytz.timezone("Asia/Jerusalem")
+
         sabbath_log = Mock()
-        sabbath_log.check_in = timezone.make_aware(
+        sabbath_log.check_in = israel_tz.localize(
             datetime(2025, 1, 4, 10, 0)
-        )  # Saturday
+        )  # Saturday 10:00 Israel time
         sabbath_log.check_out = sabbath_log.check_in + timedelta(
             hours=6, minutes=30
-        )  # Add check_out
+        )  # 16:30 Israel time - still within Shabbat
         sabbath_log.employee_id = 790
+        sabbath_log.get_total_hours.return_value = Decimal("6.5")
+        sabbath_log.break_minutes = 30
 
-        with patch.object(
-            strategy, "_calculate_night_shift_hours", return_value=Decimal("0.0")
+        # Mock Shabbat times for January 3-4, 2025
+        # Friday January 3 sunset ~16:32, Saturday January 4 nightfall ~17:33
+        mock_shabbat_times = {
+            "shabbat_start": "2025-01-03T16:32:00+02:00",
+            "shabbat_end": "2025-01-04T17:33:00+02:00",
+        }
+
+        with patch(
+            "payroll.services.strategies.enhanced.get_shabbat_times",
+            return_value=mock_shabbat_times,
         ):
             result = strategy._calculate_hourly_employee(
                 employee, salary, [sabbath_log], {}

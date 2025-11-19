@@ -70,7 +70,7 @@ class TestPayrollService:
             user_id=456,
             strategy_hint=None,
             force_recalculate=False,
-            fast_mode=False,
+            fast_mode=True,  # Skip database persistence for unit tests
             include_breakdown=True,
             include_daily_details=False,
         )
@@ -220,21 +220,50 @@ class TestPayrollService:
             assert result["total_hours"] == Decimal("0")
             assert "Mock calculation failure" in result["metadata"]["error"]
 
-    def test_calculate_with_strategy_not_found_error(self, service, context):
+    def test_calculate_with_strategy_not_found_error(self):
         """Test handling of StrategyNotFoundError"""
-        fallback_calculator = MockSuccessfulStrategy(context)
+        # Use fast_mode=True to skip database persistence
+        context = CalculationContext(
+            employee_id=123,
+            year=2025,
+            month=1,
+            user_id=456,
+            strategy_hint=None,
+            force_recalculate=False,
+            fast_mode=True,
+            include_breakdown=True,
+            include_daily_details=False,
+        )
+
+        service = PayrollService(enable_fallback=True, enable_caching=False)
+
+        # Create mock calculator
+        mock_calculator = Mock()
+        mock_calculator.calculate_with_logging.return_value = PayrollResult(
+            total_salary=Decimal("5000.00"),
+            total_hours=Decimal("160.0"),
+            regular_hours=Decimal("144.0"),
+            overtime_hours=Decimal("16.0"),
+            holiday_hours=Decimal("0.0"),
+            shabbat_hours=Decimal("0.0"),
+            breakdown={},
+            metadata={"calculation_strategy": "mock_successful"},
+        )
 
         with patch.object(service.factory, "create_calculator") as mock_create:
             # First call raises StrategyNotFoundError, second call succeeds
             mock_create.side_effect = [
                 StrategyNotFoundError("Strategy not found"),
-                fallback_calculator,
+                mock_calculator,
             ]
 
-            result = service.calculate(context, CalculationStrategy.ENHANCED)
+            # Mock _persist_results to avoid Employee.DoesNotExist error
+            with patch.object(service, "_persist_results"):
+                # Use LEGACY so fallback to ENHANCED can happen
+                result = service.calculate(context, CalculationStrategy.LEGACY)
 
-            # Should get result from fallback
-            assert result["total_salary"] == Decimal("5000.00")
+                # Should get result from fallback
+                assert result["total_salary"] == Decimal("5000.00")
 
     def test_calculate_handles_all_failures_gracefully(self, service, context):
         """Test that all failures are handled gracefully"""

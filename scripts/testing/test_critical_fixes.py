@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myhours.settings")
 django.setup()
 
+import pytest
 import pytz
 
 from django.conf import settings
@@ -26,19 +27,67 @@ from payroll.models import Salary
 from users.models import Employee
 from worktime.models import WorkLog
 
+# Apply django_db mark to all tests in this module
+pytestmark = pytest.mark.django_db
 
-def test_issue_1_working_days_optimization():
+
+@pytest.fixture
+def test_employee_with_salary(db):
+    """Create a test employee with active salary for testing."""
+    employee = Employee.objects.create(
+        first_name="Test",
+        last_name="Worker",
+        email="test.worker@example.com",
+        employment_type="hourly",
+        role="employee",
+    )
+    salary = Salary.objects.create(
+        employee=employee,
+        calculation_type="hourly",
+        hourly_rate=80,
+        currency="ILS",
+        is_active=True,
+    )
+    return salary
+
+
+@pytest.fixture
+def test_employee_with_worklogs(db):
+    """Create a test employee with work logs for testing."""
+    employee = Employee.objects.create(
+        first_name="Test",
+        last_name="Logger",
+        email="test.logger@example.com",
+        employment_type="hourly",
+        role="employee",
+    )
+    salary = Salary.objects.create(
+        employee=employee,
+        calculation_type="hourly",
+        hourly_rate=80,
+        currency="ILS",
+        is_active=True,
+    )
+    # Create some work logs
+    from django.utils import timezone as tz
+
+    check_in = tz.make_aware(datetime(2025, 7, 1, 9, 0))
+    check_out = tz.make_aware(datetime(2025, 7, 1, 17, 0))
+    WorkLog.objects.create(
+        employee=employee,
+        check_in=check_in,
+        check_out=check_out,
+    )
+    return salary
+
+
+def test_issue_1_working_days_optimization(test_employee_with_salary):
     """Test Issue #1: get_working_days_in_month() optimization"""
     print("\n" + "=" * 80)
     print("TEST #1: get_working_days_in_month() - N+1 Query Fix")
     print("=" * 80)
 
-    # Get first employee with active salary
-    salary = Salary.objects.filter(is_active=True).select_related("employee").first()
-
-    if not salary:
-        print("ERROR: No active salary found for testing")
-        return False
+    salary = test_employee_with_salary
 
     employee_name = salary.employee.get_full_name()
     print(f"\nTesting with employee: {employee_name}")
@@ -69,39 +118,24 @@ def test_issue_1_working_days_optimization():
         f"  Timezone: {test_date.tzinfo if hasattr(test_date, 'tzinfo') else 'Applied during calculation'}"
     )
 
-    # Validation
-    if query_count <= 2:  # Should be 1-2 queries (cache lookup + possible initial load)
-        print("\nPASS: Query count is optimal (<=2 queries)")
-        success = True
-    else:
-        print(f"\nFAIL: Too many queries ({query_count}). Expected <=2")
-        success = False
+    # Validation - assert query count is optimal
+    assert query_count <= 2, f"Too many queries ({query_count}). Expected <=2"
+    print("\nPASS: Query count is optimal (<=2 queries)")
 
-    # Show queries for debugging
-    if query_count > 0:
-        print("\nQueries executed:")
-        for i, query in enumerate(connection.queries, 1):
-            print(f"  {i}. {query['sql'][:100]}...")
-
-    return success
+    # Working days should be reasonable for July 2025
+    assert working_days >= 20, f"Working days {working_days} seems too low for July"
+    assert (
+        working_days <= 31
+    ), f"Working days {working_days} cannot exceed days in month"
 
 
-def test_issue_2_worked_days_optimization():
+def test_issue_2_worked_days_optimization(test_employee_with_worklogs):
     """Test Issue #2: get_worked_days_in_month() optimization"""
     print("\n" + "=" * 80)
     print("TEST #2: get_worked_days_in_month() - values() Optimization")
     print("=" * 80)
 
-    # Get employee with work logs
-    salary = (
-        Salary.objects.filter(is_active=True, employee__work_logs__isnull=False)
-        .select_related("employee")
-        .first()
-    )
-
-    if not salary:
-        print("ERROR: No employee with work logs found for testing")
-        return False
+    salary = test_employee_with_worklogs
 
     employee_name = salary.employee.get_full_name()
     work_log_count = WorkLog.objects.filter(
@@ -128,153 +162,52 @@ def test_issue_2_worked_days_optimization():
     print(f"  Worked days: {worked_days}")
     print(f"  Database queries executed: {query_count}")
 
-    # Validation
-    if (
-        query_count <= 2
-    ):  # Should be 1-2 queries (WorkLog fetch + possible Salary fetch)
-        print("\nPASS: Query count is optimal (<=2 queries)")
-        success = True
-    else:
-        print(f"\nFAIL: Too many queries ({query_count}). Expected <=2")
-        success = False
+    # Validation - assert query count is optimal
+    assert query_count <= 2, f"Too many queries ({query_count}). Expected <=2"
+    print("\nPASS: Query count is optimal (<=2 queries)")
 
-    # Show queries for debugging
-    if query_count > 0:
-        print("\nQueries executed:")
-        for i, query in enumerate(connection.queries, 1):
-            sql = query["sql"]
-            # Check if using values()
-            if "SELECT" in sql and "work_logs" in sql.lower():
-                if "check_in" in sql and "check_out" in sql:
-                    print(f"  {i}. WorkLog query with values() optimization")
-                else:
-                    print(f"  {i}. WorkLog query (check if optimized)")
-            print(f"     {sql[:150]}...")
-
-    return success
+    # We created 1 work log for July 1st, so worked_days should be at least 1
+    assert worked_days >= 1, f"Worked days {worked_days} should be at least 1"
 
 
 def test_issue_6_payroll_service_reference():
     """Test Issue #6: PayrollService reference in backward_compatible_earnings"""
-    print("\n" + "=" * 80)
-    print("TEST #3: backward_compatible_earnings() - PayrollService Fix")
-    print("=" * 80)
+    import inspect
 
-    try:
-        # Import the view function
-        from payroll.views import backward_compatible_earnings
+    # Check imports in the function
+    from payroll.services.contracts import CalculationContext
+    from payroll.services.enums import CalculationStrategy, EmployeeType
+    from payroll.services.payroll_service import PayrollService
 
-        print("\nImport successful: backward_compatible_earnings function exists")
+    # Get the source file path dynamically for the earnings_views module
+    from payroll.views import earnings_views
 
-        # Check imports in the function
-        from payroll.services.contracts import CalculationContext
-        from payroll.services.enums import CalculationStrategy, EmployeeType
-        from payroll.services.payroll_service import PayrollService
+    # Import the view function - this also validates the import works
+    from payroll.views.earnings_views import backward_compatible_earnings
 
-        print("All required imports are available:")
-        print("  - PayrollService")
-        print("  - CalculationContext")
-        print("  - CalculationStrategy")
-        print("  - EmployeeType")
+    views_file = inspect.getfile(earnings_views)
 
-        # Read the views.py to verify the fix
-        with open(
-            "/Users/aniklidetz/Documents/MyPythonProject/MyHours/backend/myhours-backend/payroll/views.py",
-            "r",
-        ) as f:
-            content = f.read()
+    with open(views_file, "r") as f:
+        content = f.read()
 
-        # Check for old broken reference
-        if "PayrollCalculationService" in content:
-            # Make sure it's not in a comment or string
-            lines = content.split("\n")
-            found_bad_reference = False
-            for line_num, line in enumerate(lines, 1):
-                if "PayrollCalculationService" in line and not line.strip().startswith(
-                    "#"
-                ):
-                    if (
-                        "backward_compatible_earnings"
-                        in content[
-                            max(0, content.find(line) - 500) : content.find(line) + 500
-                        ]
-                    ):
-                        print(
-                            f"\nFAIL: Found PayrollCalculationService reference at line {line_num}"
-                        )
-                        print(f"  Line: {line.strip()}")
-                        found_bad_reference = True
+    # Check for old broken reference
+    assert "PayrollCalculationService" not in content or all(
+        line.strip().startswith("#")
+        for line in content.split("\n")
+        if "PayrollCalculationService" in line
+    ), "Found PayrollCalculationService reference in earnings_views.py"
 
-            if found_bad_reference:
-                return False
+    # Check for new correct reference
+    assert (
+        "PayrollService()" in content
+    ), "PayrollService() not found in earnings_views.py"
 
-        # Check for new correct reference
-        if "PayrollService()" in content:
-            print("\nPASS: Using correct PayrollService() reference")
-            success = True
-        else:
-            print("\nFAIL: PayrollService() not found in views.py")
-            success = False
+    # Check for CalculationContext usage
+    assert (
+        "CalculationContext(" in content
+    ), "CalculationContext not found in earnings_views.py"
 
-        # Check for CalculationContext usage
-        if "CalculationContext(" in content:
-            print("PASS: Using CalculationContext for service initialization")
-        else:
-            print("WARNING: CalculationContext not found")
-            success = False
-
-        # Check for CalculationStrategy usage
-        if "CalculationStrategy.ENHANCED" in content:
-            print("PASS: Using CalculationStrategy.ENHANCED")
-        else:
-            print("WARNING: CalculationStrategy.ENHANCED not found")
-
-        return success
-
-    except ImportError as e:
-        print(f"\nFAIL: Import error - {e}")
-        return False
-    except Exception as e:
-        print(f"\nFAIL: Unexpected error - {e}")
-        return False
-
-
-def main():
-    """Run all tests"""
-    print("\n" + "=" * 80)
-    print("TESTING CRITICAL FIXES - Issues #1, #2, #6")
-    print("=" * 80)
-    print(f"Database: {settings.DATABASES['default']['NAME']}")
-    print(f"Django version: {django.VERSION}")
-    print(f"Debug mode: {settings.DEBUG}")
-
-    results = {
-        "Issue #1 (Working Days N+1 Query)": test_issue_1_working_days_optimization(),
-        "Issue #2 (Worked Days values() Optimization)": test_issue_2_worked_days_optimization(),
-        "Issue #6 (PayrollService Reference)": test_issue_6_payroll_service_reference(),
-    }
-
-    # Summary
-    print("\n" + "=" * 80)
-    print("TEST SUMMARY")
-    print("=" * 80)
-
-    passed = sum(1 for result in results.values() if result)
-    total = len(results)
-
-    for test_name, result in results.items():
-        status = "PASS" if result else "FAIL"
-        print(f"[{status}] {test_name}")
-
-    print(f"\nTotal: {passed}/{total} tests passed")
-
-    if passed == total:
-        print("\nALL TESTS PASSED - Critical fixes verified!")
-        return 0
-    else:
-        print(f"\n{total - passed} TEST(S) FAILED - Review needed")
-        return 1
-
-
-if __name__ == "__main__":
-    exit(main())
+    # Check for CalculationStrategy usage
+    assert (
+        "CalculationStrategy.ENHANCED" in content
+    ), "CalculationStrategy.ENHANCED not found"
