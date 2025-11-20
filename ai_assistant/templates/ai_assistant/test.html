@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - Test Page</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; text-align: center; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        textarea { min-height: 80px; resize: vertical; }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .response {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+        .loading { text-align: center; color: #666; }
+        .quick-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .quick-query {
+            background: #e9ecef;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            width: auto;
+        }
+        .quick-query:hover { background: #dee2e6; }
+        .employee-info {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Salary Assistant</h1>
+
+    <div class="card">
+        <label for="employee">Select Employee:</label>
+        <select id="employee" onchange="updateEmployeeInfo()">
+            <option value="13" data-name="Yosef Abramov" data-rate="120 NIS/hr">Yosef Abramov (Hourly - 120 NIS/hr)</option>
+            <option value="14" data-name="Dana Azulay" data-rate="95 NIS/hr">Dana Azulay (Hourly - 95 NIS/hr)</option>
+            <option value="15" data-name="Itai Shapiro" data-rate="110 NIS/hr">Itai Shapiro (Hourly - 110 NIS/hr)</option>
+            <option value="17" data-name="Yael Bar-On" data-rate="180 NIS/hr">Yael Bar-On (Hourly - 180 NIS/hr)</option>
+            <option value="19" data-name="Maya Shechter" data-rate="140 NIS/hr">Maya Shechter (Hourly - 140 NIS/hr)</option>
+            <option value="20" data-name="Omer Klein" data-rate="45 NIS/hr">Omer Klein (Hourly - 45 NIS/hr)</option>
+            <option value="11" data-name="Leah Ben-Ami" data-rate="25,000 NIS/mo">Leah Ben-Ami (Monthly - 25,000 NIS)</option>
+            <option value="12" data-name="Noam Peretz" data-rate="22,000 NIS/mo">Noam Peretz (Monthly - 22,000 NIS)</option>
+            <option value="16" data-name="Elior Weisman" data-rate="25,000 NIS/mo">Elior Weisman (Monthly - 25,000 NIS)</option>
+            <option value="18" data-name="Gilad Friedman" data-rate="16,000 NIS/mo">Gilad Friedman (Monthly - 16,000 NIS)</option>
+        </select>
+
+        <div class="employee-info" id="employeeInfo">
+            Selected: <strong>Yosef Abramov</strong> | Rate: 120 NIS/hour | Token: b6ff14...
+        </div>
+
+        <label for="periodType">Period Type:</label>
+        <select id="periodType" onchange="togglePeriodInput()">
+            <option value="month">Month</option>
+            <option value="day">Specific Day</option>
+        </select>
+
+        <div id="monthPeriod">
+            <label for="period">Month:</label>
+            <select id="period">
+                <option value="October 2025">October 2025</option>
+                <option value="November 2025">November 2025</option>
+            </select>
+        </div>
+
+        <div id="dayPeriod" style="display: none;">
+            <label for="specificDate">Date:</label>
+            <input type="date" id="specificDate" value="2025-11-01">
+        </div>
+
+        <label for="query">Your Question:</label>
+        <div class="quick-queries">
+            <button class="quick-query" onclick="setQuery('Explain my salary breakdown')">Full Breakdown</button>
+            <button class="quick-query" onclick="setQuery('Explain my Shabbat pay')">Shabbat Pay</button>
+            <button class="quick-query" onclick="setQuery('Why do I have overtime?')">Overtime</button>
+            <button class="quick-query" onclick="setQuery('What is my total gross pay?')">Total Pay</button>
+        </div>
+        <textarea id="query" placeholder="Ask about your salary...">Explain my salary breakdown</textarea>
+
+        <button onclick="askAI()" id="submitBtn">Ask AI Assistant</button>
+    </div>
+
+    <div class="card" id="responseCard" style="display: none;">
+        <h3>Response:</h3>
+        <div class="response" id="response"></div>
+    </div>
+
+    <script>
+        // Employee tokens (loaded from database)
+        const employeeTokens = {
+            '11': 'f62b05a6e015d2eb9810f65cdad7e6a26e4be415',
+            '12': '7696d94f566322a115d9612bf2c01f3c360576a3',
+            '13': 'b6ff141e026d78646dfe71ab4ae4b0ba57ef5cd8',
+            '14': 'ca82adbef4632e0afd0ccca76dad37caca0b2c11',
+            '15': '5f800056260860b4a69d32cf3978829dfb791eba',
+            '16': 'f2e4bbb78faca6220a740ca9e56085e23f3574d4',
+            '17': '009d17452b9089c5d52fb703f7865bce1f0537f1',
+            '18': 'd7b007addc5c99f2945d2a39ff0c2cd8fb493a1a',
+            '19': '60d8c80ebaf1f49eba6ccc739e27449f295872cb',
+            '20': '97d157a09d876427b6ae8a698dc9593c94687159'
+        };
+
+        function updateEmployeeInfo() {
+            const select = document.getElementById('employee');
+            const option = select.options[select.selectedIndex];
+            const name = option.dataset.name;
+            const rate = option.dataset.rate;
+            const token = employeeTokens[select.value] || option.dataset.token;
+
+            document.getElementById('employeeInfo').innerHTML =
+                `Selected: <strong>${name}</strong> | Rate: ${rate} NIS | Token: ${token.substring(0, 8)}...`;
+        }
+
+        function setQuery(text) {
+            document.getElementById('query').value = text;
+        }
+
+        function togglePeriodInput() {
+            const periodType = document.getElementById('periodType').value;
+            document.getElementById('monthPeriod').style.display = periodType === 'month' ? 'block' : 'none';
+            document.getElementById('dayPeriod').style.display = periodType === 'day' ? 'block' : 'none';
+        }
+
+        function getPeriodValue() {
+            const periodType = document.getElementById('periodType').value;
+            if (periodType === 'month') {
+                return document.getElementById('period').value;
+            } else {
+                return document.getElementById('specificDate').value;
+            }
+        }
+
+        async function askAI() {
+            const employeeSelect = document.getElementById('employee');
+            const token = employeeTokens[employeeSelect.value];
+            const query = document.getElementById('query').value;
+            const period = getPeriodValue();
+            const responseDiv = document.getElementById('response');
+            const responseCard = document.getElementById('responseCard');
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!token || !query) {
+                alert('Please select an employee and enter a question');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Loading...';
+            responseCard.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Waiting for AI response...';
+
+            try {
+                const response = await fetch('/api/v1/ai-assistant/explain/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        period: period,
+                        language: 'en'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    responseDiv.className = 'response success';
+                    responseDiv.textContent = data.data.explanation;
+                } else {
+                    responseDiv.className = 'response error';
+                    responseDiv.textContent = `Error: ${data.message || JSON.stringify(data)}`;
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Network Error: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Ask AI Assistant';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -109,9 +109,15 @@ class BulkCacheManager:
         return ":".join(key_parts)
 
     def _serialize_decimal(self, obj):
-        """Custom JSON serializer for Decimal objects."""
+        """Custom JSON serializer for Decimal and date objects."""
+        from datetime import date, datetime
+
         if isinstance(obj, Decimal):
             return float(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
     def get_many_monthly_summaries(

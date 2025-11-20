@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "payroll",
     "biometrics",
     "integrations",
+    "ai_assistant",
 ]
 
 # Conditionally add drf_spectacular ONLY if available

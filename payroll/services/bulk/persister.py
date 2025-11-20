@@ -321,8 +321,8 @@ class BulkPersister:
 
                 # Check if holiday or sabbath
                 holiday_data = bulk_data.holidays.get(work_date)
-                is_holiday = holiday_data is not None
-                is_sabbath = False  # Can check from Holiday model if needed
+                is_holiday = holiday_data.is_holiday if holiday_data else False
+                is_sabbath = holiday_data.is_shabbat if holiday_data else False
 
                 holiday_name = holiday_data.name if holiday_data else ""
 

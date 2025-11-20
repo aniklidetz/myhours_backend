@@ -636,8 +636,11 @@ class PayrollService:
                 },
             )
 
-            # Create daily calculations and compensatory days
-            self._create_daily_records(employee, context, work_logs, result)
+            # Create daily calculations from detailed shift results
+            self._create_daily_records(employee, context, result)
+
+            # Create compensatory days for Sabbath/Holiday work
+            self._create_compensatory_days(employee, context, work_logs)
 
             logger.info(
                 f"Successfully persisted calculation results for employee {context['employee_id']}",
@@ -668,12 +671,13 @@ class PayrollService:
         self,
         employee: Employee,
         context: CalculationContext,
-        work_logs: List[WorkLog],
         result: PayrollResult,
     ) -> None:
         """
-        Create DailyPayrollCalculation and CompensatoryDay records.
-        This logic uses proportional distribution for simplicity.
+        Create DailyPayrollCalculation records from daily_results in PayrollResult.
+
+        Uses the detailed shift-by-shift calculations from the strategy
+        instead of proportional distribution.
         """
         # Clear existing daily calculations for the month to avoid duplicates
         DailyPayrollCalculation.objects.filter(
@@ -682,49 +686,157 @@ class PayrollService:
             work_date__month=context["month"],
         ).delete()
 
-        daily_logs = {}
-        for log in work_logs:
-            work_date = log.check_in.date()
-            daily_logs.setdefault(work_date, []).append(log)
+        # Get daily_results from PayrollResult
+        daily_results = result.get("daily_results", [])
 
-        monthly_total_hours = result.get("total_hours", Decimal("0"))
-        if monthly_total_hours <= 0:
+        if not daily_results:
+            # No detailed results available - skip DailyPayrollCalculation creation
+            logger.warning(
+                f"No daily_results in PayrollResult for employee {context['employee_id']}. "
+                "Skipping DailyPayrollCalculation creation."
+            )
             return
 
-        # Distribute monthly totals proportionally based on daily hours
-        for work_date, logs_for_day in daily_logs.items():
-            daily_hours = sum(log.get_total_hours() for log in logs_for_day)
-            proportion = daily_hours / monthly_total_hours
+        # Build DailyPayrollCalculation objects for bulk create
+        daily_calculations = []
 
-            # Check if it's a holiday or sabbath to create compensatory days
-            holiday_record = Holiday.objects.filter(
+        for daily_shift in daily_results:
+            # Get holiday name if applicable
+            holiday_name = ""
+            if daily_shift.get("is_holiday", False):
+                holiday_record = Holiday.objects.filter(
+                    date=daily_shift["work_date"], is_holiday=True
+                ).first()
+                if holiday_record:
+                    holiday_name = holiday_record.name
+
+            daily_calculations.append(
+                DailyPayrollCalculation(
+                    employee=employee,
+                    work_date=daily_shift["work_date"],
+                    worklog_id=daily_shift.get("worklog_id"),
+                    # Hours breakdown
+                    regular_hours=daily_shift.get("regular_hours", Decimal("0")),
+                    overtime_hours_1=daily_shift.get(
+                        "overtime_125_hours", Decimal("0")
+                    ),
+                    overtime_hours_2=daily_shift.get(
+                        "overtime_150_hours", Decimal("0")
+                    ),
+                    sabbath_regular_hours=daily_shift.get(
+                        "sabbath_regular_hours", Decimal("0")
+                    ),
+                    sabbath_overtime_hours_1=daily_shift.get(
+                        "sabbath_overtime_175_hours", Decimal("0")
+                    ),
+                    sabbath_overtime_hours_2=daily_shift.get(
+                        "sabbath_overtime_200_hours", Decimal("0")
+                    ),
+                    night_hours=daily_shift.get("night_shift_hours", Decimal("0")),
+                    # Payment breakdown
+                    base_regular_pay=daily_shift.get("regular_pay", Decimal("0")),
+                    bonus_overtime_pay_1=(
+                        daily_shift.get("overtime_125_pay", Decimal("0"))
+                        - daily_shift.get("overtime_125_hours", Decimal("0"))
+                        * (
+                            daily_shift.get("regular_pay", Decimal("0"))
+                            / max(
+                                daily_shift.get("regular_hours", Decimal("1")),
+                                Decimal("1"),
+                            )
+                        )
+                        if daily_shift.get("regular_hours", Decimal("0")) > 0
+                        else daily_shift.get("overtime_125_pay", Decimal("0"))
+                        * Decimal("0.2")
+                    ),
+                    bonus_overtime_pay_2=(
+                        daily_shift.get("overtime_150_pay", Decimal("0"))
+                        - daily_shift.get("overtime_150_hours", Decimal("0"))
+                        * (
+                            daily_shift.get("regular_pay", Decimal("0"))
+                            / max(
+                                daily_shift.get("regular_hours", Decimal("1")),
+                                Decimal("1"),
+                            )
+                        )
+                        if daily_shift.get("regular_hours", Decimal("0")) > 0
+                        else daily_shift.get("overtime_150_pay", Decimal("0"))
+                        * Decimal("0.333")
+                    ),
+                    bonus_sabbath_overtime_pay_1=daily_shift.get(
+                        "sabbath_overtime_175_pay", Decimal("0")
+                    ),
+                    bonus_sabbath_overtime_pay_2=daily_shift.get(
+                        "sabbath_overtime_200_pay", Decimal("0")
+                    ),
+                    # Aggregated payment fields
+                    base_pay=daily_shift.get("base_pay", Decimal("0")),
+                    bonus_pay=daily_shift.get("bonus_pay", Decimal("0")),
+                    total_gross_pay=daily_shift.get("total_gross_pay", Decimal("0")),
+                    # Flags
+                    is_holiday=daily_shift.get("is_holiday", False),
+                    is_sabbath=daily_shift.get("is_sabbath", False),
+                    holiday_name=holiday_name,
+                    calculated_by_service="PayrollService",
+                )
+            )
+
+        # Bulk create all daily calculations
+        if daily_calculations:
+            DailyPayrollCalculation.objects.bulk_create(daily_calculations)
+
+    def _create_compensatory_days(
+        self,
+        employee: Employee,
+        context: CalculationContext,
+        work_logs: List[WorkLog],
+    ) -> None:
+        """
+        Create CompensatoryDay records based on WorkLogs and Holidays.
+
+        This method is separate from _create_daily_records to maintain
+        separation of concerns between financial calculations and employee benefits.
+        """
+        # Delete existing unused compensatory days for the period to avoid duplicates
+        CompensatoryDay.objects.filter(
+            employee=employee,
+            date_earned__year=context["year"],
+            date_earned__month=context["month"],
+            date_used__isnull=True,  # Only delete unused days
+        ).delete()
+
+        # Collect unique days that qualify for compensatory time
+        days_to_earn = set()
+
+        for log in work_logs:
+            work_date = log.check_in.date()
+
+            # Check if Saturday (Shabbat)
+            is_saturday = work_date.weekday() == 5
+
+            # Check if holiday in database
+            is_holiday = Holiday.objects.filter(
                 date=work_date, is_holiday=True
-            ).first()
-            is_holiday = holiday_record is not None
-            is_sabbath = Holiday.objects.filter(
-                date=work_date, is_shabbat=True
             ).exists()
 
-            if is_holiday:
-                CompensatoryDay.objects.get_or_create(
-                    employee=employee, date_earned=work_date, reason="holiday"
-                )
-            if is_sabbath:
-                CompensatoryDay.objects.get_or_create(
-                    employee=employee, date_earned=work_date, reason="sabbath"
-                )
+            if is_saturday:
+                days_to_earn.add((work_date, "shabbat"))
+            elif is_holiday:
+                days_to_earn.add((work_date, "holiday"))
 
-            DailyPayrollCalculation.objects.create(
-                employee=employee,
-                work_date=work_date,
-                regular_hours=result["regular_hours"] * proportion,
-                total_gross_pay=result["total_salary"] * proportion,
-                is_holiday=is_holiday,
-                is_sabbath=is_sabbath,
-                holiday_name=holiday_record.name if is_holiday else "",
-                calculated_by_service="PayrollService",
-                worklog=logs_for_day[0] if logs_for_day else None,
+        # Bulk create compensatory days
+        new_days = []
+        for date_earned, reason in days_to_earn:
+            new_days.append(
+                CompensatoryDay(
+                    employee=employee,
+                    date_earned=date_earned,
+                    reason=reason,
+                )
             )
+
+        if new_days:
+            CompensatoryDay.objects.bulk_create(new_days, ignore_conflicts=True)
 
 
 # Global service instance

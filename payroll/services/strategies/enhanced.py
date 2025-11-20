@@ -552,11 +552,12 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         """
         from datetime import time, timedelta
 
-        from ..contracts import create_empty_breakdown
+        from ..contracts import DailyPayrollBreakdown, create_empty_breakdown
 
         # Initialize accumulated results
         total_result = create_empty_breakdown()
         hourly_rate = Decimal(str(salary.hourly_rate))
+        daily_results = []
 
         # Process each work log using critical points algorithm
         for log in work_logs:
@@ -566,6 +567,97 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 hourly_rate,
                 holidays,
                 salary.calculation_type,
+            )
+
+            # Calculate shift totals for daily result
+            shift_total_pay = (
+                Decimal(str(shift_result.get("regular_pay", 0)))
+                + Decimal(str(shift_result.get("overtime_125_pay", 0)))
+                + Decimal(str(shift_result.get("overtime_150_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_regular_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_pay", 0)))
+                + Decimal(str(shift_result.get("holiday_pay", 0)))
+            )
+
+            # Calculate base_pay (regular rate components) and bonus_pay (premium components)
+            shift_base_pay = Decimal(str(shift_result.get("regular_pay", 0))) + Decimal(
+                str(shift_result.get("holiday_pay", 0))
+            )
+            shift_bonus_pay = (
+                Decimal(str(shift_result.get("overtime_125_pay", 0)))
+                + Decimal(str(shift_result.get("overtime_150_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_regular_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_pay", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_pay", 0)))
+            )
+
+            # Determine if shift is on sabbath or holiday
+            work_date = log.check_in.date()
+            is_holiday = work_date in holidays
+            # Check if shift has any sabbath hours (Shabbat starts Friday evening)
+            sabbath_hours_total = (
+                Decimal(str(shift_result.get("sabbath_regular_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_hours", 0)))
+            )
+            is_sabbath = sabbath_hours_total > 0
+
+            # Store daily result for this shift
+            daily_results.append(
+                DailyPayrollBreakdown(
+                    worklog_id=log.id,
+                    work_date=work_date,
+                    regular_hours=Decimal(str(shift_result.get("regular_hours", 0))),
+                    overtime_125_hours=Decimal(
+                        str(shift_result.get("overtime_125_hours", 0))
+                    ),
+                    overtime_150_hours=Decimal(
+                        str(shift_result.get("overtime_150_hours", 0))
+                    ),
+                    holiday_hours=Decimal(str(shift_result.get("holiday_hours", 0))),
+                    sabbath_regular_hours=Decimal(
+                        str(shift_result.get("sabbath_regular_hours", 0))
+                    ),
+                    sabbath_overtime_175_hours=Decimal(
+                        str(shift_result.get("sabbath_overtime_175_hours", 0))
+                    ),
+                    sabbath_overtime_200_hours=Decimal(
+                        str(shift_result.get("sabbath_overtime_200_hours", 0))
+                    ),
+                    night_shift_hours=Decimal(
+                        str(shift_result.get("night_shift_hours", 0))
+                    ),
+                    regular_pay=Decimal(str(shift_result.get("regular_pay", 0))),
+                    overtime_125_pay=Decimal(
+                        str(shift_result.get("overtime_125_pay", 0))
+                    ),
+                    overtime_150_pay=Decimal(
+                        str(shift_result.get("overtime_150_pay", 0))
+                    ),
+                    holiday_pay=Decimal(str(shift_result.get("holiday_pay", 0))),
+                    sabbath_regular_pay=Decimal(
+                        str(shift_result.get("sabbath_regular_pay", 0))
+                    ),
+                    sabbath_overtime_175_pay=Decimal(
+                        str(shift_result.get("sabbath_overtime_175_pay", 0))
+                    ),
+                    sabbath_overtime_200_pay=Decimal(
+                        str(shift_result.get("sabbath_overtime_200_pay", 0))
+                    ),
+                    night_shift_pay=Decimal(
+                        str(shift_result.get("night_shift_pay", 0))
+                    ),
+                    base_pay=shift_base_pay,
+                    bonus_pay=shift_bonus_pay,
+                    total_gross_pay=shift_total_pay,
+                    is_holiday=is_holiday,
+                    is_sabbath=is_sabbath,
+                    is_night_shift=Decimal(
+                        str(shift_result.get("night_shift_hours", 0))
+                    )
+                    > 0,
+                )
             )
 
             # Accumulate results
@@ -671,6 +763,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 "has_cache": False,
                 "warnings": [],
             },
+            daily_results=daily_results,
         )
 
     def _calculate_shift_critical_points(
@@ -1140,7 +1233,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
         """
         from datetime import time, timedelta
 
-        from ..contracts import create_empty_breakdown
+        from ..contracts import DailyPayrollBreakdown, create_empty_breakdown
 
         # Monthly salary parameters
         full_monthly_salary = Decimal(str(salary.base_salary or 0))
@@ -1149,11 +1242,132 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
 
         # Initialize accumulated results
         total_result = create_empty_breakdown()
+        daily_results = []
 
         # Process each work log using critical points algorithm
         for log in work_logs:
             shift_result = self._calculate_monthly_shift_premiums_critical_points(
                 log.check_in, log.check_out, effective_hourly_rate, holidays
+            )
+
+            # Calculate shift hours for proportional base
+            shift_hours = (
+                Decimal(str(shift_result.get("regular_hours", 0)))
+                + Decimal(str(shift_result.get("overtime_125_hours", 0)))
+                + Decimal(str(shift_result.get("overtime_150_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_regular_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_hours", 0)))
+                + Decimal(str(shift_result.get("holiday_regular_hours", 0)))
+                + Decimal(str(shift_result.get("holiday_overtime_175_hours", 0)))
+                + Decimal(str(shift_result.get("holiday_overtime_200_hours", 0)))
+            )
+
+            # Calculate shift proportional base
+            shift_proportional_base = (
+                shift_hours / monthly_hours_norm
+            ) * full_monthly_salary
+
+            # Calculate shift bonus (premium amounts only)
+            shift_bonus = (
+                Decimal(str(shift_result.get("overtime_125_amount", 0)))
+                + Decimal(str(shift_result.get("overtime_150_amount", 0)))
+                + Decimal(str(shift_result.get("sabbath_regular_amount", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_amount", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_amount", 0)))
+                + Decimal(str(shift_result.get("holiday_regular_amount", 0)))
+                + Decimal(str(shift_result.get("holiday_overtime_175_amount", 0)))
+                + Decimal(str(shift_result.get("holiday_overtime_200_amount", 0)))
+            )
+
+            # Total shift pay
+            shift_total_pay = shift_proportional_base + shift_bonus
+
+            # Determine if shift is on sabbath or holiday
+            work_date = log.check_in.date()
+            is_holiday = work_date in holidays
+            # Check if shift has any sabbath hours (Shabbat starts Friday evening)
+            sabbath_hours_total = (
+                Decimal(str(shift_result.get("sabbath_regular_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_175_hours", 0)))
+                + Decimal(str(shift_result.get("sabbath_overtime_200_hours", 0)))
+            )
+            is_sabbath = sabbath_hours_total > 0
+
+            # Store daily result for this shift
+            daily_results.append(
+                DailyPayrollBreakdown(
+                    worklog_id=log.id,
+                    work_date=work_date,
+                    regular_hours=Decimal(str(shift_result.get("regular_hours", 0))),
+                    overtime_125_hours=Decimal(
+                        str(shift_result.get("overtime_125_hours", 0))
+                    ),
+                    overtime_150_hours=Decimal(
+                        str(shift_result.get("overtime_150_hours", 0))
+                    ),
+                    holiday_hours=Decimal(
+                        str(shift_result.get("holiday_regular_hours", 0))
+                    )
+                    + Decimal(str(shift_result.get("holiday_overtime_175_hours", 0)))
+                    + Decimal(str(shift_result.get("holiday_overtime_200_hours", 0))),
+                    sabbath_regular_hours=Decimal(
+                        str(shift_result.get("sabbath_regular_hours", 0))
+                    ),
+                    sabbath_overtime_175_hours=Decimal(
+                        str(shift_result.get("sabbath_overtime_175_hours", 0))
+                    ),
+                    sabbath_overtime_200_hours=Decimal(
+                        str(shift_result.get("sabbath_overtime_200_hours", 0))
+                    ),
+                    night_shift_hours=Decimal(
+                        str(shift_result.get("night_shift_hours", 0))
+                    ),
+                    regular_pay=Decimal(str(shift_result.get("regular_hours", 0)))
+                    * effective_hourly_rate,
+                    overtime_125_pay=Decimal(
+                        str(shift_result.get("overtime_125_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("overtime_125_amount", 0))),
+                    overtime_150_pay=Decimal(
+                        str(shift_result.get("overtime_150_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("overtime_150_amount", 0))),
+                    holiday_pay=Decimal(
+                        str(shift_result.get("holiday_regular_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("holiday_regular_amount", 0))),
+                    sabbath_regular_pay=Decimal(
+                        str(shift_result.get("sabbath_regular_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("sabbath_regular_amount", 0))),
+                    sabbath_overtime_175_pay=Decimal(
+                        str(shift_result.get("sabbath_overtime_175_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("sabbath_overtime_175_amount", 0))),
+                    sabbath_overtime_200_pay=Decimal(
+                        str(shift_result.get("sabbath_overtime_200_hours", 0))
+                    )
+                    * effective_hourly_rate
+                    + Decimal(str(shift_result.get("sabbath_overtime_200_amount", 0))),
+                    night_shift_pay=Decimal(
+                        "0"
+                    ),  # Night shift for monthly has no separate pay
+                    base_pay=shift_proportional_base,
+                    bonus_pay=shift_bonus,
+                    total_gross_pay=shift_total_pay,
+                    is_holiday=is_holiday,
+                    is_sabbath=is_sabbath,
+                    is_night_shift=Decimal(
+                        str(shift_result.get("night_shift_hours", 0))
+                    )
+                    > 0,
+                )
             )
 
             # Accumulate results
@@ -1296,6 +1510,7 @@ class EnhancedPayrollStrategy(AbstractPayrollStrategy):
                 "has_cache": False,
                 "warnings": [],
             },
+            daily_results=daily_results,
         )
 
     def _calculate_monthly_shift_premiums_critical_points(

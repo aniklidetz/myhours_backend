@@ -70,6 +70,7 @@ def api_root(request):
                 "v1_payroll": request.build_absolute_uri("/api/v1/payroll/"),
                 "v1_biometrics": request.build_absolute_uri("/api/v1/biometrics/"),
                 "v1_integrations": request.build_absolute_uri("/api/v1/integrations/"),
+                "v1_ai_assistant": request.build_absolute_uri("/api/v1/ai-assistant/"),
             },
         }
     )
@@ -101,6 +102,7 @@ urlpatterns = [
         include(("biometrics.urls", "biometrics"), namespace="biometrics"),
     ),
     path("api/v1/integrations/", include("integrations.urls")),
+    path("api/v1/ai-assistant/", include("ai_assistant.urls")),
     # Legacy API endpoints removed - all traffic goes to v1 directly
 ]
 

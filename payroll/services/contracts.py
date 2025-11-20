@@ -6,8 +6,9 @@ strategies must adhere to, ensuring consistency and type safety across the syste
 """
 
 import decimal
+from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 
 class PayrollBreakdown(TypedDict, total=False):
@@ -71,6 +72,49 @@ class PayrollMetadata(TypedDict, total=False):
     warnings: list[str]
 
 
+class DailyPayrollBreakdown(TypedDict, total=False):
+    """
+    Detailed breakdown of payroll calculations for a single shift/day.
+
+    This structure contains the results from the critical points algorithm
+    for one work log, enabling accurate DailyPayrollCalculation records.
+    """
+
+    # Shift identification
+    worklog_id: int
+    work_date: date
+
+    # Hours breakdown
+    regular_hours: Decimal
+    overtime_125_hours: Decimal
+    overtime_150_hours: Decimal
+    holiday_hours: Decimal
+    sabbath_regular_hours: Decimal
+    sabbath_overtime_175_hours: Decimal
+    sabbath_overtime_200_hours: Decimal
+    night_shift_hours: Decimal
+
+    # Payment breakdown
+    regular_pay: Decimal
+    overtime_125_pay: Decimal
+    overtime_150_pay: Decimal
+    holiday_pay: Decimal
+    sabbath_regular_pay: Decimal
+    sabbath_overtime_175_pay: Decimal
+    sabbath_overtime_200_pay: Decimal
+    night_shift_pay: Decimal
+
+    # Aggregated values for DailyPayrollCalculation
+    base_pay: Decimal  # regular_pay + holiday_pay (base rate components)
+    bonus_pay: Decimal  # All premium/overtime components
+    total_gross_pay: Decimal  # Total payment for this shift
+
+    # Flags
+    is_holiday: bool
+    is_sabbath: bool
+    is_night_shift: bool
+
+
 class PayrollResult(TypedDict):
     """
     Standardized payroll calculation result contract.
@@ -95,6 +139,9 @@ class PayrollResult(TypedDict):
 
     # Additional metadata (required)
     metadata: PayrollMetadata
+
+    # Daily/shift-level results (optional, for detailed persistence)
+    daily_results: List[DailyPayrollBreakdown]
 
 
 class CalculationContext(TypedDict):
@@ -432,4 +479,5 @@ def create_empty_payroll_result(
             has_cache=False,
             warnings=["No calculation data available"],
         ),
+        daily_results=[],
     )
